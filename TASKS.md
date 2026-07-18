@@ -31,7 +31,7 @@ are, and mark things done yourself. No AI verification yet. No resurfacing yet.
   self-talk-voice acknowledgment (see CLAUDE.md Section 2 for tone rules) — wire this into
   the capture flow and into marking a roadmap step done
 - [x] Plain list view of all entries/roadmaps — no charts, no analytics, just visibility
-- [ ] **Push + tag `phase-1-complete`. Stop. Let the founder use this for real before
+- [x] **Push + tag `phase-1-complete`. Stop. Let the founder use this for real before
   continuing.**
 
 ---
