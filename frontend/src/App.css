@@ -5,16 +5,44 @@
 }
 
 .app-header {
-  padding: 20px 24px;
+  padding: 18px 24px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .wordmark {
+  background: transparent;
+  border: none;
+  padding: 0;
   color: var(--muted);
   font-size: 0.95rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+}
+
+.app-nav {
+  display: flex;
+  gap: 6px;
+}
+
+.nav-link {
+  background: transparent;
+  border: none;
+  color: var(--faint);
+  font-size: 0.9rem;
+  padding: 6px 10px;
+  border-radius: 6px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.nav-link:hover {
+  color: var(--muted);
+}
+
+.nav-link.is-active {
+  color: var(--text);
 }
 
 .app-main {
@@ -23,6 +51,5 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  /* Sit slightly above true center so the capture box feels reachable. */
-  padding-bottom: 12vh;
+  padding: 0 0 12vh;
 }

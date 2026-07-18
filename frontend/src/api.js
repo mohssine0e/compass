@@ -33,3 +33,21 @@ export function createEntry(payload) {
 export function listEntries() {
   return request('/entries')
 }
+
+/** Create a roadmap. `payload` is { title, notes?, steps: string[] }. */
+export function createRoadmap(payload) {
+  return request('/roadmaps', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+/** All roadmaps with their steps and progress, newest first. */
+export function listRoadmaps() {
+  return request('/roadmaps')
+}
+
+/** One roadmap with its ordered steps and progress. */
+export function getRoadmap(id) {
+  return request(`/roadmaps/${id}`)
+}

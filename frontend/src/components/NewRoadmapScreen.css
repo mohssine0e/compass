@@ -1,0 +1,161 @@
+.roadmap-form {
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.roadmap-title {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 1.6rem;
+  padding: 0;
+}
+
+.roadmap-title::placeholder {
+  color: var(--faint);
+}
+
+.roadmap-notes {
+  width: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1rem;
+  padding: 0;
+}
+
+.roadmap-notes::placeholder {
+  color: var(--faint);
+}
+
+.roadmap-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+
+.step-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.step-index {
+  width: 20px;
+  text-align: right;
+  color: var(--faint);
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.step-input {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.step-input:focus {
+  border-color: var(--faint);
+}
+
+.step-input::placeholder {
+  color: var(--faint);
+}
+
+.step-remove {
+  background: transparent;
+  border: none;
+  color: var(--faint);
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.step-remove:hover:not(:disabled) {
+  color: #d98a7a;
+}
+
+.step-remove:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.step-add {
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+.roadmap-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-top: 6px;
+}
+
+.roadmap-error {
+  margin-right: auto;
+  color: #d98a7a;
+  font-size: 0.95rem;
+}
+
+.roadmap-created {
+  color: var(--text);
+  font-size: 1.25rem;
+  text-align: center;
+  margin: 0;
+}
+
+.btn-primary {
+  background: var(--brass-dim);
+  color: var(--brass);
+  border: 1px solid var(--brass);
+  border-radius: 8px;
+  padding: 9px 20px;
+  font-size: 1rem;
+  transition: background 0.15s ease;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: rgba(207, 157, 91, 0.22);
+}
+
+.btn-primary:disabled {
+  color: var(--faint);
+  border-color: var(--line);
+  background: transparent;
+  cursor: default;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-size: 0.95rem;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-ghost:hover {
+  color: var(--text);
+  border-color: var(--faint);
+}

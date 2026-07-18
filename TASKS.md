@@ -22,7 +22,7 @@ are, and mark things done yourself. No AI verification yet. No resurfacing yet.
   submit button, nothing else on screen by default
 - [x] Voice input on the capture screen (Web Speech API), toggle between typing/speaking
 - [x] Big/small tap on capture (sets `significance` field) — for `idea` type only
-- [ ] `roadmap` and `roadmap_step` entry types: create a roadmap with an ordered list of
+- [x] `roadmap` and `roadmap_step` entry types: create a roadmap with an ordered list of
   steps (founder writes steps manually for v1 — AI-assisted roadmap generation is a later
   nice-to-have, not required for Phase 1)
 - [ ] Roadmap view: shows steps in order, current position, what's done, what's left
