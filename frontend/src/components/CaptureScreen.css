@@ -25,6 +25,13 @@
   color: var(--faint);
 }
 
+.capture-interim {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 1.15rem;
+  font-style: italic;
+}
+
 .capture-footer {
   display: flex;
   align-items: center;
@@ -42,6 +49,41 @@
 
 .capture-status.is-error {
   color: #d98a7a;
+}
+
+.capture-mic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.capture-mic:hover {
+  color: var(--text);
+  border-color: var(--faint);
+}
+
+.capture-mic.is-active {
+  color: var(--brass);
+  border-color: var(--brass);
+  background: var(--brass-dim);
+  animation: mic-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes mic-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--brass-dim);
+  }
+  50% {
+    box-shadow: 0 0 0 6px transparent;
+  }
 }
 
 .capture-submit {

@@ -20,7 +20,7 @@ are, and mark things done yourself. No AI verification yet. No resurfacing yet.
 - [x] `GET /entries` — list entries, newest first
 - [x] Frontend (PWA): capture screen as the app's home/landing view — single text box,
   submit button, nothing else on screen by default
-- [ ] Voice input on the capture screen (Web Speech API), toggle between typing/speaking
+- [x] Voice input on the capture screen (Web Speech API), toggle between typing/speaking
 - [ ] Big/small tap on capture (sets `significance` field) — for `idea` type only
 - [ ] `roadmap` and `roadmap_step` entry types: create a roadmap with an ordered list of
   steps (founder writes steps manually for v1 — AI-assisted roadmap generation is a later
