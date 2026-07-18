@@ -21,9 +21,16 @@ public record EntryResponse(
         Map<String, Object> content,
         Instant createdAt,
         Instant updatedAt,
-        Instant lastResurfacedAt
+        Instant lastResurfacedAt,
+        // A short self-talk-voice line for this moment (capture / mark done). Only set on
+        // create and mark-done responses; null elsewhere and when AI is unconfigured.
+        String acknowledgment
 ) {
     public static EntryResponse from(Entry e) {
+        return of(e, null);
+    }
+
+    public static EntryResponse of(Entry e, String acknowledgment) {
         return new EntryResponse(
                 e.getId(),
                 e.getType(),
@@ -34,7 +41,8 @@ public record EntryResponse(
                 e.getContent(),
                 e.getCreatedAt(),
                 e.getUpdatedAt(),
-                e.getLastResurfacedAt()
+                e.getLastResurfacedAt(),
+                acknowledgment
         );
     }
 }

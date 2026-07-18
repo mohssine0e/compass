@@ -1,5 +1,6 @@
 package com.compass.app.entry;
 
+import com.compass.app.ai.AiVoiceService;
 import com.compass.app.entry.dto.CreateEntryRequest;
 import com.compass.app.entry.dto.EntryResponse;
 import com.compass.app.entry.dto.PatchEntryRequest;
@@ -20,16 +21,19 @@ import java.util.List;
 public class EntryController {
 
     private final EntryService service;
+    private final AiVoiceService aiVoice;
 
-    public EntryController(EntryService service) {
+    public EntryController(EntryService service, AiVoiceService aiVoice) {
         this.service = service;
+        this.aiVoice = aiVoice;
     }
 
-    /** Capture an entry. Defaults to an idea; returns the stored entry. */
+    /** Capture an entry. Defaults to an idea; returns the stored entry + a voice line. */
     @PostMapping
     public ResponseEntity<EntryResponse> create(@RequestBody CreateEntryRequest request) {
         Entry entry = service.create(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(EntryResponse.from(entry));
+        String ack = aiVoice.acknowledge(entry);
+        return ResponseEntity.status(HttpStatus.CREATED).body(EntryResponse.of(entry, ack));
     }
 
     /** List all entries, newest first. */
@@ -41,6 +45,9 @@ public class EntryController {
     /** Partial update — self-report completion with {"status":"done"}. */
     @PatchMapping("/{id}")
     public EntryResponse patch(@PathVariable Long id, @RequestBody PatchEntryRequest request) {
-        return EntryResponse.from(service.update(id, request));
+        Entry entry = service.update(id, request);
+        // Acknowledge completions in the self-talk voice; other edits pass through quietly.
+        String ack = entry.getStatus() == EntryStatus.DONE ? aiVoice.acknowledge(entry) : null;
+        return EntryResponse.of(entry, ack);
     }
 }

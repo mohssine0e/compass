@@ -7,6 +7,7 @@ export default function RoadmapDetail({ id, onBack }) {
   const [roadmap, setRoadmap] = useState(null)
   const [error, setError] = useState(null)
   const [busyStepId, setBusyStepId] = useState(null)
+  const [doneNote, setDoneNote] = useState(null)
 
   const load = useCallback(async () => {
     try {
@@ -24,7 +25,8 @@ export default function RoadmapDetail({ id, onBack }) {
     setBusyStepId(stepId)
     setError(null)
     try {
-      await patchEntry(stepId, { status: 'done' })
+      const updated = await patchEntry(stepId, { status: 'done' })
+      setDoneNote(updated.acknowledgment || null)
       await load()
     } catch (err) {
       setError(err.message)
@@ -67,6 +69,8 @@ export default function RoadmapDetail({ id, onBack }) {
             : `${progress.done} of ${progress.total} done`}
         </span>
       </div>
+
+      {doneNote && <p className="roadmap-done-note">{doneNote}</p>}
 
       <ol className="step-list">
         {steps.map((step) => {

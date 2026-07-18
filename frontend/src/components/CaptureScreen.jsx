@@ -28,10 +28,11 @@ export default function CaptureScreen() {
     setStatus(null)
     try {
       // Ideas carry significance; it stays null unless the user marked it.
-      await createEntry({ text: text.trim(), significance })
+      const entry = await createEntry({ text: text.trim(), significance })
       setText('')
       setSignificance(null)
-      setStatus({ kind: 'held', message: 'Held.' })
+      // Use the self-talk-voice line when present; fall back to a plain confirmation.
+      setStatus({ kind: 'held', message: entry.acknowledgment || 'Held.' })
       textareaRef.current?.focus()
     } catch (err) {
       setStatus({ kind: 'error', message: err.message })
