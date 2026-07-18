@@ -1,2 +1,27 @@
 *.md
 !README.md
+
+# --- Backend (Maven / Spring Boot) ---
+backend/target/
+*.class
+*.jar
+*.war
+!.mvn/wrapper/maven-wrapper.jar
+
+# --- Frontend (Node / Vite) ---
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+*.local
+
+# --- Env / secrets ---
+.env
+.env.*
+!.env.example
+
+# --- IDE / OS ---
+.idea/
+*.iml
+.vscode/
+.DS_Store
+*.log
