@@ -1,12 +1,14 @@
 package com.compass.app.entry;
 
 import com.compass.app.entry.dto.CreateEntryRequest;
+import com.compass.app.entry.dto.PatchEntryRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 
 @Service
 public class EntryService {
@@ -21,6 +23,40 @@ public class EntryService {
     @Transactional(readOnly = true)
     public List<Entry> listAll() {
         return repository.findAllByOrderByCreatedAtDesc();
+    }
+
+    @Transactional(readOnly = true)
+    public Entry get(Long id) {
+        return repository.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("No entry with id " + id));
+    }
+
+    /**
+     * Apply a partial update. Only non-null fields change. Phase 1's main use is
+     * self-reported completion (status → done).
+     */
+    @Transactional
+    public Entry update(Long id, PatchEntryRequest patch) {
+        Entry entry = get(id);
+
+        if (patch.status() != null) {
+            entry.setStatus(patch.status());
+        }
+        if (patch.significance() != null) {
+            entry.setSignificance(patch.significance());
+        }
+        if (patch.content() != null) {
+            entry.setContent(new HashMap<>(patch.content()));
+        }
+        if (patch.text() != null && !patch.text().isBlank()) {
+            Map<String, Object> content = entry.getContent() != null
+                    ? new HashMap<>(entry.getContent())
+                    : new HashMap<>();
+            content.put("text", patch.text().trim());
+            entry.setContent(content);
+        }
+
+        return repository.save(entry);
     }
 
     /**

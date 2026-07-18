@@ -1,23 +1,37 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getRoadmap } from '../api'
+import { getRoadmap, patchEntry } from '../api'
 import ProgressBar from './ProgressBar'
 import './Roadmap.css'
 
 export default function RoadmapDetail({ id, onBack }) {
   const [roadmap, setRoadmap] = useState(null)
   const [error, setError] = useState(null)
+  const [busyStepId, setBusyStepId] = useState(null)
 
-  const load = useCallback(() => {
-    let alive = true
-    getRoadmap(id)
-      .then((data) => alive && setRoadmap(data))
-      .catch((err) => alive && setError(err.message))
-    return () => {
-      alive = false
+  const load = useCallback(async () => {
+    try {
+      setRoadmap(await getRoadmap(id))
+    } catch (err) {
+      setError(err.message)
     }
   }, [id])
 
-  useEffect(() => load(), [load])
+  useEffect(() => {
+    load()
+  }, [load])
+
+  async function markDone(stepId) {
+    setBusyStepId(stepId)
+    setError(null)
+    try {
+      await patchEntry(stepId, { status: 'done' })
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusyStepId(null)
+    }
+  }
 
   if (error) {
     return (
@@ -72,7 +86,15 @@ export default function RoadmapDetail({ id, onBack }) {
                 {isDone ? '✓' : isDropped ? '–' : isCurrent ? '●' : '○'}
               </span>
               <span className="step-text">{step.content.text}</span>
-              {isCurrent && <span className="step-here">you're here</span>}
+              {isCurrent && (
+                <button
+                  className="step-done-btn"
+                  onClick={() => markDone(step.id)}
+                  disabled={busyStepId === step.id}
+                >
+                  {busyStepId === step.id ? 'Marking…' : 'Mark done'}
+                </button>
+              )}
             </li>
           )
         })}

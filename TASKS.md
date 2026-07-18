@@ -26,7 +26,7 @@ are, and mark things done yourself. No AI verification yet. No resurfacing yet.
   steps (founder writes steps manually for v1 — AI-assisted roadmap generation is a later
   nice-to-have, not required for Phase 1)
 - [x] Roadmap view: shows steps in order, current position, what's done, what's left
-- [ ] `PATCH /entries/{id}` — mark a roadmap step (or idea) as done, self-reported
+- [x] `PATCH /entries/{id}` — mark a roadmap step (or idea) as done, self-reported
 - [ ] AI voice service: single method that takes an entry and returns a short
   self-talk-voice acknowledgment (see CLAUDE.md Section 2 for tone rules) — wire this into
   the capture flow and into marking a roadmap step done

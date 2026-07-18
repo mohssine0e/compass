@@ -168,6 +168,28 @@
   letter-spacing: 0.02em;
 }
 
+.step-done-btn {
+  background: transparent;
+  color: var(--brass);
+  border: 1px solid var(--brass-dim);
+  border-radius: 7px;
+  padding: 5px 14px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.step-done-btn:hover:not(:disabled) {
+  background: var(--brass-dim);
+  border-color: var(--brass);
+}
+
+.step-done-btn:disabled {
+  color: var(--faint);
+  border-color: var(--line);
+  cursor: default;
+}
+
 .step-item.is-done .step-marker {
   color: var(--brass);
 }

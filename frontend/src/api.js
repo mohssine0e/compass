@@ -34,6 +34,14 @@ export function listEntries() {
   return request('/entries')
 }
 
+/** Partial update of an entry. `patch` is e.g. { status: 'done' }. */
+export function patchEntry(id, patch) {
+  return request(`/entries/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
+}
+
 /** Create a roadmap. `payload` is { title, notes?, steps: string[] }. */
 export function createRoadmap(payload) {
   return request('/roadmaps', {

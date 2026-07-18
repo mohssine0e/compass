@@ -2,9 +2,12 @@ package com.compass.app.entry;
 
 import com.compass.app.entry.dto.CreateEntryRequest;
 import com.compass.app.entry.dto.EntryResponse;
+import com.compass.app.entry.dto.PatchEntryRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,5 +36,11 @@ public class EntryController {
     @GetMapping
     public List<EntryResponse> list() {
         return service.listAll().stream().map(EntryResponse::from).toList();
+    }
+
+    /** Partial update — self-report completion with {"status":"done"}. */
+    @PatchMapping("/{id}")
+    public EntryResponse patch(@PathVariable Long id, @RequestBody PatchEntryRequest request) {
+        return EntryResponse.from(service.update(id, request));
     }
 }
