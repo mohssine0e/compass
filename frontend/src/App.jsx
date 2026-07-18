@@ -3,6 +3,7 @@ import CaptureScreen from './components/CaptureScreen'
 import NewRoadmapScreen from './components/NewRoadmapScreen'
 import RoadmapsScreen from './components/RoadmapsScreen'
 import RoadmapDetail from './components/RoadmapDetail'
+import AllEntriesScreen from './components/AllEntriesScreen'
 import './App.css'
 
 // Lightweight view state — no router dependency (keeping to the approved stack).
@@ -27,6 +28,9 @@ export default function App() {
           >
             Roadmaps
           </NavLink>
+          <NavLink active={view.name === 'all'} onClick={() => go('all')}>
+            All
+          </NavLink>
         </nav>
       </header>
 
@@ -46,6 +50,9 @@ export default function App() {
         )}
         {view.name === 'roadmap' && (
           <RoadmapDetail id={view.id} onBack={() => go('roadmaps')} />
+        )}
+        {view.name === 'all' && (
+          <AllEntriesScreen onOpenRoadmap={(id) => go('roadmap', { id })} />
         )}
       </main>
     </div>
