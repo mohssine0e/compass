@@ -18,7 +18,7 @@ are, and mark things done yourself. No AI verification yet. No resurfacing yet.
 - [x] `entries` table migration (see CLAUDE.md Section 4 for schema)
 - [x] `POST /entries` — create an entry (type: `idea`), plain text content
 - [x] `GET /entries` — list entries, newest first
-- [ ] Frontend (PWA): capture screen as the app's home/landing view — single text box,
+- [x] Frontend (PWA): capture screen as the app's home/landing view — single text box,
   submit button, nothing else on screen by default
 - [ ] Voice input on the capture screen (Web Speech API), toggle between typing/speaking
 - [ ] Big/small tap on capture (sets `significance` field) — for `idea` type only

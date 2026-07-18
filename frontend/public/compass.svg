@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#14161c"/>
+  <circle cx="256" cy="256" r="150" fill="none" stroke="#2c313c" stroke-width="14"/>
+  <circle cx="256" cy="256" r="150" fill="none" stroke="#3a4150" stroke-width="2"/>
+  <!-- needle: north brass, south muted -->
+  <polygon points="256,120 288,256 256,300 224,256" fill="#cf9d5b"/>
+  <polygon points="256,392 224,256 256,212 288,256" fill="#565d6b"/>
+  <circle cx="256" cy="256" r="16" fill="#14161c" stroke="#cf9d5b" stroke-width="6"/>
+</svg>
