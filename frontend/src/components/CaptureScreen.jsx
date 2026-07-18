@@ -5,6 +5,7 @@ import './CaptureScreen.css'
 
 export default function CaptureScreen() {
   const [text, setText] = useState('')
+  const [significance, setSignificance] = useState(null) // 'big' | 'small' | null
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState(null) // { kind: 'held' | 'error', message }
   const textareaRef = useRef(null)
@@ -26,8 +27,10 @@ export default function CaptureScreen() {
     setSaving(true)
     setStatus(null)
     try {
-      await createEntry({ text: text.trim() })
+      // Ideas carry significance; it stays null unless the user marked it.
+      await createEntry({ text: text.trim(), significance })
       setText('')
+      setSignificance(null)
       setStatus({ kind: 'held', message: 'Held.' })
       textareaRef.current?.focus()
     } catch (err) {
@@ -64,6 +67,24 @@ export default function CaptureScreen() {
         {speech.listening && speech.interim && (
           <p className="capture-interim">{speech.interim}</p>
         )}
+      </div>
+
+      <div className="capture-significance" role="group" aria-label="How big is this?">
+        {['big', 'small'].map((level) => (
+          <button
+            key={level}
+            type="button"
+            className={
+              'sig-tap' + (significance === level ? ' is-selected' : '')
+            }
+            aria-pressed={significance === level}
+            onClick={() =>
+              setSignificance((cur) => (cur === level ? null : level))
+            }
+          >
+            {level}
+          </button>
+        ))}
       </div>
 
       <div className="capture-footer">

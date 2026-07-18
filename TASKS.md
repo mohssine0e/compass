@@ -21,7 +21,7 @@ are, and mark things done yourself. No AI verification yet. No resurfacing yet.
 - [x] Frontend (PWA): capture screen as the app's home/landing view — single text box,
   submit button, nothing else on screen by default
 - [x] Voice input on the capture screen (Web Speech API), toggle between typing/speaking
-- [ ] Big/small tap on capture (sets `significance` field) — for `idea` type only
+- [x] Big/small tap on capture (sets `significance` field) — for `idea` type only
 - [ ] `roadmap` and `roadmap_step` entry types: create a roadmap with an ordered list of
   steps (founder writes steps manually for v1 — AI-assisted roadmap generation is a later
   nice-to-have, not required for Phase 1)

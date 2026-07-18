@@ -32,6 +32,33 @@
   font-style: italic;
 }
 
+.capture-significance {
+  display: flex;
+  gap: 8px;
+}
+
+.sig-tap {
+  background: transparent;
+  color: var(--faint);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 14px;
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.sig-tap:hover {
+  color: var(--muted);
+  border-color: var(--faint);
+}
+
+.sig-tap.is-selected {
+  color: var(--brass);
+  border-color: var(--brass);
+  background: var(--brass-dim);
+}
+
 .capture-footer {
   display: flex;
   align-items: center;
