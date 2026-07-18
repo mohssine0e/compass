@@ -4,13 +4,12 @@ import './NewRoadmapScreen.css'
 
 const EMPTY_STEPS = ['', '', '']
 
-export default function NewRoadmapScreen({ onDone }) {
+export default function NewRoadmapScreen({ onCreated, onCancel }) {
   const [title, setTitle] = useState('')
   const [notes, setNotes] = useState('')
   const [steps, setSteps] = useState(EMPTY_STEPS)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
-  const [created, setCreated] = useState(null) // { title, count }
 
   const cleanSteps = steps.map((s) => s.trim()).filter(Boolean)
   const canCreate = title.trim().length > 0 && cleanSteps.length > 0 && !saving
@@ -40,39 +39,11 @@ export default function NewRoadmapScreen({ onDone }) {
         notes: notes.trim(),
         steps: cleanSteps,
       })
-      setCreated({ title: roadmap.title, count: roadmap.steps.length })
+      onCreated?.(roadmap.id)
     } catch (err) {
       setError(err.message)
-    } finally {
       setSaving(false)
     }
-  }
-
-  function reset() {
-    setTitle('')
-    setNotes('')
-    setSteps(EMPTY_STEPS)
-    setCreated(null)
-    setError(null)
-  }
-
-  if (created) {
-    return (
-      <div className="roadmap-form">
-        <p className="roadmap-created">
-          {created.title} — {created.count}{' '}
-          {created.count === 1 ? 'step' : 'steps'}. You're at the start.
-        </p>
-        <div className="roadmap-actions">
-          <button className="btn-ghost" onClick={reset}>
-            Another roadmap
-          </button>
-          <button className="btn-primary" onClick={onDone}>
-            Done
-          </button>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -124,6 +95,9 @@ export default function NewRoadmapScreen({ onDone }) {
 
       <div className="roadmap-actions">
         {error && <span className="roadmap-error">{error}</span>}
+        <button className="btn-ghost" onClick={onCancel}>
+          Cancel
+        </button>
         <button className="btn-primary" onClick={submit} disabled={!canCreate}>
           {saving ? 'Creating…' : 'Create roadmap'}
         </button>

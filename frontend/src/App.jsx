@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import CaptureScreen from './components/CaptureScreen'
 import NewRoadmapScreen from './components/NewRoadmapScreen'
+import RoadmapsScreen from './components/RoadmapsScreen'
+import RoadmapDetail from './components/RoadmapDetail'
 import './App.css'
 
 // Lightweight view state — no router dependency (keeping to the approved stack).
@@ -20,18 +22,30 @@ export default function App() {
             Capture
           </NavLink>
           <NavLink
-            active={view.name === 'newRoadmap'}
-            onClick={() => go('newRoadmap')}
+            active={view.name.startsWith('roadmap') || view.name === 'newRoadmap'}
+            onClick={() => go('roadmaps')}
           >
-            New roadmap
+            Roadmaps
           </NavLink>
         </nav>
       </header>
 
       <main className="app-main">
         {view.name === 'capture' && <CaptureScreen />}
+        {view.name === 'roadmaps' && (
+          <RoadmapsScreen
+            onNew={() => go('newRoadmap')}
+            onOpen={(id) => go('roadmap', { id })}
+          />
+        )}
         {view.name === 'newRoadmap' && (
-          <NewRoadmapScreen onDone={() => go('capture')} />
+          <NewRoadmapScreen
+            onCreated={(id) => go('roadmap', { id })}
+            onCancel={() => go('roadmaps')}
+          />
+        )}
+        {view.name === 'roadmap' && (
+          <RoadmapDetail id={view.id} onBack={() => go('roadmaps')} />
         )}
       </main>
     </div>

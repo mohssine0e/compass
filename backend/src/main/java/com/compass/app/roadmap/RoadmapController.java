@@ -5,10 +5,14 @@ import com.compass.app.roadmap.dto.CreateRoadmapRequest;
 import com.compass.app.roadmap.dto.RoadmapResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/roadmaps")
@@ -26,5 +30,20 @@ public class RoadmapController {
         Entry roadmap = service.create(request);
         RoadmapResponse body = RoadmapResponse.of(roadmap, service.stepsOf(roadmap.getId()));
         return ResponseEntity.status(HttpStatus.CREATED).body(body);
+    }
+
+    /** All roadmaps with their steps and progress, newest first. */
+    @GetMapping
+    public List<RoadmapResponse> list() {
+        return service.listRoadmapsWithSteps().stream()
+                .map(r -> RoadmapResponse.of(r.roadmap(), r.steps()))
+                .toList();
+    }
+
+    /** One roadmap with its ordered steps and where-am-I progress. */
+    @GetMapping("/{id}")
+    public RoadmapResponse get(@PathVariable Long id) {
+        Entry roadmap = service.getRoadmap(id);
+        return RoadmapResponse.of(roadmap, service.stepsOf(id));
     }
 }
