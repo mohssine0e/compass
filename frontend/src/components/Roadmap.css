@@ -131,6 +131,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+.roadmap-done-note {
+  margin: -14px 0 22px;
+  color: var(--brass);
+  font-size: 0.95rem;
+}
+
 .step-list {
   list-style: none;
   margin: 0;
