@@ -15,7 +15,7 @@ Goal: a working app where you can capture a thought or start a roadmap, see wher
 are, and mark things done yourself. No AI verification yet. No resurfacing yet.
 
 - [x] Project scaffolding: Spring Boot app, Postgres connection, Flyway migrations set up
-- [ ] `entries` table migration (see CLAUDE.md Section 4 for schema)
+- [x] `entries` table migration (see CLAUDE.md Section 4 for schema)
 - [ ] `POST /entries` — create an entry (type: `idea`), plain text content
 - [ ] `GET /entries` — list entries, newest first
 - [ ] Frontend (PWA): capture screen as the app's home/landing view — single text box,
