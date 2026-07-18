@@ -27,9 +27,13 @@ are, and mark things done yourself. No AI verification yet. No resurfacing yet.
   nice-to-have, not required for Phase 1)
 - [x] Roadmap view: shows steps in order, current position, what's done, what's left
 - [x] `PATCH /entries/{id}` — mark a roadmap step (or idea) as done, self-reported
-- [x] AI voice service: single method that takes an entry and returns a short
+- [ ] AI voice service: single method that takes an entry and returns a short
   self-talk-voice acknowledgment (see CLAUDE.md Section 2 for tone rules) — wire this into
   the capture flow and into marking a roadmap step done
+  > **Deferred by the founder.** The AI layer is intentionally not wired in yet — the API
+  > provider is still TBD (evaluating Gemini / DeepSeek / a free tier). Capture and
+  > mark-done currently use plain confirmations ("Held."). Re-add as a provider-agnostic
+  > service when the provider is chosen; the tone rules in CLAUDE.md Section 2 still apply.
 - [x] Plain list view of all entries/roadmaps — no charts, no analytics, just visibility
 - [x] **Push + tag `phase-1-complete`. Stop. Let the founder use this for real before
   continuing.**
