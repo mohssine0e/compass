@@ -5,6 +5,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -14,6 +15,12 @@ public class EntryService {
 
     public EntryService(EntryRepository repository) {
         this.repository = repository;
+    }
+
+    /** All entries, newest first. */
+    @Transactional(readOnly = true)
+    public List<Entry> listAll() {
+        return repository.findAllByOrderByCreatedAtDesc();
     }
 
     /**
