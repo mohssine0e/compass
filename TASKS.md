@@ -111,8 +111,8 @@ the actual generated output carefully before trusting it.
 
 ## Phase 5 — Observability & error reporting
 
-Goal: a small, honest window into what's going wrong, before the next two phases add more
-external dependencies (file parsing, search grounding) that can fail in new ways. Small
+Goal: a small, honest window into what's going wrong, before the next phases add more
+external dependencies (search grounding, file parsing) that can fail in new ways. Small
 and low-risk — build this before piling on more AI-facing complexity, same reasoning as
 Phase 3 before Phase 4.
 
@@ -125,7 +125,7 @@ this is a lightweight, human-scannable record for noticing patterns early, not a
   (short text, hard-capped length — a sentence, not a paragraph), `context` (nullable,
   small JSONB — e.g. which entry/roadmap it relates to), `severity` (`info` | `warning` |
   `error`)
-- [ ] Every AI call site (voice acknowledgment, roadmap generation, resurfacing questions)
+- [x] Every AI call site (voice acknowledgment, roadmap generation, resurfacing questions)
   logs a brief event on failure or fallback — e.g. "Gemini timed out, Groq backup used" or
   "both AI providers failed, fell back to plain acknowledgment" — not the raw exception
 - [ ] Key system-side failures (DB errors, failed migrations at runtime, unexpected nulls
@@ -219,6 +219,44 @@ review actual generated output carefully, on a real roadmap, before trusting it.
 
 ---
 
+## Phase 7.5 — Resource Discovery
+
+Goal: generated roadmaps include curated learning resources per step, so the user doesn't
+have to hunt for materials. The system finds them, the user curates them. This bridges
+the gap between "here's your plan" and "here's how to actually learn it." Built on the
+search grounding from Phase 7, but scoped to resource finding rather than roadmap validation.
+
+**Resource metadata on roadmap steps**
+- [ ] Extend `entries.content` JSONB for `roadmap_step` to include a `resources` array:
+  each resource has `id`, `title`, `url`, `format` (enum: written, video, interactive,
+  repo, book_chapter), `source_type` (official_docs, community, tutorial), `estimated_time`,
+  `ai_grounding_source` (which search result found it), `user_rating` (nullable)
+- [ ] During roadmap generation, AI suggests 2-3 resources per step using search grounding
+  results — filtered by the user's format preferences from their learner profile
+- [ ] Proposed resources are shown in the roadmap confirmation screen alongside steps —
+  user can remove, reorder, or add their own before accepting
+- [ ] If a user's profile says they avoid videos, no video resources are suggested unless
+  explicitly requested
+
+**Step deep view (frontend)**
+- [ ] Double-click or tap a roadmap step to open a "deep view" — shows: step description,
+  estimated time, what this step covers (bullet list), attached resources with links,
+  user's own notes field
+- [ ] Deep view is optional — roadmap list view works without ever opening it (low friction
+  preserved)
+- [ ] "Start Session" button in deep view — begins tracking time spent on this step
+  (lightweight, no complex scheduling yet)
+
+**Backend: session tracking (lightweight)**
+- [ ] Add `session_history` to `entries.content` JSONB: array of `{started_at,
+  duration_minutes, resource_used, user_feedback, completed}` — minimal fields, enough
+  to learn from behavior later
+- [ ] `POST /entries/{id}/sessions/start` and `.../end` — simple start/stop tracking
+- [ ] **Push + tag `phase-7.5-complete`. Stop. Let the founder use this for real before
+  continuing.**
+
+---
+
 ## Phase 8 — Verification
 
 Goal: roadmap steps can optionally require a real check of understanding before counting
@@ -244,9 +282,44 @@ as done, instead of pure self-reporting.
 
 ---
 
+## Phase 8.5 — In-Content AI Assistant
+
+Goal: when the user is viewing a resource in a step's deep view, they can select any text
+and get contextual help — explanation, translation, concrete examples, or reformulation.
+This turns Compass from a roadmap planner into an integrated learning environment without
+losing its lightweight core. The AI voice stays self-talk, never teacher-mode.
+
+**Select-text AI help**
+- [ ] `POST /ai/explain` endpoint: accepts `{selected_text, context: {step_id,
+  user_skill_level, preferred_depth, action}}` where `action` is one of: `explain`,
+  `explain_with_background`, `translate`, `concrete_example`, `simplify`
+- [ ] Response is generated in self-talk voice, calibrated to the user's learner profile
+  (e.g., if they know C++, explain Rust ownership by contrasting with C++ pointers)
+- [ ] Response appears in a side panel or modal — original resource text is never replaced
+- [ ] Frontend: text selection in deep view triggers a floating toolbar with action options
+
+**Reformulate on demand**
+- [ ] "This is too hard / too big / too abstract" button in deep view — user-initiated
+  restructuring, reusing the Phase 4 adaptive resurfacing engine
+- [ ] AI proposes: break into smaller steps, find easier resources, or skip and revisit
+  prerequisite — user approves before any edit is applied
+- [ ] Track reformulation requests per step — if a step gets reformulated multiple times,
+  the self-talk voice should notice ("This is the third time you've broken this step down.
+  Is the topic wrong, or the approach?")
+
+**Translation support**
+- [ ] `translate` action: detect source language, translate to user's preferred language
+  (stored in learner profile or inferred from browser)
+- [ ] Translation is shown alongside original text, not replacing it
+- [ ] **Push + tag `phase-8.5-complete`. Stop. Let the founder use this for real before
+  continuing.**
+
+---
+
 ## Phase 9 — Follow-through
 
 Goal: standalone captured ideas can turn into real tracked action, not just sit as text.
+Also: guided learning sessions, behavioral preference inference, and a focused daily view.
 
 - [ ] "Next step" answers from the resurfacing loop become their own trackable
   entry (linked via `parent_id`, type `task` or similar)
@@ -262,6 +335,22 @@ Goal: standalone captured ideas can turn into real tracked action, not just sit 
 - [ ] Staleness as a passive visual cue on the roadmap list (e.g. "6 days since touched"
   next to a step), separate from the active resurfacing prompt — lets the founder notice
   drift without waiting for the system to interrupt them
+
+**Guided session mode (extends Phase 7.5 session tracking)**
+- [ ] Full session flow: user opens deep view → hits "Start Session" → timer runs →
+  user marks "done for now" or "need help" → brief feedback prompt ("helpful? too hard?")
+- [ ] Session feedback feeds into behavioral preference inference (see below)
+- [ ] Post-session: system suggests next action — continue to next step, review this one,
+  or take a break
+
+**Behavioral preference inference**
+- [ ] Analyze session history + step completion patterns to infer preferences:
+  "always skips video resources," "completes hands-on steps faster than reading steps,"
+  "reformulates steps >30 min estimated time"
+- [ ] Propose inferred preferences to user on a confirmation screen — editable before
+  saved to `learner_profile`
+- [ ] Use inferred preferences to filter resource suggestions and calibrate step estimates
+  in future roadmaps
 - [ ] **Push + tag `phase-9-complete`. Stop. Let the founder use this for real before
   continuing.**
 
@@ -296,16 +385,19 @@ design (see CLAUDE.md Section 7):
 
 ---
 
-## API note — what's needed for Phase 6/7
+## API note — what's needed for Phase 6/7/7.5/8.5
 
 The existing Gemini/Groq setup (OpenAI-compatible chat completion endpoint) is enough for:
-tone generation, roadmap drafting from the model's own knowledge, and the AI extraction
-pass over resume text (Phase 6) — all plain text-in, text-out tasks.
+tone generation, roadmap drafting from the model's own knowledge, the AI extraction pass
+over resume text (Phase 6), and the in-content explain/reformulate features (Phase 8.5) —
+all plain text-in, text-out tasks.
 
-It is **not** enough on its own for search grounding (Phase 7) — a generic chat completion
-call has no live web access. This needs one new integration: a dedicated search API
-(e.g. Tavily, which is built specifically for LLM-grounding use cases and has a free tier,
-or Serper.dev as an alternative) called from the backend, with results passed into the
-generation prompt as context. Same `.env` pattern as `GEMINI_API_KEY`/`GROQ_API_KEY` — add
-a `SEARCH_API_KEY` and a small `SearchGroundingService`. Resume file parsing itself (PDF/
-DOCX text extraction) needs no external API — Apache PDFBox / Apache POI run locally.
+It is **not** enough on its own for search grounding (Phase 7 / 7.5) — a generic chat
+completion call has no live web access. This needs one new integration: a dedicated search
+API (e.g. Tavily, which is built specifically for LLM-grounding use cases and has a free
+tier, or Serper.dev as an alternative) called from the backend, with results passed into
+the generation prompt as context. Same `.env` pattern as `GEMINI_API_KEY`/`GROQ_API_KEY`
+— add a `SEARCH_API_KEY` and a small `SearchGroundingService`.
+
+Resume file parsing itself (PDF/DOCX text extraction) needs no external API — Apache PDFBox
+/ Apache POI run locally.

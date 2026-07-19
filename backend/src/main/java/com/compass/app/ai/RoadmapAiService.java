@@ -1,5 +1,6 @@
 package com.compass.app.ai;
 
+import com.compass.app.events.EventService;
 import com.fasterxml.jackson.core.json.JsonReadFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,6 +29,7 @@ public class RoadmapAiService {
 
     private final AiProperties props;
     private final OpenAiCompatibleChatClient chat;
+    private final EventService events;
 
     // A tolerant parser just for model output: models routinely emit literal newlines inside
     // JSON string values, which strict Jackson rejects. Scoped here so the app's request
@@ -36,9 +38,10 @@ public class RoadmapAiService {
             .enable(JsonReadFeature.ALLOW_UNESCAPED_CONTROL_CHARS)
             .build();
 
-    public RoadmapAiService(AiProperties props, OpenAiCompatibleChatClient chat) {
+    public RoadmapAiService(AiProperties props, OpenAiCompatibleChatClient chat, EventService events) {
         this.props = props;
         this.chat = chat;
+        this.events = events;
     }
 
     /** True when at least one provider could serve a generation request. */
@@ -48,7 +51,8 @@ public class RoadmapAiService {
 
     /** 1–2 clarifying questions for a goal, or {@code null} if unavailable / both providers fail. */
     public List<String> clarifyingQuestions(String goal) {
-        JsonNode json = generateJson(PromptTemplates.CLARIFY_SYSTEM, PromptTemplates.clarifyUser(goal));
+        JsonNode json = generateJson("roadmap clarifying questions",
+                PromptTemplates.CLARIFY_SYSTEM, PromptTemplates.clarifyUser(goal));
         if (json == null) {
             return null;
         }
@@ -58,7 +62,7 @@ public class RoadmapAiService {
 
     /** A proposed roadmap for a goal + clarifying answers, or {@code null} on failure. */
     public RoadmapDraft proposeRoadmap(String goal, String clarifications) {
-        JsonNode json = generateJson(
+        JsonNode json = generateJson("roadmap proposal",
                 PromptTemplates.PROPOSE_SYSTEM, PromptTemplates.proposeUser(goal, clarifications));
         if (json == null) {
             return null;
@@ -73,7 +77,7 @@ public class RoadmapAiService {
 
     /** Smaller sub-steps that replace one stalled step, or {@code null} on failure. */
     public List<String> breakDownStep(String roadmapTitle, String stepText) {
-        JsonNode json = generateJson(PromptTemplates.BREAKDOWN_SYSTEM,
+        JsonNode json = generateJson("step breakdown", PromptTemplates.BREAKDOWN_SYSTEM,
                 PromptTemplates.breakdownUser(roadmapTitle, stepText));
         if (json == null) {
             return null;
@@ -87,7 +91,7 @@ public class RoadmapAiService {
      * unavailable, both providers fail, or the model judges nothing is genuinely missing.
      */
     public Prerequisite proposePrerequisite(String roadmapTitle, String stepText, String priorSteps) {
-        JsonNode json = generateJson(PromptTemplates.PREREQUISITE_SYSTEM,
+        JsonNode json = generateJson("prerequisite proposal", PromptTemplates.PREREQUISITE_SYSTEM,
                 PromptTemplates.prerequisiteUser(roadmapTitle, stepText, priorSteps));
         if (json == null) {
             return null;
@@ -99,13 +103,28 @@ public class RoadmapAiService {
         return new Prerequisite(step, text(json.get("why")));
     }
 
-    /** Try primary then backup with the larger generation budget; parse JSON; null on any failure. */
-    private JsonNode generateJson(String system, String user) {
+    /**
+     * Try primary then backup with the larger generation budget; parse JSON; null on any
+     * failure. Records a brief event when both providers fail or the reply won't parse — the
+     * {@code feature} names which drafting step degraded.
+     */
+    private JsonNode generateJson(String feature, String system, String user) {
         String raw = complete(props.getPrimary(), system, user);
         if (raw == null) {
             raw = complete(props.getBackup(), system, user);
         }
-        return raw == null ? null : parse(raw);
+        if (raw == null) {
+            if (isAvailable()) {
+                events.aiWarning("provider_error", "All AI providers failed for " + feature + ".", null);
+            }
+            return null;
+        }
+        JsonNode json = parse(raw);
+        if (json == null) {
+            events.aiWarning("parse_failure",
+                    "AI returned unparseable JSON for " + feature + ".", null);
+        }
+        return json;
     }
 
     private String complete(AiProperties.Provider provider, String system, String user) {
@@ -118,6 +137,8 @@ public class RoadmapAiService {
             return out == null || out.isBlank() ? null : out;
         } catch (RuntimeException ex) {
             log.warn("Roadmap AI provider ({}) failed: {}", provider.getModel(), ex.getMessage());
+            events.aiWarning(AiFailures.category(ex),
+                    provider.getModel() + " failed: " + AiFailures.reason(ex), null);
             return null;
         }
     }

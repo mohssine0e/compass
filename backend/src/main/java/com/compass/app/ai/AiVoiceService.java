@@ -3,6 +3,7 @@ package com.compass.app.ai;
 import com.compass.app.entry.Entry;
 import com.compass.app.entry.EntryStatus;
 import com.compass.app.entry.EntryType;
+import com.compass.app.events.EventService;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,10 +24,12 @@ public class AiVoiceService {
 
     private final AiProperties props;
     private final OpenAiCompatibleChatClient chat;
+    private final EventService events;
 
-    public AiVoiceService(AiProperties props, OpenAiCompatibleChatClient chat) {
+    public AiVoiceService(AiProperties props, OpenAiCompatibleChatClient chat, EventService events) {
         this.props = props;
         this.chat = chat;
+        this.events = events;
     }
 
     @PostConstruct
@@ -60,7 +63,7 @@ public class AiVoiceService {
                 ? entry.getSignificance().getValue()
                 : null;
         String text = textOf(entry);
-        return generate(PromptTemplates.ACK_SYSTEM,
+        return generate("acknowledgment", PromptTemplates.ACK_SYSTEM,
                 PromptTemplates.ackUser(moment, type, significance, text));
     }
 
@@ -89,18 +92,30 @@ public class AiVoiceService {
         String text = textOf(entry);
         long days = daysSince(entry.getUpdatedAt());
 
-        String q = generate(PromptTemplates.RESURFACE_SYSTEM,
+        String q = generate("resurfacing question", PromptTemplates.RESURFACE_SYSTEM,
                 PromptTemplates.resurfaceUser(type, significance, text, days, currentStepText, skipCount));
         return q != null ? q : fallbackQuestion(entry, text, currentStepText, skipCount);
     }
 
-    /** Try primary then backup; null if neither is configured or both fail. */
-    private String generate(String system, String user) {
-        String line = tryProvider("primary", props.getPrimary(), system, user);
-        if (line == null) {
-            line = tryProvider("backup", props.getBackup(), system, user);
+    /**
+     * Try primary then backup; null if neither is configured or both fail. Each provider
+     * failure records a brief event; if both fail (with at least one configured), records the
+     * feature-level fall-back to the plain path too.
+     */
+    private String generate(String feature, String system, String user) {
+        String line = tryProvider(props.getPrimary(), system, user);
+        if (line != null) {
+            return line;
         }
-        return line;
+        line = tryProvider(props.getBackup(), system, user);
+        if (line != null) {
+            return line;
+        }
+        if (props.getPrimary().isConfigured() || props.getBackup().isConfigured()) {
+            events.aiWarning("fallback",
+                    "All AI providers failed for " + feature + "; used the plain fallback.", null);
+        }
+        return null;
     }
 
     private static String fallbackQuestion(Entry entry, String text, String currentStepText, int skipCount) {
@@ -133,7 +148,7 @@ public class AiVoiceService {
         return java.time.Duration.between(instant, java.time.Instant.now()).toDays();
     }
 
-    private String tryProvider(String role, AiProperties.Provider provider, String system, String user) {
+    private String tryProvider(AiProperties.Provider provider, String system, String user) {
         if (!provider.isConfigured()) {
             return null;
         }
@@ -146,7 +161,9 @@ public class AiVoiceService {
             // Models sometimes wrap the line in quotes despite the instruction; strip them.
             return stripQuotes(line.trim());
         } catch (RuntimeException ex) {
-            log.warn("AI {} provider ({}) failed: {}", role, provider.getModel(), ex.getMessage());
+            log.warn("AI provider ({}) failed: {}", provider.getModel(), ex.getMessage());
+            events.aiWarning(AiFailures.category(ex),
+                    provider.getModel() + " failed: " + AiFailures.reason(ex), null);
             return null;
         }
     }
