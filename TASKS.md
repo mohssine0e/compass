@@ -252,7 +252,7 @@ search grounding from Phase 7, but scoped to resource finding rather than roadma
   duration_minutes, resource_used, user_feedback, completed}` — minimal fields, enough
   to learn from behavior later
 - [x] `POST /entries/{id}/sessions/start` and `.../end` — simple start/stop tracking
-- [ ] **Push + tag `phase-7.5-complete`. Stop. Let the founder use this for real before
+- [x] **Push + tag `phase-7.5-complete`. Stop. Let the founder use this for real before
   continuing.**
 
 ---
