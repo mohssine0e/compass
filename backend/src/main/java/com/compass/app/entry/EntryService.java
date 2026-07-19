@@ -5,6 +5,7 @@ import com.compass.app.entry.dto.PatchEntryRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,7 +57,13 @@ public class EntryService {
             entry.setContent(content);
         }
 
-        return repository.save(entry);
+        Entry saved = repository.save(entry);
+        // Working a step counts as touching its roadmap, so an actively-progressing roadmap
+        // isn't mistaken for a stalled one by the resurfacing engine.
+        if (saved.getParentId() != null) {
+            repository.touchUpdatedAt(saved.getParentId(), Instant.now());
+        }
+        return saved;
     }
 
     /**

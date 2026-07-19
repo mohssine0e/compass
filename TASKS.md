@@ -49,7 +49,7 @@ are, and mark things done yourself. No AI verification yet. No resurfacing yet.
 Goal: the app proactively surfaces one stalled thing before letting you capture something
 new, and asks an honest question about it — with multiple ways to answer.
 
-- [ ] Resurfacing service: generic query for "unresolved big ideas or stalled roadmap
+- [x] Resurfacing service: generic query for "unresolved big ideas or stalled roadmap
   steps, not touched in N days" (query by `type`, `status`, `last_resurfaced_at` — should
   not be hardcoded to `idea` only, per CLAUDE.md Section 4)
 - [ ] On app open: if something qualifies for resurfacing, show it *before* the capture

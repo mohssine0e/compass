@@ -60,14 +60,61 @@ public class AiVoiceService {
                 ? entry.getSignificance().getValue()
                 : null;
         String text = textOf(entry);
-        String system = PromptTemplates.ACK_SYSTEM;
-        String user = PromptTemplates.ackUser(moment, type, significance, text);
+        return generate(PromptTemplates.ACK_SYSTEM,
+                PromptTemplates.ackUser(moment, type, significance, text));
+    }
 
+    /**
+     * An honest, specific resurfacing question in the user's self-talk voice. Never null —
+     * falls back to a plain, still-specific question when no provider is configured or both
+     * fail, so the resurfacing prompt always has something honest to ask.
+     */
+    public String resurfaceQuestion(Entry entry) {
+        if (entry == null) {
+            return null;
+        }
+        String type = entry.getType() != null ? entry.getType().getValue() : "idea";
+        String significance = entry.getType() == EntryType.IDEA && entry.getSignificance() != null
+                ? entry.getSignificance().getValue()
+                : null;
+        String text = textOf(entry);
+        long days = daysSince(entry.getUpdatedAt());
+
+        String q = generate(PromptTemplates.RESURFACE_SYSTEM,
+                PromptTemplates.resurfaceUser(type, significance, text, days));
+        return q != null ? q : fallbackQuestion(entry, text);
+    }
+
+    /** Try primary then backup; null if neither is configured or both fail. */
+    private String generate(String system, String user) {
         String line = tryProvider("primary", props.getPrimary(), system, user);
         if (line == null) {
             line = tryProvider("backup", props.getBackup(), system, user);
         }
         return line;
+    }
+
+    private static String fallbackQuestion(Entry entry, String text) {
+        String subject = shorten(text);
+        if (entry.getType() == EntryType.ROADMAP) {
+            return "Haven't moved on \"" + subject + "\" in a while. Stuck, or done with it?";
+        }
+        return "\"" + subject + "\" — still worth it, or let it go?";
+    }
+
+    private static String shorten(String s) {
+        if (s == null) {
+            return "this";
+        }
+        String t = s.trim();
+        return t.length() <= 60 ? t : t.substring(0, 57).trim() + "…";
+    }
+
+    private static long daysSince(java.time.Instant instant) {
+        if (instant == null) {
+            return 0;
+        }
+        return java.time.Duration.between(instant, java.time.Instant.now()).toDays();
     }
 
     private String tryProvider(String role, AiProperties.Provider provider, String system, String user) {
