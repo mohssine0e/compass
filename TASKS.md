@@ -266,10 +266,10 @@ as done, instead of pure self-reporting.
   non-trivial check (question or short task)
 - [x] AI evaluation service: given the user's answer, judge whether it demonstrates real
   understanding — return a specific gap, not just pass/fail, when it doesn't
-- [ ] Wire verification into "mark step done" as an optional gate (light-check vs. full
+- [x] Wire verification into "mark step done" as an optional gate (light-check vs. full
   check — not every step needs the same rigor; let this be configurable per step or per
   roadmap)
-- [ ] Handle wrong/shaky answers honestly in self-talk voice — point at the specific gap,
+- [x] Handle wrong/shaky answers honestly in self-talk voice — point at the specific gap,
   don't just block silently
 - [ ] **Spaced retrieval on already-completed steps**: reuse the question-generation
   service to occasionally re-check a step that's already marked done, spaced out over

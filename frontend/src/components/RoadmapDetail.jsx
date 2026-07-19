@@ -8,6 +8,7 @@ import {
 } from '../api'
 import ProgressBar from './ProgressBar'
 import StepDeepView from './StepDeepView'
+import VerifyModal from './VerifyModal'
 import './Roadmap.css'
 
 export default function RoadmapDetail({ id, onBack }) {
@@ -22,6 +23,7 @@ export default function RoadmapDetail({ id, onBack }) {
   const [insertText, setInsertText] = useState('')
   const [savingInsert, setSavingInsert] = useState(false)
   const [deepStepId, setDeepStepId] = useState(null)
+  const [verifyStepId, setVerifyStepId] = useState(null)
 
   const load = useCallback(async () => {
     try {
@@ -46,6 +48,27 @@ export default function RoadmapDetail({ id, onBack }) {
       setError(err.message)
     } finally {
       setBusyStepId(null)
+    }
+  }
+
+  // When the step (or its roadmap) is set to be verified, "mark done" goes through the check
+  // gate instead of self-reporting (Phase 8).
+  function requestMarkDone(step) {
+    const mode = (step.content && step.content.verify) || (roadmap && roadmap.verify)
+    if (mode === 'light' || mode === 'full') {
+      setVerifyStepId(step.id)
+    } else {
+      markDone(step.id)
+    }
+  }
+
+  async function setVerifyMode(mode) {
+    setError(null)
+    try {
+      await patchEntry(roadmap.id, { verify: mode })
+      await load()
+    } catch (err) {
+      setError(err.message)
     }
   }
 
@@ -225,6 +248,15 @@ export default function RoadmapDetail({ id, onBack }) {
         </span>
       </div>
 
+      <label className="roadmap-verify">
+        <span>Check before done</span>
+        <select value={roadmap.verify || 'off'} onChange={(e) => setVerifyMode(e.target.value)}>
+          <option value="off">off — self-report</option>
+          <option value="light">light — quick question</option>
+          <option value="full">full — real check</option>
+        </select>
+      </label>
+
       {doneNote && <p className="roadmap-done-note">{doneNote}</p>}
 
       <ol className="step-list">
@@ -336,7 +368,7 @@ export default function RoadmapDetail({ id, onBack }) {
               {!isEditing && isCurrent && (
                 <button
                   className="step-done-btn"
-                  onClick={() => markDone(step.id)}
+                  onClick={() => requestMarkDone(step)}
                   disabled={busyStepId === step.id}
                 >
                   {busyStepId === step.id ? 'Marking…' : 'Mark done'}
@@ -363,6 +395,23 @@ export default function RoadmapDetail({ id, onBack }) {
           step={steps.find((s) => s.id === deepStepId)}
           onClose={() => setDeepStepId(null)}
           onChanged={load}
+        />
+      )}
+
+      {verifyStepId && steps.find((s) => s.id === verifyStepId) && (
+        <VerifyModal
+          step={steps.find((s) => s.id === verifyStepId)}
+          onClose={() => setVerifyStepId(null)}
+          onPassed={async () => {
+            setVerifyStepId(null)
+            setDoneNote(null)
+            await load()
+          }}
+          onOverride={async () => {
+            const id = verifyStepId
+            setVerifyStepId(null)
+            await markDone(id)
+          }}
         />
       )}
     </div>

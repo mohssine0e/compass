@@ -113,6 +113,19 @@ export function endSession(stepId, body = {}) {
   })
 }
 
+/** Generate a verification check for a step (Phase 8). Returns { question }. */
+export function getStepCheck(stepId) {
+  return request(`/verification/steps/${stepId}/check`, { method: 'POST' })
+}
+
+/** Answer a step's check. Returns { passed, gap }; on pass the step is marked done. */
+export function verifyStep(stepId, answer) {
+  return request(`/verification/steps/${stepId}/verify`, {
+    method: 'POST',
+    body: JSON.stringify({ answer }),
+  })
+}
+
 /** The one thing to resurface before capture, or null when nothing qualifies. */
 export function getNextResurfacing() {
   return request('/resurfacing/next')

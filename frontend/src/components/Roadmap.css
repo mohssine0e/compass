@@ -66,6 +66,25 @@
   cursor: pointer;
 }
 
+.roadmap-verify {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  color: var(--faint);
+  font-size: 0.85rem;
+}
+
+.roadmap-verify select {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 8px;
+  font-size: 0.85rem;
+  outline: none;
+}
+
 .roadmap-empty {
   color: var(--muted);
   font-size: 1.05rem;
