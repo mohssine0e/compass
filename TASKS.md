@@ -104,7 +104,7 @@ the actual generated output carefully before trusting it.
 - [x] Track repeated skips on the same item distinctly from a single skip (see CLAUDE.md
   Section 2 — this is what lets the self-talk voice eventually ask "is this the wrong next
   step, or are you avoiding it?" honestly, instead of nagging on every skip identically)
-- [ ] **Push + tag `phase-4-complete`. Stop. Let the founder use this for real before
+- [x] **Push + tag `phase-4-complete`. Stop. Let the founder use this for real before
   continuing.**
 
 ---
