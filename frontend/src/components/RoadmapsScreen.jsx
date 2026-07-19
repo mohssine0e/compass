@@ -3,6 +3,14 @@ import { listRoadmaps } from '../api'
 import ProgressBar from './ProgressBar'
 import './Roadmap.css'
 
+// A passive drift cue (Phase 9): how long since this roadmap was last touched. Only once it's
+// been a day or more — no nagging, just a quiet signal next to the plain list.
+function staleness(updatedAt) {
+  if (!updatedAt) return null
+  const days = Math.floor((Date.now() - new Date(updatedAt).getTime()) / 86400000)
+  return days >= 1 ? `${days} day${days === 1 ? '' : 's'} since touched` : null
+}
+
 export default function RoadmapsScreen({ onNew, onDraft, onOpen }) {
   const [roadmaps, setRoadmaps] = useState(null)
   const [error, setError] = useState(null)
@@ -62,6 +70,9 @@ export default function RoadmapsScreen({ onNew, onDraft, onOpen }) {
                         ? `Now: ${current.content.text}`
                         : ''}
                   </span>
+                  {r.progress.currentOrderIndex !== null && staleness(r.updatedAt) && (
+                    <span className="roadmap-card-stale">{staleness(r.updatedAt)}</span>
+                  )}
                 </button>
               </li>
             )

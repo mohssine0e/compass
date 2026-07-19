@@ -7,6 +7,7 @@ import RoadmapDetail from './components/RoadmapDetail'
 import AllEntriesScreen from './components/AllEntriesScreen'
 import AdminEventsScreen from './components/AdminEventsScreen'
 import ProfileScreen from './components/ProfileScreen'
+import FocusScreen from './components/FocusScreen'
 import ResurfacingScreen from './components/ResurfacingScreen'
 import { getNextResurfacing } from './api'
 import './App.css'
@@ -51,6 +52,9 @@ export default function App() {
           >
             Roadmaps
           </NavLink>
+          <NavLink active={view.name === 'focus'} onClick={() => go('focus')}>
+            Focus
+          </NavLink>
           <NavLink active={view.name === 'all'} onClick={() => go('all')}>
             All
           </NavLink>
@@ -90,6 +94,12 @@ export default function App() {
         )}
         {view.name === 'roadmap' && (
           <RoadmapDetail id={view.id} onBack={() => go('roadmaps')} />
+        )}
+        {view.name === 'focus' && (
+          <FocusScreen
+            onOpenResurfacing={(prompt) => go('resurfacing', { prompt })}
+            onOpenRoadmap={(id) => go('roadmap', { id })}
+          />
         )}
         {view.name === 'all' && (
           <AllEntriesScreen onOpenRoadmap={(id) => go('roadmap', { id })} />

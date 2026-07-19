@@ -329,10 +329,10 @@ Also: guided learning sessions, behavioral preference inference, and a focused d
   question, check for real history on that specific thread first (per CLAUDE.md — per-topic,
   not global) and use it if present; otherwise fall back to the generic default list. Be
   explicit (in the self-talk voice) about which mode it's in.
-- [ ] Daily/session focus view: a deliberately narrow view showing one resurfaced item
+- [x] Daily/session focus view: a deliberately narrow view showing one resurfaced item
   (if any) plus the current step of one active roadmap — not a full list of everything.
   Optional alternate landing view, not a replacement for the plain list.
-- [ ] Staleness as a passive visual cue on the roadmap list (e.g. "6 days since touched"
+- [x] Staleness as a passive visual cue on the roadmap list (e.g. "6 days since touched"
   next to a step), separate from the active resurfacing prompt — lets the founder notice
   drift without waiting for the system to interrupt them
 
