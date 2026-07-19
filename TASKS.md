@@ -214,7 +214,7 @@ review actual generated output carefully, on a real roadmap, before trusting it.
 - [x] Clarifying questions (from Phase 4) become sharper using profile context — e.g.
   "you've already covered ownership — skip it here, or just a quick refresher step?"
   instead of a generic question
-- [ ] **Push + tag `phase-7-complete`. Stop. Let the founder use this for real before
+- [x] **Push + tag `phase-7-complete`. Stop. Let the founder use this for real before
   continuing.**
 
 ---
