@@ -139,6 +139,14 @@ export function respondResurfacing(id, body) {
   })
 }
 
+/** Answer a spaced recheck of a done step (Phase 8). Returns { passed, gap }. */
+export function recheckResurfacing(id, answer) {
+  return request(`/resurfacing/${id}/recheck`, {
+    method: 'POST',
+    body: JSON.stringify({ answer }),
+  })
+}
+
 /**
  * Draft a restructuring of a stalled roadmap's current step. `kind` is 'break_down' or
  * 'add_prerequisite'. Returns a proposal to edit and approve — nothing changes yet.

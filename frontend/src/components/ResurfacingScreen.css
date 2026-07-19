@@ -221,3 +221,46 @@
   gap: 12px;
   margin-top: 8px;
 }
+
+/* --- Spaced recheck (Phase 8) --- */
+
+.recheck-answer {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.recheck-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.recheck-verdict {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--text);
+}
+
+.recheck-verdict.is-pass {
+  color: var(--brass);
+}
+
+.recheck-verdict.is-miss {
+  color: #d98a7a;
+}
+
+.recheck-done {
+  align-self: flex-start;
+}
+
+.verify-gap {
+  margin: 0;
+  padding: 10px 14px;
+  border-left: 2px solid #d98a7a;
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.5;
+}

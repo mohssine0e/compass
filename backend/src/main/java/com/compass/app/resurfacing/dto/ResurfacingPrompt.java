@@ -16,6 +16,7 @@ import java.util.List;
  * so the UI opens an approve-before-apply flow instead of recording a plain answer.
  */
 public record ResurfacingPrompt(
+        String mode,
         EntryResponse entry,
         String question,
         List<Option> options
@@ -48,8 +49,14 @@ public record ResurfacingPrompt(
             Option.restructure("break_down", "break this step down"),
             Option.restructure("add_prerequisite", "something's missing first"));
 
+    /** A normal resurface of a stalled idea/roadmap: an honest question + answer options. */
     public static ResurfacingPrompt of(Entry entry, String question) {
-        return new ResurfacingPrompt(EntryResponse.from(entry), question, optionsFor(entry));
+        return new ResurfacingPrompt("resurface", EntryResponse.from(entry), question, optionsFor(entry));
+    }
+
+    /** A spaced recheck of a done step (Phase 8): answer the check, no answer-options list. */
+    public static ResurfacingPrompt recheck(Entry step, String question) {
+        return new ResurfacingPrompt("recheck", EntryResponse.from(step), question, List.of());
     }
 
     private static List<Option> optionsFor(Entry entry) {

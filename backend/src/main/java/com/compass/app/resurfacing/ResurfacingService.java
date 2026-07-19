@@ -8,7 +8,10 @@ import com.compass.app.entry.EntryStatus;
 import com.compass.app.entry.EntryType;
 import com.compass.app.resurfacing.dto.ApplyRestructureRequest;
 import com.compass.app.resurfacing.dto.RestructureProposal;
+import com.compass.app.resurfacing.dto.ResurfacingPrompt;
 import com.compass.app.roadmap.RoadmapService;
+import com.compass.app.verification.VerificationService;
+import com.compass.app.verification.dto.VerifyResult;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,19 +37,48 @@ public class ResurfacingService {
     private final AiVoiceService aiVoice;
     private final RoadmapAiService roadmapAi;
     private final RoadmapService roadmapService;
+    private final VerificationService verificationService;
     private final int staleDays;
     private final int snoozeDays;
 
     public ResurfacingService(EntryRepository repository, AiVoiceService aiVoice,
                               RoadmapAiService roadmapAi, RoadmapService roadmapService,
+                              VerificationService verificationService,
                               @Value("${compass.resurfacing.stale-days:3}") int staleDays,
                               @Value("${compass.resurfacing.snooze-days:1}") int snoozeDays) {
         this.repository = repository;
         this.aiVoice = aiVoice;
         this.roadmapAi = roadmapAi;
         this.roadmapService = roadmapService;
+        this.verificationService = verificationService;
         this.staleDays = staleDays;
         this.snoozeDays = snoozeDays;
+    }
+
+    /**
+     * A spaced recheck of a done step that's due, as a resurfacing prompt — checked before the
+     * normal stalled-thing resurface so overdue rechecks come first. Empty when none is due.
+     */
+    @Transactional
+    public Optional<ResurfacingPrompt> nextRecheckPrompt() {
+        Instant now = Instant.now();
+        return repository.findNextRecheckCandidate(now, now.minus(snoozeDays, ChronoUnit.DAYS))
+                .map(step -> ResurfacingPrompt.recheck(step,
+                        verificationService.recheckQuestion(step.getId())));
+    }
+
+    /**
+     * Answer a spaced recheck. Delegates the judging/rescheduling to the verification service,
+     * and stamps last_resurfaced_at so the same step isn't rechecked again next open.
+     */
+    @Transactional
+    public VerifyResult recheck(Long stepId, String answer) {
+        VerifyResult result = verificationService.recheck(stepId, answer);
+        repository.findById(stepId).ifPresent(step -> {
+            step.setLastResurfacedAt(Instant.now());
+            repository.save(step);
+        });
+        return result;
     }
 
     /** The next entry worth resurfacing, or empty if nothing qualifies right now. */

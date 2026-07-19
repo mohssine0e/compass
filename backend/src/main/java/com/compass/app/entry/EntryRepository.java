@@ -45,4 +45,21 @@ public interface EntryRepository extends JpaRepository<Entry, Long> {
     @Modifying
     @Query(value = "UPDATE entries SET updated_at = :now WHERE id = :id", nativeQuery = true)
     void touchUpdatedAt(@Param("id") Long id, @Param("now") Instant now);
+
+    /**
+     * A verified-done roadmap step that's due for a spaced recheck (Phase 8): its
+     * {@code nextRecheckAt} has passed and it isn't snoozed. Soonest-due first. This is the same
+     * resurfacing engine firing on a different trigger — completed + due — not a new system.
+     */
+    @Query(value = """
+            SELECT * FROM entries e
+            WHERE e.type = 'roadmap_step' AND e.status = 'done'
+              AND e.content->>'nextRecheckAt' IS NOT NULL
+              AND (e.content->>'nextRecheckAt')::timestamptz <= :now
+              AND (e.last_resurfaced_at IS NULL OR e.last_resurfaced_at < :resurfacedBefore)
+            ORDER BY (e.content->>'nextRecheckAt')::timestamptz ASC
+            LIMIT 1
+            """, nativeQuery = true)
+    Optional<Entry> findNextRecheckCandidate(@Param("now") Instant now,
+                                             @Param("resurfacedBefore") Instant resurfacedBefore);
 }

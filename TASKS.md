@@ -271,7 +271,7 @@ as done, instead of pure self-reporting.
   roadmap)
 - [x] Handle wrong/shaky answers honestly in self-talk voice — point at the specific gap,
   don't just block silently
-- [ ] **Spaced retrieval on already-completed steps**: reuse the question-generation
+- [x] **Spaced retrieval on already-completed steps**: reuse the question-generation
   service to occasionally re-check a step that's already marked done, spaced out over
   increasing intervals (e.g. a few days, then weeks) — this is the single most
   evidence-backed learning technique (spaced repetition) and it's nearly free here since

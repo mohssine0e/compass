@@ -1,11 +1,25 @@
 import { useCallback, useRef, useState } from 'react'
-import { applyRestructure, proposeRestructure, respondResurfacing } from '../api'
+import {
+  applyRestructure,
+  proposeRestructure,
+  recheckResurfacing,
+  respondResurfacing,
+} from '../api'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import './ResurfacingScreen.css'
 
 // Shown before capture when something stalled is worth an honest look (Phase 2).
 // For a stalled roadmap, the options can also open a restructuring flow (Phase 4).
+// For a done step due for spaced retrieval, it's a recheck instead (Phase 8).
 export default function ResurfacingScreen({ prompt, onDone }) {
+  return prompt.mode === 'recheck' ? (
+    <RecheckView prompt={prompt} onDone={onDone} />
+  ) : (
+    <ResurfaceView prompt={prompt} onDone={onDone} />
+  )
+}
+
+function ResurfaceView({ prompt, onDone }) {
   const { entry, question, options } = prompt
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -300,6 +314,80 @@ function RestructureReview({
           {busy ? 'Applying…' : 'Apply'}
         </button>
       </div>
+    </div>
+  )
+}
+
+// A spaced recheck of a done step (Phase 8): answer the check again to reinforce it. Passing
+// or missing, the step stays done — a miss just brings the next recheck sooner and names the gap.
+function RecheckView({ prompt, onDone }) {
+  const { entry, question } = prompt
+  const [answer, setAnswer] = useState('')
+  const [result, setResult] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  async function submit() {
+    if (busy || !answer.trim()) return
+    setBusy(true)
+    setError(null)
+    try {
+      setResult(await recheckResurfacing(entry.id, answer.trim()))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function skip() {
+    if (busy) return
+    setBusy(true)
+    try {
+      await respondResurfacing(entry.id, { option: 'skip' })
+    } catch {
+      // best-effort; move on either way
+    }
+    onDone()
+  }
+
+  return (
+    <div className="resurface">
+      <p className="resurface-context">You learned this a while ago — does it still hold up?</p>
+      <p className="resurface-entry">{entry.content.text}</p>
+
+      {result ? (
+        <>
+          <p className={'recheck-verdict ' + (result.passed ? 'is-pass' : 'is-miss')}>
+            {result.passed ? 'Still solid.' : 'Worth another look.'}
+          </p>
+          {!result.passed && result.gap && <p className="verify-gap">{result.gap}</p>}
+          <button className="btn-primary recheck-done" onClick={onDone}>
+            Done
+          </button>
+        </>
+      ) : (
+        <>
+          <h1 className="resurface-question">{question}</h1>
+          <textarea
+            className="resurface-input recheck-answer"
+            value={answer}
+            onChange={(e) => setAnswer(e.target.value)}
+            placeholder="Answer from memory…"
+            rows={3}
+            autoFocus
+          />
+          {error && <p className="resurface-error">{error}</p>}
+          <div className="recheck-actions">
+            <button className="resurface-skip" disabled={busy} onClick={skip}>
+              Skip for now
+            </button>
+            <button className="btn-primary" disabled={busy || !answer.trim()} onClick={submit}>
+              {busy ? 'Checking…' : 'Check'}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }
