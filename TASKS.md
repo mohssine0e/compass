@@ -52,14 +52,14 @@ new, and asks an honest question about it — with multiple ways to answer.
 - [x] Resurfacing service: generic query for "unresolved big ideas or stalled roadmap
   steps, not touched in N days" (query by `type`, `status`, `last_resurfaced_at` — should
   not be hardcoded to `idea` only, per CLAUDE.md Section 4)
-- [ ] On app open: if something qualifies for resurfacing, show it *before* the capture
+- [x] On app open: if something qualifies for resurfacing, show it *before* the capture
   screen, with the honest question generated in self-talk voice
-- [ ] Response modes for the honest question: free text, voice, and a short list of
+- [x] Response modes for the honest question: free text, voice, and a short list of
   default options ("still relevant" / "stuck" / "lost interest" / "something else")
-- [ ] Skip/snooze option, clearly labeled as a real state (not silently repeated every time)
-- [ ] `last_resurfaced_at` updates correctly so the same item isn't resurfaced every
+- [x] Skip/snooze option, clearly labeled as a real state (not silently repeated every time)
+- [x] `last_resurfaced_at` updates correctly so the same item isn't resurfaced every
   single open
-- [ ] **Push + tag `phase-2-complete`. Stop. Let the founder use this for real before
+- [x] **Push + tag `phase-2-complete`. Stop. Let the founder use this for real before
   continuing.**
 
 ---

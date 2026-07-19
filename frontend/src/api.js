@@ -59,3 +59,16 @@ export function listRoadmaps() {
 export function getRoadmap(id) {
   return request(`/roadmaps/${id}`)
 }
+
+/** The one thing to resurface before capture, or null when nothing qualifies. */
+export function getNextResurfacing() {
+  return request('/resurfacing/next')
+}
+
+/** Record a response to a resurfacing prompt. `body` is { option, text? }. */
+export function respondResurfacing(id, body) {
+  return request(`/resurfacing/${id}/respond`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}

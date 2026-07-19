@@ -1,16 +1,32 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import CaptureScreen from './components/CaptureScreen'
 import NewRoadmapScreen from './components/NewRoadmapScreen'
 import RoadmapsScreen from './components/RoadmapsScreen'
 import RoadmapDetail from './components/RoadmapDetail'
 import AllEntriesScreen from './components/AllEntriesScreen'
+import ResurfacingScreen from './components/ResurfacingScreen'
+import { getNextResurfacing } from './api'
 import './App.css'
 
 // Lightweight view state — no router dependency (keeping to the approved stack).
 export default function App() {
-  const [view, setView] = useState({ name: 'capture' })
+  // Start in a brief check so a stalled thing can surface *before* the capture screen.
+  const [view, setView] = useState({ name: 'loading' })
 
   const go = (name, params = {}) => setView({ name, ...params })
+
+  useEffect(() => {
+    let alive = true
+    getNextResurfacing()
+      .then((prompt) => {
+        if (!alive) return
+        setView(prompt ? { name: 'resurfacing', prompt } : { name: 'capture' })
+      })
+      .catch(() => alive && setView({ name: 'capture' }))
+    return () => {
+      alive = false
+    }
+  }, [])
 
   return (
     <div className="app">
@@ -35,6 +51,9 @@ export default function App() {
       </header>
 
       <main className="app-main">
+        {view.name === 'resurfacing' && (
+          <ResurfacingScreen prompt={view.prompt} onDone={() => go('capture')} />
+        )}
         {view.name === 'capture' && <CaptureScreen />}
         {view.name === 'roadmaps' && (
           <RoadmapsScreen
