@@ -42,6 +42,11 @@ public class Entry {
     @Column(name = "order_index")
     private Integer orderIndex;
 
+    // A real prerequisite: another step that must be done first (distinct from order_index,
+    // which is only position in the list). Nullable; only meaningful for roadmap steps.
+    @Column(name = "depends_on")
+    private Long dependsOn;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(nullable = false, columnDefinition = "jsonb")
     private Map<String, Object> content = new HashMap<>();
@@ -116,6 +121,14 @@ public class Entry {
 
     public void setOrderIndex(Integer orderIndex) {
         this.orderIndex = orderIndex;
+    }
+
+    public Long getDependsOn() {
+        return dependsOn;
+    }
+
+    public void setDependsOn(Long dependsOn) {
+        this.dependsOn = dependsOn;
     }
 
     public Map<String, Object> getContent() {

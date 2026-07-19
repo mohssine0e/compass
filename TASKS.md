@@ -88,7 +88,7 @@ the actual generated output carefully before trusting it.
   ordered step breakdown — not a single-shot generation, per CLAUDE.md tone/quality bar
 - [x] Proposed roadmap is editable before the user accepts it — AI drafts, user owns the
   final version
-- [ ] `roadmap_step` gains an optional `depends_on` field (references another step's id)
+- [x] `roadmap_step` gains an optional `depends_on` field (references another step's id)
   so steps can express real prerequisites, not just position-in-list order. Needed for
   the adaptive restructuring below to reason about *why* something's stuck, not just
   *that* it's stuck.

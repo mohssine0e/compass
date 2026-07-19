@@ -46,6 +46,15 @@ public class EntryService {
         if (patch.significance() != null) {
             entry.setSignificance(patch.significance());
         }
+        if (patch.dependsOn() != null) {
+            // Non-positive id is the documented "clear the prerequisite" sentinel, since a
+            // plain null here means "leave unchanged".
+            Long prereq = patch.dependsOn() > 0 ? patch.dependsOn() : null;
+            if (prereq != null && prereq.equals(entry.getId())) {
+                throw new IllegalArgumentException("A step can't be its own prerequisite.");
+            }
+            entry.setDependsOn(prereq);
+        }
         if (patch.content() != null) {
             entry.setContent(new HashMap<>(patch.content()));
         }
