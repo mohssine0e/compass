@@ -20,6 +20,7 @@ export default function GenerateRoadmapScreen({ onCreated, onManual, onCancel })
   const [title, setTitle] = useState('')
   const [steps, setSteps] = useState([])
   const [skipped, setSkipped] = useState([])
+  const [sources, setSources] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   // 503 = drafting unavailable; offer the manual form instead of a dead end.
@@ -80,6 +81,7 @@ export default function GenerateRoadmapScreen({ onCreated, onManual, onCancel })
     }))
     setSteps(steps)
     setSkipped(res.skipped || [])
+    setSources(res.sources || [])
     setPhase('proposal')
     setBusy(false)
   }
@@ -251,6 +253,16 @@ export default function GenerateRoadmapScreen({ onCreated, onManual, onCancel })
               + Add step
             </button>
           </div>
+          {sources.length > 0 && (
+            <div className="gen-sources">
+              <span className="gen-sources-label">Grounded in:</span>
+              <ul className="gen-sources-list">
+                {sources.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="roadmap-actions">
             {error && <span className="roadmap-error">{error}</span>}
             <button className="btn-ghost" onClick={onCancel}>

@@ -1,6 +1,7 @@
 package com.compass.app.roadmap;
 
 import com.compass.app.ai.RoadmapAiService;
+import com.compass.app.ai.SearchGroundingService;
 import com.compass.app.entry.Entry;
 import com.compass.app.entry.EntryRepository;
 import com.compass.app.entry.EntryStatus;
@@ -30,12 +31,14 @@ public class RoadmapService {
     private final EntryRepository repository;
     private final RoadmapAiService roadmapAi;
     private final ProfileService profileService;
+    private final SearchGroundingService searchGrounding;
 
     public RoadmapService(EntryRepository repository, RoadmapAiService roadmapAi,
-                          ProfileService profileService) {
+                          ProfileService profileService, SearchGroundingService searchGrounding) {
         this.repository = repository;
         this.roadmapAi = roadmapAi;
         this.profileService = profileService;
+        this.searchGrounding = searchGrounding;
     }
 
     /**
@@ -69,13 +72,19 @@ public class RoadmapService {
             return GenerateRoadmapResponse.needsClarification(questions);
         }
 
+        // Ground the draft in real sources when a search key is configured; null (and no
+        // sources) when it isn't, and generation proceeds ungrounded.
+        SearchGroundingService.Grounding grounding = searchGrounding.ground(goal);
+        String groundingContext = grounding == null ? null : grounding.context();
+        List<String> sources = grounding == null ? List.of() : grounding.sources();
+
         RoadmapAiService.RoadmapDraft draft = roadmapAi.proposeRoadmap(
-                goal, formatClarifications(req.clarifications()), profileContext);
+                goal, formatClarifications(req.clarifications()), profileContext, groundingContext);
         if (draft == null) {
             throw new IllegalStateException(
                     "Drafting is unavailable right now — write the steps yourself.");
         }
-        return GenerateRoadmapResponse.proposal(draft.title(), draft.steps(), draft.skipped());
+        return GenerateRoadmapResponse.proposal(draft.title(), draft.steps(), draft.skipped(), sources);
     }
 
     // (proposal() maps the AI draft steps to the structured response DTO.)

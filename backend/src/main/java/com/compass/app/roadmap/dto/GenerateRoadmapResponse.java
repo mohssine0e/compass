@@ -18,7 +18,8 @@ public record GenerateRoadmapResponse(
         List<String> questions,
         String title,
         List<ProposedStep> steps,
-        List<String> skipped
+        List<String> skipped,
+        List<String> sources
 ) {
     /**
      * A proposed step (Phase 7): its text plus its kind (concept|project), relative weight
@@ -32,12 +33,12 @@ public record GenerateRoadmapResponse(
     }
 
     public static GenerateRoadmapResponse needsClarification(List<String> questions) {
-        return new GenerateRoadmapResponse("needs_clarification", questions, null, null, null);
+        return new GenerateRoadmapResponse("needs_clarification", questions, null, null, null, null);
     }
 
     public static GenerateRoadmapResponse proposal(String title, List<RoadmapAiService.DraftStep> steps,
-                                                   List<String> skipped) {
+                                                   List<String> skipped, List<String> sources) {
         return new GenerateRoadmapResponse("proposal", null, title,
-                steps.stream().map(ProposedStep::from).toList(), skipped);
+                steps.stream().map(ProposedStep::from).toList(), skipped, sources);
     }
 }

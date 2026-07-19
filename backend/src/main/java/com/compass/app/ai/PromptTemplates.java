@@ -154,6 +154,11 @@ final class PromptTemplates {
             syntax — your profile lists C++ as solid"). Never skip silently. If nothing is skipped,
             return an empty "skipped" list.
 
+            If real search results (official docs, established curricula) are given as grounding, use
+            them to shape and CORRECT the roadmap's structure and sequence — prefer how authoritative
+            sources actually order this material over your own memory. Do not invent sources; only the
+            given ones are real.
+
             Each step is an object with these fields:
             - text: one concrete, checkable action or milestone — plain, direct, imperative. No
               numbering, no "Step 1:", no motivational language, no emoji.
@@ -177,13 +182,18 @@ final class PromptTemplates {
               {"title": "...", "steps": [{"text": "...", "kind": "concept", "weight": "medium", "dependsOn": null, "rationale": "..."}], "skipped": ["..."]}
             """;
 
-    static String proposeUser(String goal, String clarifications, String profileContext) {
+    static String proposeUser(String goal, String clarifications, String profileContext,
+                              String groundingContext) {
         StringBuilder sb = new StringBuilder();
         sb.append("Goal: ").append(goal == null ? "" : goal.trim()).append('\n');
         if (clarifications != null && !clarifications.isBlank()) {
             sb.append("What they told you:\n").append(clarifications.trim()).append('\n');
         }
         appendProfile(sb, profileContext);
+        if (groundingContext != null && !groundingContext.isBlank()) {
+            sb.append("Real search results to ground the structure in:\n")
+                    .append(groundingContext.trim()).append('\n');
+        }
         sb.append("Write the roadmap as JSON.");
         return sb.toString();
     }

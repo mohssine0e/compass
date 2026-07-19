@@ -50,9 +50,10 @@ public class RoadmapAiService {
      * A proposed roadmap for a goal + clarifying answers, using the profile context to skip what
      * the user already knows (each skip stated plainly). {@code null} on failure.
      */
-    public RoadmapDraft proposeRoadmap(String goal, String clarifications, String profileContext) {
+    public RoadmapDraft proposeRoadmap(String goal, String clarifications, String profileContext,
+                                       String groundingContext) {
         JsonNode json = ai.generate("roadmap proposal", PromptTemplates.PROPOSE_SYSTEM,
-                PromptTemplates.proposeUser(goal, clarifications, profileContext));
+                PromptTemplates.proposeUser(goal, clarifications, profileContext, groundingContext));
         if (json == null) {
             return null;
         }

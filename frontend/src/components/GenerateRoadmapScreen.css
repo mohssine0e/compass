@@ -98,3 +98,21 @@
   color: var(--faint);
   line-height: 1.4;
 }
+
+.gen-sources {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.gen-sources-label {
+  color: var(--faint);
+  font-size: 0.85rem;
+}
+
+.gen-sources-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}

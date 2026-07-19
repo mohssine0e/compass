@@ -185,11 +185,11 @@ profile (Phase 6) already shows you know. This is the highest-complexity phase s
 review actual generated output carefully, on a real roadmap, before trusting it.
 
 **Search grounding (new capability — see the API note below)**
-- [ ] Integrate a dedicated search API call (separate from the Gemini/Groq chat models —
+- [x] Integrate a dedicated search API call (separate from the Gemini/Groq chat models —
   see note) during generation: before finalizing a proposed roadmap, the system checks its
   own draft structure against real search results (official docs, established curricula)
   and can revise before presenting it
-- [ ] Surface grounding sources alongside the generated roadmap (even briefly — "based on
+- [x] Surface grounding sources alongside the generated roadmap (even briefly — "based on
   the official Rust book's structure") so the founder can sanity-check, not just trust
 
 **Prerequisite reasoning**
