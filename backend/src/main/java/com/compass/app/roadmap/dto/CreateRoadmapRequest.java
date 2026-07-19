@@ -23,7 +23,7 @@ public record CreateRoadmapRequest(
      * {@code resources} are the curated learning resources to attach.
      */
     public record DraftStepInput(String text, String kind, String weight, Integer dependsOn,
-                                 List<ResourceInput> resources) {
+                                 String rationale, List<ResourceInput> resources) {
     }
 
     /** One curated resource on a step. {@code id} is assigned on save if the client didn't send one. */

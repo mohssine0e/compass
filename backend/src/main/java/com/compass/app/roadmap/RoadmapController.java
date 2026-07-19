@@ -89,4 +89,10 @@ public class RoadmapController {
         Entry roadmap = service.getRoadmap(id);
         return RoadmapResponse.of(roadmap, service.stepsOf(id));
     }
+
+    /** "What this step covers" bullets for the deep view — generated once, then cached. */
+    @PostMapping("/steps/{stepId}/covers")
+    public java.util.Map<String, Object> stepCovers(@PathVariable Long stepId) {
+        return java.util.Map.of("covers", service.stepCovers(stepId));
+    }
 }

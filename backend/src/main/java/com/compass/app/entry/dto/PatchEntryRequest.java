@@ -18,6 +18,7 @@ public record PatchEntryRequest(
         Significance significance,
         String text,
         Long dependsOn,
+        String notes,
         Map<String, Object> content
 ) {
 }

@@ -193,6 +193,9 @@ public class RoadmapService {
             if (draft.weight() != null && !draft.weight().isBlank()) {
                 stepContent.put("weight", draft.weight());
             }
+            if (draft.rationale() != null && !draft.rationale().isBlank()) {
+                stepContent.put("rationale", draft.rationale().trim());
+            }
             List<Map<String, Object>> resources = buildResources(draft.resources());
             if (!resources.isEmpty()) {
                 stepContent.put("resources", resources);
@@ -213,6 +216,42 @@ public class RoadmapService {
                 repository.save(step);
             }
         }
+    }
+
+    /**
+     * The 2–4 "what this covers" bullets for a step (Phase 7.5 deep view). Generated on first
+     * open and cached in the step's content, so re-opening is instant and free. Throws
+     * {@link IllegalStateException} if the AI can't summarize it right now.
+     */
+    @Transactional
+    @SuppressWarnings("unchecked")
+    public List<String> stepCovers(Long stepId) {
+        Entry step = repository.findById(stepId)
+                .filter(e -> e.getType() == EntryType.ROADMAP_STEP)
+                .orElseThrow(() -> new java.util.NoSuchElementException("No step " + stepId));
+
+        Map<String, Object> content = step.getContent() != null
+                ? new HashMap<>(step.getContent()) : new HashMap<>();
+        Object cached = content.get("covers");
+        if (cached instanceof List<?> list && !list.isEmpty()) {
+            return list.stream().map(String::valueOf).toList();
+        }
+
+        String roadmapTitle = step.getParentId() == null ? null
+                : repository.findById(step.getParentId()).map(r -> stringOf(r, "title")).orElse(null);
+        List<String> covers = roadmapAi.stepCovers(roadmapTitle, stringOf(step, "text"));
+        if (covers == null) {
+            throw new IllegalStateException("Couldn't summarize this step right now.");
+        }
+        content.put("covers", covers);
+        step.setContent(content);
+        repository.save(step);
+        return covers;
+    }
+
+    private static String stringOf(Entry entry, String key) {
+        Object value = entry != null && entry.getContent() != null ? entry.getContent().get(key) : null;
+        return value instanceof String s ? s : null;
     }
 
     /** A roadmap's steps in order. */

@@ -381,4 +381,28 @@ final class PromptTemplates {
     sb.append("Write the per-step resources as JSON.");
     return sb.toString();
   }
+
+  /**
+   * System prompt for the "what this step covers" bullets shown in a step's deep view
+   * (Phase 7.5). Plain and concrete — what you'll actually do or understand, not a pep talk.
+   */
+  static final String COVERS_SYSTEM = """
+      Given one step of a learning roadmap, list the concrete things it actually covers — what
+      you'll do or understand by the end of it. This is a quick orientation, not a lesson.
+
+      Hard rules:
+      - 2 to 4 short bullets. Each is one plain, concrete phrase — no full sentences needed.
+      - Specific to this step, not the whole roadmap. No praise, no filler, no emoji.
+      - Output ONLY strict JSON, no prose: {"covers": ["...", "..."]}
+      """;
+
+  static String coversUser(String roadmapTitle, String stepText) {
+    StringBuilder sb = new StringBuilder();
+    if (roadmapTitle != null && !roadmapTitle.isBlank()) {
+      sb.append("Roadmap: ").append(roadmapTitle.trim()).append('\n');
+    }
+    sb.append("Step: ").append(stepText == null ? "" : stepText.trim()).append('\n');
+    sb.append("Write what it covers as JSON.");
+    return sb.toString();
+  }
 }

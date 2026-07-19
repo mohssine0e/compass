@@ -95,6 +95,24 @@ export function deleteRoadmapStep(roadmapId, stepId) {
   })
 }
 
+/** "What this step covers" bullets for the deep view — generated once, then cached (Phase 7.5). */
+export function getStepCovers(stepId) {
+  return request(`/roadmaps/steps/${stepId}/covers`, { method: 'POST' })
+}
+
+/** Start a work session on a step. */
+export function startSession(stepId) {
+  return request(`/entries/${stepId}/sessions/start`, { method: 'POST' })
+}
+
+/** End the open work session on a step. `body` is { resourceUsed?, userFeedback?, completed? }. */
+export function endSession(stepId, body = {}) {
+  return request(`/entries/${stepId}/sessions/end`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 /** The one thing to resurface before capture, or null when nothing qualifies. */
 export function getNextResurfacing() {
   return request('/resurfacing/next')

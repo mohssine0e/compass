@@ -7,6 +7,7 @@ import {
   reorderRoadmapSteps,
 } from '../api'
 import ProgressBar from './ProgressBar'
+import StepDeepView from './StepDeepView'
 import './Roadmap.css'
 
 export default function RoadmapDetail({ id, onBack }) {
@@ -20,6 +21,7 @@ export default function RoadmapDetail({ id, onBack }) {
   const [insertAtIndex, setInsertAtIndex] = useState(null)
   const [insertText, setInsertText] = useState('')
   const [savingInsert, setSavingInsert] = useState(false)
+  const [deepStepId, setDeepStepId] = useState(null)
 
   const load = useCallback(async () => {
     try {
@@ -277,7 +279,11 @@ export default function RoadmapDetail({ id, onBack }) {
                   autoFocus
                 />
               ) : (
-                <span className="step-text">
+                <span
+                  className="step-text step-text-openable"
+                  onDoubleClick={() => setDeepStepId(step.id)}
+                  title="Double-click for details"
+                >
                   {step.content.text}
                   {(step.content.kind === 'project' ||
                     step.content.weight ||
@@ -351,6 +357,14 @@ export default function RoadmapDetail({ id, onBack }) {
         })}
         {renderInsertRow(steps.length)}
       </ol>
+
+      {deepStepId && steps.find((s) => s.id === deepStepId) && (
+        <StepDeepView
+          step={steps.find((s) => s.id === deepStepId)}
+          onClose={() => setDeepStepId(null)}
+          onChanged={load}
+        />
+      )}
     </div>
   )
 }

@@ -2,6 +2,7 @@ package com.compass.app.entry;
 
 import com.compass.app.ai.AiVoiceService;
 import com.compass.app.entry.dto.CreateEntryRequest;
+import com.compass.app.entry.dto.EndSessionRequest;
 import com.compass.app.entry.dto.EntryResponse;
 import com.compass.app.entry.dto.PatchEntryRequest;
 import org.springframework.http.HttpStatus;
@@ -49,5 +50,17 @@ public class EntryController {
         // Acknowledge completions in the self-talk voice; other edits pass through quietly.
         String ack = entry.getStatus() == EntryStatus.DONE ? aiVoice.acknowledge(entry) : null;
         return EntryResponse.of(entry, ack);
+    }
+
+    /** Start a lightweight work session on a step (Phase 7.5). */
+    @PostMapping("/{id}/sessions/start")
+    public EntryResponse startSession(@PathVariable Long id) {
+        return EntryResponse.from(service.startSession(id));
+    }
+
+    /** End the open work session on a step, recording duration and optional feedback. */
+    @PostMapping("/{id}/sessions/end")
+    public EntryResponse endSession(@PathVariable Long id, @RequestBody(required = false) EndSessionRequest request) {
+        return EntryResponse.from(service.endSession(id, request));
     }
 }

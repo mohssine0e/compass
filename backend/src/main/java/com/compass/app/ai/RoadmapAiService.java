@@ -156,6 +156,17 @@ public class RoadmapAiService {
         return node != null && node.isArray() ? node : List.of();
     }
 
+    /** 2–4 short bullets of what a roadmap step covers, or {@code null} on failure (Phase 7.5). */
+    public List<String> stepCovers(String roadmapTitle, String stepText) {
+        JsonNode json = ai.generate("step covers",
+                PromptTemplates.COVERS_SYSTEM, PromptTemplates.coversUser(roadmapTitle, stepText));
+        if (json == null) {
+            return null;
+        }
+        List<String> covers = AiJsonGenerator.strings(json.get("covers"));
+        return covers.isEmpty() ? null : covers;
+    }
+
     /** Parse and sanitize the structured step array; skips entries without real text. */
     private static List<DraftStep> parseSteps(JsonNode array) {
         List<DraftStep> steps = new ArrayList<>();

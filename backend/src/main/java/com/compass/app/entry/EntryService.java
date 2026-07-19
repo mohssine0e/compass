@@ -1,12 +1,16 @@
 package com.compass.app.entry;
 
 import com.compass.app.entry.dto.CreateEntryRequest;
+import com.compass.app.entry.dto.EndSessionRequest;
 import com.compass.app.entry.dto.PatchEntryRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
@@ -65,6 +69,20 @@ public class EntryService {
             content.put("text", patch.text().trim());
             entry.setContent(content);
         }
+        if (patch.notes() != null) {
+            // Merge notes into content without disturbing the rest (text, resources, …). A blank
+            // note clears it.
+            Map<String, Object> content = entry.getContent() != null
+                    ? new HashMap<>(entry.getContent())
+                    : new HashMap<>();
+            String trimmed = patch.notes().trim();
+            if (trimmed.isEmpty()) {
+                content.remove("notes");
+            } else {
+                content.put("notes", trimmed);
+            }
+            entry.setContent(content);
+        }
 
         Entry saved = repository.save(entry);
         // Working a step counts as touching its roadmap, so an actively-progressing roadmap
@@ -73,6 +91,76 @@ public class EntryService {
             repository.touchUpdatedAt(saved.getParentId(), Instant.now());
         }
         return saved;
+    }
+
+    /**
+     * Begin a work session on a step (Phase 7.5): append an open session (start time, no
+     * duration yet) to the step's {@code sessionHistory}. Lightweight time tracking — no
+     * scheduling. If a session is already open, it's left as-is and this is a no-op.
+     */
+    @Transactional
+    @SuppressWarnings("unchecked")
+    public Entry startSession(Long id) {
+        Entry entry = get(id);
+        Map<String, Object> content = new HashMap<>(entry.getContent() != null ? entry.getContent() : Map.of());
+        List<Object> history = content.get("sessionHistory") instanceof List<?> l
+                ? new ArrayList<>((List<Object>) l) : new ArrayList<>();
+
+        boolean alreadyOpen = !history.isEmpty()
+                && history.get(history.size() - 1) instanceof Map<?, ?> last
+                && last.get("durationMinutes") == null;
+        if (!alreadyOpen) {
+            Map<String, Object> session = new LinkedHashMap<>();
+            session.put("startedAt", Instant.now().toString());
+            history.add(session);
+            content.put("sessionHistory", history);
+            entry.setContent(content);
+            entry = repository.save(entry);
+        }
+        touchParent(entry);
+        return entry;
+    }
+
+    /**
+     * End the open work session on a step: compute its duration from the start time and record
+     * the optional resource used / feedback / completed flag. A no-op if no session is open.
+     */
+    @Transactional
+    @SuppressWarnings("unchecked")
+    public Entry endSession(Long id, EndSessionRequest req) {
+        Entry entry = get(id);
+        Map<String, Object> content = new HashMap<>(entry.getContent() != null ? entry.getContent() : Map.of());
+        List<Object> history = content.get("sessionHistory") instanceof List<?> l
+                ? new ArrayList<>((List<Object>) l) : new ArrayList<>();
+
+        if (!history.isEmpty() && history.get(history.size() - 1) instanceof Map<?, ?> lastRaw
+                && lastRaw.get("durationMinutes") == null) {
+            Map<String, Object> session = new LinkedHashMap<>((Map<String, Object>) lastRaw);
+            long minutes = 0;
+            if (session.get("startedAt") instanceof String startedAt) {
+                minutes = Math.max(0, Duration.between(Instant.parse(startedAt), Instant.now()).toMinutes());
+            }
+            session.put("durationMinutes", minutes);
+            if (req != null && req.resourceUsed() != null && !req.resourceUsed().isBlank()) {
+                session.put("resourceUsed", req.resourceUsed().trim());
+            }
+            if (req != null && req.userFeedback() != null && !req.userFeedback().isBlank()) {
+                session.put("userFeedback", req.userFeedback().trim());
+            }
+            session.put("completed", req != null && Boolean.TRUE.equals(req.completed()));
+            history.set(history.size() - 1, session);
+            content.put("sessionHistory", history);
+            entry.setContent(content);
+            entry = repository.save(entry);
+        }
+        touchParent(entry);
+        return entry;
+    }
+
+    private void touchParent(Entry entry) {
+        if (entry.getParentId() != null) {
+            repository.touchUpdatedAt(entry.getParentId(), Instant.now());
+        }
     }
 
     /**

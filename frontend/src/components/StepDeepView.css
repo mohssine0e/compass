@@ -1,0 +1,171 @@
+.deep-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 20px;
+  overflow-y: auto;
+  z-index: 50;
+}
+
+.deep-panel {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 28px 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.deep-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  color: var(--faint);
+  font-size: 1.5rem;
+  line-height: 1;
+  padding: 2px 6px;
+}
+
+.deep-close:hover {
+  color: var(--text);
+}
+
+.deep-title {
+  margin: 0;
+  padding-right: 28px;
+  color: var(--text);
+  font-size: 1.35rem;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.deep-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.deep-time {
+  color: var(--faint);
+  font-size: 0.82rem;
+}
+
+.deep-rationale {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.deep-section {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.deep-section-title {
+  margin: 0 0 8px;
+  color: var(--faint);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.deep-faint {
+  margin: 0;
+  color: var(--faint);
+  font-size: 0.9rem;
+}
+
+.deep-covers {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.deep-resources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.deep-resource {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.deep-resource-title {
+  color: var(--brass);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  font-size: 0.95rem;
+}
+
+.deep-resource-title:hover {
+  border-bottom-color: var(--brass);
+}
+
+.deep-resource-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.deep-notes {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  outline: none;
+  resize: vertical;
+}
+
+.deep-notes:focus {
+  border-color: var(--faint);
+}
+
+.deep-notes-status {
+  display: block;
+  margin-top: 4px;
+  color: var(--faint);
+  font-size: 0.8rem;
+  min-height: 1em;
+}
+
+.deep-error {
+  margin: 0;
+  color: #d98a7a;
+  font-size: 0.9rem;
+}
+
+.deep-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.btn-primary.is-active-session {
+  color: #d98a7a;
+  border-color: #d98a7a;
+  background: rgba(217, 138, 122, 0.12);
+}

@@ -62,6 +62,10 @@
   color: var(--faint);
 }
 
+.step-text-openable {
+  cursor: pointer;
+}
+
 .roadmap-empty {
   color: var(--muted);
   font-size: 1.05rem;

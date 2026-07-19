@@ -239,19 +239,19 @@ search grounding from Phase 7, but scoped to resource finding rather than roadma
   explicitly requested
 
 **Step deep view (frontend)**
-- [ ] Double-click or tap a roadmap step to open a "deep view" — shows: step description,
+- [x] Double-click or tap a roadmap step to open a "deep view" — shows: step description,
   estimated time, what this step covers (bullet list), attached resources with links,
   user's own notes field
-- [ ] Deep view is optional — roadmap list view works without ever opening it (low friction
+- [x] Deep view is optional — roadmap list view works without ever opening it (low friction
   preserved)
-- [ ] "Start Session" button in deep view — begins tracking time spent on this step
+- [x] "Start Session" button in deep view — begins tracking time spent on this step
   (lightweight, no complex scheduling yet)
 
 **Backend: session tracking (lightweight)**
-- [ ] Add `session_history` to `entries.content` JSONB: array of `{started_at,
+- [x] Add `session_history` to `entries.content` JSONB: array of `{started_at,
   duration_minutes, resource_used, user_feedback, completed}` — minimal fields, enough
   to learn from behavior later
-- [ ] `POST /entries/{id}/sessions/start` and `.../end` — simple start/stop tracking
+- [x] `POST /entries/{id}/sessions/start` and `.../end` — simple start/stop tracking
 - [ ] **Push + tag `phase-7.5-complete`. Stop. Let the founder use this for real before
   continuing.**
 
