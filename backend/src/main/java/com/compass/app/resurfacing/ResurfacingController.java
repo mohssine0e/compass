@@ -2,8 +2,12 @@ package com.compass.app.resurfacing;
 
 import com.compass.app.entry.Entry;
 import com.compass.app.entry.dto.EntryResponse;
+import com.compass.app.resurfacing.dto.ApplyRestructureRequest;
 import com.compass.app.resurfacing.dto.RespondRequest;
+import com.compass.app.resurfacing.dto.RestructureProposal;
+import com.compass.app.resurfacing.dto.RestructureRequest;
 import com.compass.app.resurfacing.dto.ResurfacingPrompt;
+import com.compass.app.roadmap.dto.RoadmapResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,5 +42,23 @@ public class ResurfacingController {
     public EntryResponse respond(@PathVariable Long id, @RequestBody RespondRequest request) {
         Entry entry = service.respond(id, request.option(), request.text());
         return EntryResponse.from(entry);
+    }
+
+    /**
+     * Draft a restructuring of a stalled roadmap's current step (break it down / add a
+     * prerequisite). Returns a proposal to edit and approve — nothing is changed yet. 503 when
+     * the AI can't help right now.
+     */
+    @PostMapping("/{id}/restructure")
+    public RestructureProposal restructure(@PathVariable Long id,
+                                           @RequestBody RestructureRequest request) {
+        return service.proposeRestructure(id, request.kind());
+    }
+
+    /** Apply the user's approved (possibly edited) restructuring; returns the updated roadmap. */
+    @PostMapping("/{id}/restructure/apply")
+    public RoadmapResponse applyRestructure(@PathVariable Long id,
+                                            @RequestBody ApplyRestructureRequest request) {
+        return service.applyRestructure(id, request);
     }
 }

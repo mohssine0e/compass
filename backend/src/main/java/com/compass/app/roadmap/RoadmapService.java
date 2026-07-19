@@ -210,6 +210,80 @@ public class RoadmapService {
         return step;
     }
 
+    /**
+     * Replace one step with several smaller ones at the same position — the "break this step
+     * down" restructuring (Phase 4). The replacements start fresh (captured), so breaking a
+     * step down re-opens it as concrete sub-steps.
+     */
+    @Transactional
+    public void splitStep(Long roadmapId, Long stepId, List<String> replacements) {
+        List<String> clean = replacements == null ? List.<String>of()
+                : replacements.stream()
+                        .map(s -> s == null ? "" : s.trim())
+                        .filter(s -> !s.isEmpty())
+                        .toList();
+        if (clean.isEmpty()) {
+            throw new IllegalArgumentException("Give at least one step to replace it with.");
+        }
+
+        List<Entry> steps = stepsOf(roadmapId);
+        int index = indexOfStep(steps, stepId, roadmapId);
+        Entry original = steps.remove(index);
+        repository.delete(original);
+
+        List<Entry> replacementSteps = new ArrayList<>();
+        for (String text : clean) {
+            replacementSteps.add(newStep(roadmapId, text));
+        }
+        steps.addAll(index, replacementSteps);
+        reindexAndSave(steps);
+        repository.touchUpdatedAt(roadmapId, Instant.now());
+    }
+
+    /**
+     * Insert a prerequisite step immediately before {@code stepId} and record it as that step's
+     * real prerequisite (depends_on) — the "something's missing first" restructuring (Phase 4).
+     */
+    @Transactional
+    public Entry addPrerequisite(Long roadmapId, Long stepId, String prerequisiteText) {
+        String text = prerequisiteText != null ? prerequisiteText.trim() : "";
+        if (text.isEmpty()) {
+            throw new IllegalArgumentException("A prerequisite needs some text.");
+        }
+
+        List<Entry> steps = stepsOf(roadmapId);
+        int index = indexOfStep(steps, stepId, roadmapId);
+        Entry target = steps.get(index);
+
+        Entry prerequisite = newStep(roadmapId, text);
+        steps.add(index, prerequisite);
+        reindexAndSave(steps); // assigns the new step its id
+        target.setDependsOn(prerequisite.getId());
+        repository.save(target);
+        repository.touchUpdatedAt(roadmapId, Instant.now());
+        return prerequisite;
+    }
+
+    private Entry newStep(Long roadmapId, String text) {
+        Entry step = new Entry();
+        step.setType(EntryType.ROADMAP_STEP);
+        step.setStatus(EntryStatus.CAPTURED);
+        step.setParentId(roadmapId);
+        Map<String, Object> content = new HashMap<>();
+        content.put("text", text);
+        step.setContent(content);
+        return step;
+    }
+
+    private static int indexOfStep(List<Entry> steps, Long stepId, Long roadmapId) {
+        for (int i = 0; i < steps.size(); i++) {
+            if (steps.get(i).getId().equals(stepId)) {
+                return i;
+            }
+        }
+        throw new java.util.NoSuchElementException("No step " + stepId + " on roadmap " + roadmapId);
+    }
+
     /** Delete a step and close the order_index gap it leaves behind. */
     @Transactional
     public void deleteStep(Long roadmapId, Long stepId) {

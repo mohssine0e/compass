@@ -160,3 +160,64 @@
   opacity: 0.5;
   cursor: default;
 }
+
+/* --- Restructuring (Phase 4): change the plan, not just answer about it --- */
+
+.resurface-restructure-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.resurface-restructure-lead {
+  margin: 0;
+  color: var(--faint);
+  font-size: 0.9rem;
+}
+
+.resurface-restructure-btn {
+  background: transparent;
+  color: var(--muted);
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 0.95rem;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.resurface-restructure-btn:hover:not(:disabled) {
+  color: var(--brass);
+  border-color: var(--brass);
+}
+
+.resurface-restructure-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.resurface-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.resurface-restructure-why {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.05rem;
+  line-height: 1.4;
+}
+
+.resurface-prereq-input {
+  width: 100%;
+}
+
+.resurface-restructure-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+}

@@ -107,3 +107,23 @@ export function respondResurfacing(id, body) {
     body: JSON.stringify(body),
   })
 }
+
+/**
+ * Draft a restructuring of a stalled roadmap's current step. `kind` is 'break_down' or
+ * 'add_prerequisite'. Returns a proposal to edit and approve — nothing changes yet.
+ * Throws (503) when the AI can't help right now.
+ */
+export function proposeRestructure(id, kind) {
+  return request(`/resurfacing/${id}/restructure`, {
+    method: 'POST',
+    body: JSON.stringify({ kind }),
+  })
+}
+
+/** Apply an approved restructuring; returns the updated roadmap. */
+export function applyRestructure(id, body) {
+  return request(`/resurfacing/${id}/restructure/apply`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}

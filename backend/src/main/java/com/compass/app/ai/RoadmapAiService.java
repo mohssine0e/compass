@@ -1,7 +1,9 @@
 package com.compass.app.ai;
 
+import com.fasterxml.jackson.core.json.JsonReadFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -26,12 +28,17 @@ public class RoadmapAiService {
 
     private final AiProperties props;
     private final OpenAiCompatibleChatClient chat;
-    private final ObjectMapper mapper;
 
-    public RoadmapAiService(AiProperties props, OpenAiCompatibleChatClient chat, ObjectMapper mapper) {
+    // A tolerant parser just for model output: models routinely emit literal newlines inside
+    // JSON string values, which strict Jackson rejects. Scoped here so the app's request
+    // parsing stays strict.
+    private final ObjectMapper mapper = JsonMapper.builder()
+            .enable(JsonReadFeature.ALLOW_UNESCAPED_CONTROL_CHARS)
+            .build();
+
+    public RoadmapAiService(AiProperties props, OpenAiCompatibleChatClient chat) {
         this.props = props;
         this.chat = chat;
-        this.mapper = mapper;
     }
 
     /** True when at least one provider could serve a generation request. */

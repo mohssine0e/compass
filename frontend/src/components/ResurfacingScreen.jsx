@@ -1,14 +1,18 @@
 import { useCallback, useRef, useState } from 'react'
-import { respondResurfacing } from '../api'
+import { applyRestructure, proposeRestructure, respondResurfacing } from '../api'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import './ResurfacingScreen.css'
 
 // Shown before capture when something stalled is worth an honest look (Phase 2).
+// For a stalled roadmap, the options can also open a restructuring flow (Phase 4).
 export default function ResurfacingScreen({ prompt, onDone }) {
   const { entry, question, options } = prompt
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  // null | { kind, loading } | { kind, targetStepId, steps }        (break_down)
+  //      | { kind, targetStepId, prerequisite, why }                (add_prerequisite)
+  const [restructure, setRestructure] = useState(null)
   const textareaRef = useRef(null)
 
   const appendSpokenText = useCallback((chunk) => {
@@ -31,9 +35,83 @@ export default function ResurfacingScreen({ prompt, onDone }) {
     }
   }
 
+  async function startRestructure(kind) {
+    if (busy) return
+    setError(null)
+    setRestructure({ kind, loading: true })
+    try {
+      const p = await proposeRestructure(entry.id, kind)
+      if (p.kind === 'break_down') {
+        setRestructure({
+          kind,
+          targetStepId: p.targetStepId,
+          targetStepText: p.targetStepText,
+          steps: p.steps && p.steps.length ? p.steps : [''],
+        })
+      } else {
+        setRestructure({
+          kind,
+          targetStepId: p.targetStepId,
+          targetStepText: p.targetStepText,
+          prerequisite: p.prerequisite || '',
+          why: p.why,
+        })
+      }
+    } catch (err) {
+      setError(err.message)
+      setRestructure(null)
+    }
+  }
+
+  async function applyChange() {
+    if (busy || !restructure) return
+    setBusy(true)
+    setError(null)
+    try {
+      const body =
+        restructure.kind === 'break_down'
+          ? {
+              kind: 'break_down',
+              targetStepId: restructure.targetStepId,
+              steps: restructure.steps.map((s) => s.trim()).filter(Boolean),
+            }
+          : {
+              kind: 'add_prerequisite',
+              targetStepId: restructure.targetStepId,
+              prerequisite: (restructure.prerequisite || '').trim(),
+            }
+      await applyRestructure(entry.id, body)
+      onDone()
+    } catch (err) {
+      setError(err.message)
+      setBusy(false)
+    }
+  }
+
   const entryText = entry.content.title || entry.content.text
-  // Quick options are everything except "something else" (that one opens the text box).
-  const quickOptions = options.filter((o) => o.value !== 'something_else')
+  // Quick options are plain answers except "something else" (that one opens the text box).
+  const quickOptions = options.filter(
+    (o) => o.action === 'respond' && o.value !== 'something_else'
+  )
+  const restructureOptions = options.filter((o) => o.action === 'restructure')
+
+  // Reviewing a proposed change takes over the screen until it's applied or dismissed.
+  if (restructure) {
+    return (
+      <RestructureReview
+        entryText={entryText}
+        restructure={restructure}
+        setRestructure={setRestructure}
+        busy={busy}
+        error={error}
+        onApply={applyChange}
+        onCancel={() => {
+          setRestructure(null)
+          setError(null)
+        }}
+      />
+    )
+  }
 
   return (
     <div className="resurface">
@@ -54,6 +132,22 @@ export default function ResurfacingScreen({ prompt, onDone }) {
           </button>
         ))}
       </div>
+
+      {restructureOptions.length > 0 && (
+        <div className="resurface-restructure-options">
+          <span className="resurface-restructure-lead">or change the plan:</span>
+          {restructureOptions.map((o) => (
+            <button
+              key={o.value}
+              className="resurface-restructure-btn"
+              disabled={busy}
+              onClick={() => startRestructure(o.value)}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="resurface-say">
         <textarea
@@ -99,6 +193,113 @@ export default function ResurfacingScreen({ prompt, onDone }) {
       >
         Skip for now
       </button>
+    </div>
+  )
+}
+
+// Review, edit, and approve a proposed restructuring before anything is applied (Phase 4).
+function RestructureReview({
+  entryText,
+  restructure,
+  setRestructure,
+  busy,
+  error,
+  onApply,
+  onCancel,
+}) {
+  if (restructure.loading) {
+    return (
+      <div className="resurface">
+        <p className="resurface-entry">{entryText}</p>
+        <p className="resurface-restructure-lead">Thinking it through…</p>
+      </div>
+    )
+  }
+
+  const isBreakDown = restructure.kind === 'break_down'
+  const cleanSteps = (restructure.steps || []).map((s) => s.trim()).filter(Boolean)
+  const canApply = isBreakDown
+    ? cleanSteps.length > 0 && !busy
+    : (restructure.prerequisite || '').trim().length > 0 && !busy
+
+  function setStep(i, value) {
+    setRestructure((prev) => ({
+      ...prev,
+      steps: prev.steps.map((s, j) => (j === i ? value : s)),
+    }))
+  }
+  function addStep() {
+    setRestructure((prev) => ({ ...prev, steps: [...prev.steps, ''] }))
+  }
+  function removeStep(i) {
+    setRestructure((prev) => ({
+      ...prev,
+      steps: prev.steps.length > 1 ? prev.steps.filter((_, j) => j !== i) : prev.steps,
+    }))
+  }
+
+  return (
+    <div className="resurface resurface-restructure">
+      <p className="resurface-context">The step you're on:</p>
+      <p className="resurface-entry">{restructure.targetStepText}</p>
+
+      {isBreakDown ? (
+        <>
+          <p className="resurface-restructure-lead">
+            Break it into smaller steps. Edit anything before you keep it.
+          </p>
+          <div className="resurface-steps">
+            {restructure.steps.map((step, i) => (
+              <div className="step-row" key={i}>
+                <span className="step-index">{i + 1}</span>
+                <input
+                  className="step-input"
+                  value={step}
+                  onChange={(e) => setStep(i, e.target.value)}
+                  placeholder={`Step ${i + 1}`}
+                />
+                <button
+                  type="button"
+                  className="step-remove"
+                  onClick={() => removeStep(i)}
+                  aria-label={`Remove step ${i + 1}`}
+                  disabled={restructure.steps.length <= 1}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+            <button type="button" className="btn-ghost step-add" onClick={addStep}>
+              + Add step
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          {restructure.why && <p className="resurface-restructure-why">{restructure.why}</p>}
+          <p className="resurface-restructure-lead">Do this first. Edit it before you keep it.</p>
+          <input
+            className="step-input resurface-prereq-input"
+            value={restructure.prerequisite}
+            onChange={(e) =>
+              setRestructure((prev) => ({ ...prev, prerequisite: e.target.value }))
+            }
+            placeholder="Prerequisite step"
+            autoFocus
+          />
+        </>
+      )}
+
+      {error && <p className="resurface-error">{error}</p>}
+
+      <div className="resurface-restructure-actions">
+        <button className="btn-ghost" onClick={onCancel} disabled={busy}>
+          Never mind
+        </button>
+        <button className="btn-primary" onClick={onApply} disabled={!canApply}>
+          {busy ? 'Applying…' : 'Apply'}
+        </button>
+      </div>
     </div>
   )
 }

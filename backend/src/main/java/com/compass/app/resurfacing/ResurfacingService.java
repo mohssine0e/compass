@@ -1,9 +1,14 @@
 package com.compass.app.resurfacing;
 
 import com.compass.app.ai.AiVoiceService;
+import com.compass.app.ai.RoadmapAiService;
 import com.compass.app.entry.Entry;
 import com.compass.app.entry.EntryRepository;
 import com.compass.app.entry.EntryStatus;
+import com.compass.app.entry.EntryType;
+import com.compass.app.resurfacing.dto.ApplyRestructureRequest;
+import com.compass.app.resurfacing.dto.RestructureProposal;
+import com.compass.app.roadmap.RoadmapService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,14 +32,19 @@ public class ResurfacingService {
 
     private final EntryRepository repository;
     private final AiVoiceService aiVoice;
+    private final RoadmapAiService roadmapAi;
+    private final RoadmapService roadmapService;
     private final int staleDays;
     private final int snoozeDays;
 
     public ResurfacingService(EntryRepository repository, AiVoiceService aiVoice,
+                              RoadmapAiService roadmapAi, RoadmapService roadmapService,
                               @Value("${compass.resurfacing.stale-days:3}") int staleDays,
                               @Value("${compass.resurfacing.snooze-days:1}") int snoozeDays) {
         this.repository = repository;
         this.aiVoice = aiVoice;
+        this.roadmapAi = roadmapAi;
+        this.roadmapService = roadmapService;
         this.staleDays = staleDays;
         this.snoozeDays = snoozeDays;
     }
@@ -117,6 +127,103 @@ public class ResurfacingService {
         entry.setContent(content);
         entry.setLastResurfacedAt(Instant.now());
         return repository.save(entry);
+    }
+
+    /**
+     * Draft a restructuring of the roadmap's current step — never applied here (CLAUDE.md
+     * Phase 4: propose, the user approves, only then apply). {@code kind} is {@code break_down}
+     * or {@code add_prerequisite}. Throws {@link IllegalStateException} when the AI can't help
+     * so the caller surfaces it rather than inventing an edit.
+     */
+    @Transactional(readOnly = true)
+    public RestructureProposal proposeRestructure(Long id, String kind) {
+        Entry roadmap = requireRoadmap(id);
+        Entry step = currentStepOf(roadmap);
+        if (step == null) {
+            throw new IllegalArgumentException("No step left on this roadmap to restructure.");
+        }
+        if (!roadmapAi.isAvailable()) {
+            throw new IllegalStateException("Restructuring is unavailable right now — edit it yourself.");
+        }
+
+        String title = stringField(roadmap, "title");
+        String stepText = stringField(step, "text");
+
+        return switch (kind == null ? "" : kind) {
+            case "break_down" -> {
+                List<String> smaller = roadmapAi.breakDownStep(title, stepText);
+                if (smaller == null) {
+                    throw new IllegalStateException("Couldn't draft smaller steps right now.");
+                }
+                yield RestructureProposal.breakDown(roadmap.getId(), step.getId(), stepText, smaller);
+            }
+            case "add_prerequisite" -> {
+                RoadmapAiService.Prerequisite p =
+                        roadmapAi.proposePrerequisite(title, stepText, priorStepsText(roadmap.getId(), step));
+                if (p == null) {
+                    throw new IllegalStateException("Nothing obvious is missing first — this may just need doing.");
+                }
+                yield RestructureProposal.prerequisite(
+                        roadmap.getId(), step.getId(), stepText, p.step(), p.why());
+            }
+            default -> throw new IllegalArgumentException("Unknown restructuring: " + kind);
+        };
+    }
+
+    /**
+     * Apply an approved restructuring, then treat it as real engagement with the roadmap:
+     * clear the avoidance streak and stamp {@code last_resurfaced_at} so it isn't shown again
+     * next open. Returns the roadmap with its (now edited) steps.
+     */
+    @Transactional
+    public com.compass.app.roadmap.dto.RoadmapResponse applyRestructure(Long id, ApplyRestructureRequest req) {
+        Entry roadmap = requireRoadmap(id);
+
+        switch (req.kind() == null ? "" : req.kind()) {
+            case "break_down" -> roadmapService.splitStep(id, req.targetStepId(), req.steps());
+            case "add_prerequisite" -> roadmapService.addPrerequisite(id, req.targetStepId(), req.prerequisite());
+            default -> throw new IllegalArgumentException("Unknown restructuring: " + req.kind());
+        }
+
+        Map<String, Object> content = roadmap.getContent() != null
+                ? new HashMap<>(roadmap.getContent())
+                : new HashMap<>();
+        appendResurfaceLog(content, "restructured_" + req.kind(), null);
+        roadmap.setContent(content);
+        roadmap.setSkipCount(0);
+        roadmap.setLastResurfacedAt(Instant.now());
+        repository.save(roadmap);
+
+        return com.compass.app.roadmap.dto.RoadmapResponse.of(roadmap, roadmapService.stepsOf(id));
+    }
+
+    private Entry requireRoadmap(Long id) {
+        Entry entry = repository.findById(id)
+                .orElseThrow(() -> new NoSuchElementException("No entry with id " + id));
+        if (entry.getType() != EntryType.ROADMAP) {
+            throw new IllegalArgumentException("Only a roadmap can be restructured.");
+        }
+        return entry;
+    }
+
+    /** The texts of the steps that come before {@code step}, as one block for the prompt. */
+    private String priorStepsText(Long roadmapId, Entry step) {
+        StringBuilder sb = new StringBuilder();
+        for (Entry s : repository.findByParentIdOrderByOrderIndexAsc(roadmapId)) {
+            if (s.getId().equals(step.getId())) {
+                break;
+            }
+            String text = stringField(s, "text");
+            if (text != null && !text.isBlank()) {
+                sb.append("- ").append(text).append('\n');
+            }
+        }
+        return sb.toString();
+    }
+
+    private static String stringField(Entry entry, String key) {
+        Object value = entry != null && entry.getContent() != null ? entry.getContent().get(key) : null;
+        return value instanceof String s ? s : null;
     }
 
     @SuppressWarnings("unchecked")

@@ -94,11 +94,11 @@ the actual generated output carefully before trusting it.
   *that* it's stuck.
 
 **Adaptive resurfacing (extends the Phase 2 resurfacing engine)**
-- [ ] When a roadmap step has been stalled long enough to qualify for resurfacing, the
+- [x] When a roadmap step has been stalled long enough to qualify for resurfacing, the
   self-talk-voice question can now offer restructuring as a response option, not just
   "still relevant / stuck / lost interest" — e.g. "break this into smaller steps?" or
   "reorder — tackle something else first?"
-- [ ] If the user picks a restructuring option, the AI proposes a specific edit (e.g. split
+- [x] If the user picks a restructuring option, the AI proposes a specific edit (e.g. split
   one step into two, or suggest a prerequisite step) — user still approves before it's
   applied; never auto-edit silently
 - [x] Track repeated skips on the same item distinctly from a single skip (see CLAUDE.md
