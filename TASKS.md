@@ -299,11 +299,11 @@ losing its lightweight core. The AI voice stays self-talk, never teacher-mode.
 - [x] Frontend: text selection in deep view triggers a floating toolbar with action options
 
 **Reformulate on demand**
-- [ ] "This is too hard / too big / too abstract" button in deep view — user-initiated
+- [x] "This is too hard / too big / too abstract" button in deep view — user-initiated
   restructuring, reusing the Phase 4 adaptive resurfacing engine
-- [ ] AI proposes: break into smaller steps, find easier resources, or skip and revisit
+- [x] AI proposes: break into smaller steps, find easier resources, or skip and revisit
   prerequisite — user approves before any edit is applied
-- [ ] Track reformulation requests per step — if a step gets reformulated multiple times,
+- [x] Track reformulation requests per step — if a step gets reformulated multiple times,
   the self-talk voice should notice ("This is the third time you've broken this step down.
   Is the topic wrong, or the approach?")
 

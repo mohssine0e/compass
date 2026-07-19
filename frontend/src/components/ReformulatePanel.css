@@ -1,0 +1,105 @@
+.reformulate-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 56px 20px;
+  overflow-y: auto;
+  z-index: 60;
+}
+
+.reformulate-panel {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 26px 26px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.reformulate-context {
+  margin: 0;
+  color: var(--faint);
+  font-size: 0.85rem;
+}
+
+.reformulate-step {
+  margin: 0;
+  color: var(--text);
+  font-size: 1.1rem;
+  line-height: 1.35;
+  padding-right: 24px;
+}
+
+.reformulate-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.reformulate-option {
+  text-align: left;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 0.98rem;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.reformulate-option:hover {
+  border-color: var(--brass);
+  color: var(--brass);
+}
+
+.reformulate-proposal {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.reformulate-note {
+  margin: 0;
+  padding: 10px 14px;
+  border-left: 2px solid var(--brass);
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.reformulate-lead {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.reformulate-resources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reformulate-resource {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.reformulate-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 4px;
+}

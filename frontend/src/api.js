@@ -137,6 +137,22 @@ export function verifyStep(stepId, answer) {
   })
 }
 
+/**
+ * Draft a reformulation of a step (Phase 8.5). `kind` is 'break_down', 'add_prerequisite', or
+ * 'easier_resources'. Returns a proposal to review — nothing changes yet.
+ */
+export function proposeReformulate(stepId, kind) {
+  return request(`/reformulate/steps/${stepId}?kind=${encodeURIComponent(kind)}`, { method: 'POST' })
+}
+
+/** Apply an approved reformulation. */
+export function applyReformulate(stepId, body) {
+  return request(`/reformulate/steps/${stepId}/apply`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 /** The one thing to resurface before capture, or null when nothing qualifies. */
 export function getNextResurfacing() {
   return request('/resurfacing/next')

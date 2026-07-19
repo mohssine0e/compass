@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { endSession, explainText, getStepCovers, patchEntry, startSession } from '../api'
+import ReformulatePanel from './ReformulatePanel'
 import './StepDeepView.css'
 
 // Select-text help actions (Phase 8.5). Labels stay plain, never teacher-y.
@@ -31,6 +32,7 @@ export default function StepDeepView({ step, onClose, onChanged }) {
   // Text-selection help (Phase 8.5): toolbar at the selection, then a result shown alongside.
   const [selection, setSelection] = useState(null) // { text, top, left }
   const [help, setHelp] = useState(null) // { action, text, loading, response, error }
+  const [reformulating, setReformulating] = useState(false)
 
   // Show the action toolbar when the user selects text inside the panel (but not in the notes).
   function onMouseUp(e) {
@@ -233,6 +235,9 @@ export default function StepDeepView({ step, onClose, onChanged }) {
         {error && <p className="deep-error">{error}</p>}
 
         <div className="deep-actions">
+          <button className="deep-toomuch" onClick={() => setReformulating(true)} disabled={busy}>
+            This is too much
+          </button>
           <button
             className={'btn-primary' + (sessionOpen ? ' is-active-session' : '')}
             onClick={toggleSession}
@@ -242,6 +247,18 @@ export default function StepDeepView({ step, onClose, onChanged }) {
           </button>
         </div>
       </div>
+
+      {reformulating && (
+        <ReformulatePanel
+          step={step}
+          onClose={() => setReformulating(false)}
+          onApplied={() => {
+            setReformulating(false)
+            onChanged?.()
+            onClose()
+          }}
+        />
+      )}
     </div>
   )
 }
