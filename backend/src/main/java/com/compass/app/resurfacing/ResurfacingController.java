@@ -42,7 +42,8 @@ public class ResurfacingController {
             return ResponseEntity.ok(recheck.get());
         }
         return service.nextCandidate()
-                .map(entry -> ResponseEntity.ok(ResurfacingPrompt.of(entry, service.question(entry))))
+                .map(entry -> ResponseEntity.ok(
+                        ResurfacingPrompt.of(entry, service.question(entry), service.historyNote(entry))))
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
 

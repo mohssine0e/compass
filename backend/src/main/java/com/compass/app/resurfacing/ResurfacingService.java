@@ -95,6 +95,35 @@ public class ResurfacingService {
         return aiVoice.resurfaceQuestion(entry, currentStepTextOf(entry), entry.getSkipCount());
     }
 
+    /**
+     * A self-talk note drawing on THIS thread's own history (per-topic, not global, per
+     * CLAUDE.md), or {@code null} when there's no prior history — which is itself the signal
+     * that the prompt is in generic mode. Kept template-based and specific to the last response.
+     */
+    @SuppressWarnings("unchecked")
+    public String historyNote(Entry entry) {
+        Object log = entry.getContent() != null ? entry.getContent().get("resurfaceLog") : null;
+        if (!(log instanceof List<?> list) || list.isEmpty()) {
+            return null;
+        }
+        int times = list.size();
+        Object lastRaw = list.get(list.size() - 1);
+        String last = lastRaw instanceof Map<?, ?> m && m.get("response") instanceof String r ? r : null;
+        String phrase = switch (last == null ? "" : last) {
+            case "still_relevant" -> "you said it still mattered";
+            case "stuck" -> "you said you were stuck";
+            case "skip" -> "you skipped it";
+            case "something_else" -> "you gave it a next step";
+            default -> null;
+        };
+        if (phrase == null) {
+            return times == 1 ? "This has come up once before." : "This has come up " + times + " times before.";
+        }
+        return times == 1
+                ? "Last time this came up, " + phrase + "."
+                : "This has come up " + times + " times — last time, " + phrase + ".";
+    }
+
     /** The text of the step a stalled roadmap is currently on, or null (not a roadmap / none left). */
     String currentStepTextOf(Entry entry) {
         Entry step = currentStepOf(entry);

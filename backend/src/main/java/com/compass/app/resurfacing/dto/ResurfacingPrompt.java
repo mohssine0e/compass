@@ -19,6 +19,7 @@ public record ResurfacingPrompt(
         String mode,
         EntryResponse entry,
         String question,
+        String note,
         List<Option> options
 ) {
     /**
@@ -50,13 +51,13 @@ public record ResurfacingPrompt(
             Option.restructure("add_prerequisite", "something's missing first"));
 
     /** A normal resurface of a stalled idea/roadmap: an honest question + answer options. */
-    public static ResurfacingPrompt of(Entry entry, String question) {
-        return new ResurfacingPrompt("resurface", EntryResponse.from(entry), question, optionsFor(entry));
+    public static ResurfacingPrompt of(Entry entry, String question, String note) {
+        return new ResurfacingPrompt("resurface", EntryResponse.from(entry), question, note, optionsFor(entry));
     }
 
     /** A spaced recheck of a done step (Phase 8): answer the check, no answer-options list. */
     public static ResurfacingPrompt recheck(Entry step, String question) {
-        return new ResurfacingPrompt("recheck", EntryResponse.from(step), question, List.of());
+        return new ResurfacingPrompt("recheck", EntryResponse.from(step), question, null, List.of());
     }
 
     private static List<Option> optionsFor(Entry entry) {

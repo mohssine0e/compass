@@ -132,6 +132,8 @@ function ResurfaceView({ prompt, onDone }) {
       <p className="resurface-context">On your mind a while ago:</p>
       <p className="resurface-entry">{entryText}</p>
 
+      {prompt.note && <p className="resurface-history">{prompt.note}</p>}
+
       <h1 className="resurface-question">{question}</h1>
 
       <div className="resurface-options">

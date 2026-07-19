@@ -21,6 +21,12 @@
   font-size: 1rem;
 }
 
+.resurface-history {
+  margin: 0;
+  color: var(--brass);
+  font-size: 0.9rem;
+}
+
 .resurface-question {
   margin: 6px 0 10px;
   color: var(--text);

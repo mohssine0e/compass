@@ -325,7 +325,7 @@ Also: guided learning sessions, behavioral preference inference, and a focused d
   entry (linked via `parent_id`, type `task` or similar)
 - [x] Progress states for standalone ideas: captured → developing → in motion →
   done/dropped, reflected in the list/roadmap views
-- [ ] Per-topic personalization: when generating the default-options list for the honest
+- [x] Per-topic personalization: when generating the default-options list for the honest
   question, check for real history on that specific thread first (per CLAUDE.md — per-topic,
   not global) and use it if present; otherwise fall back to the generic default list. Be
   explicit (in the self-talk voice) about which mode it's in.
