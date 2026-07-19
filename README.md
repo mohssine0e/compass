@@ -19,10 +19,13 @@ self-talk, not an AI assistant.
 
 - **Phase 1**: capture (text/voice) + roadmap structure with self-marked progress
 - **Phase 2**: the system resurfaces stalled ideas/steps and asks about them
-- **Phase 3**: roadmap steps can require real AI-verified understanding, not just
-  self-reporting
-- **Phase 4**: captured ideas turn into trackable next steps
-- **Phase 5**: pattern-awareness across sessions, weekly reviews
+- **Phase 3**: fixing/editing roadmaps directly — undo, edit, reorder, insert, delete steps
+- **Phase 4**: AI-generated roadmaps from a goal, and adaptive resurfacing that can
+  propose restructuring a stalled step, not just ask about it
+- **Phase 5**: roadmap steps can require real AI-verified understanding, not just
+  self-reporting, plus spaced re-checks on things already marked done
+- **Phase 6**: captured ideas turn into trackable next steps
+- **Phase 7**: pattern-awareness across sessions, weekly reviews
 
 Each phase is meant to be actually used for a while before the next one gets built —
 see `TASKS.md` for the reasoning.
