@@ -109,7 +109,117 @@ the actual generated output carefully before trusting it.
 
 ---
 
-## Phase 5 — Verification
+## Phase 5 — Observability & error reporting
+
+Goal: a small, honest window into what's going wrong, before the next two phases add more
+external dependencies (file parsing, search grounding) that can fail in new ways. Small
+and low-risk — build this before piling on more AI-facing complexity, same reasoning as
+Phase 3 before Phase 4.
+
+Keep every log entry **brief** — a short message, not a full stack trace. Full technical
+detail belongs in normal server logs (stdout/file, whatever Spring Boot already does);
+this is a lightweight, human-scannable record for noticing patterns early, not a debugger.
+
+- [x] `system_events` table: `id`, `occurred_at`, `source` (`ai_provider` | `system`),
+  `category` (e.g. `timeout`, `provider_error`, `parse_failure`, `db_error`), `message`
+  (short text, hard-capped length — a sentence, not a paragraph), `context` (nullable,
+  small JSONB — e.g. which entry/roadmap it relates to), `severity` (`info` | `warning` |
+  `error`)
+- [ ] Every AI call site (voice acknowledgment, roadmap generation, resurfacing questions)
+  logs a brief event on failure or fallback — e.g. "Gemini timed out, Groq backup used" or
+  "both AI providers failed, fell back to plain acknowledgment" — not the raw exception
+- [ ] Key system-side failures (DB errors, failed migrations at runtime, unexpected nulls
+  in critical paths) also log a brief event, same table, `source: system`
+- [ ] `GET /admin/events` (or similar) — simple list, most recent first, filterable by
+  `source`/`severity`
+- [ ] Minimal admin view in the frontend: a plain list of recent events, nothing fancier
+  than the existing plain-list philosophy elsewhere in the app
+- [ ] Retention: cap how much accumulates (e.g. keep the last N events or auto-prune
+  anything older than a set window) so this stays a lightweight recent-signal view, not an
+  ever-growing log dump
+- [ ] **Push + tag `phase-5-complete`. Stop. Let the founder use this for real before
+  continuing.**
+
+---
+
+## Phase 6 — Learner profile
+
+Goal: a place to tell the system what you already know, so future roadmap generation
+(Phase 7) doesn't waste your time re-teaching things you've already learned. Every AI
+interpretation of what you provide gets shown back to you for confirmation or correction
+before it's trusted — same propose→approve→apply trust pattern as Phase 4, applied to your
+own profile instead of a roadmap edit.
+
+- [ ] Profile data model: a `learner_profile` record (skills list with optional confidence
+  level, free-text self-description, structured data extracted from an uploaded resume)
+- [ ] Manual skills entry: add/remove skill tags, each with an optional confidence level
+  (e.g. "just started" / "comfortable" / "solid") — confidence matters here specifically
+  because "I know Python" means very different things to different people, which is the
+  exact ambiguity that caused the re-teaching problem in the first place
+- [ ] Resume/CV upload: accept PDF/DOCX, extract raw text locally (e.g. Apache PDFBox for
+  PDF, Apache POI for DOCX — no external API needed for extraction itself)
+- [ ] AI extraction pass: send the extracted resume text to the existing AI provider,
+  prompted to pull out structured skills/experience/education — this reuses the existing
+  Gemini/Groq setup, no new provider needed for this step
+- [ ] Free-text self-description field ("how you like to learn/think") — AI-interpreted
+  into a few structured traits (e.g. "prefers concrete examples," "learns fast, skips
+  fundamentals if bored"), not stored as a raw guess
+- [ ] **Confirmation screen**: after skills + resume + self-description are submitted,
+  show the founder a plain-language overview of everything the system understood —
+  editable before it's saved as the real profile. Nothing from this phase is used in
+  generation (Phase 7) until it's been confirmed at least once.
+- [ ] Decide and implement resume file retention: keep the parsed structured data; discard
+  or keep the raw uploaded file only as long as actually needed (avoid holding sensitive
+  personal data — name, employer history — longer than necessary)
+- [ ] **Push + tag `phase-6-complete`. Stop. Let the founder use this for real before
+  continuing.**
+
+---
+
+## Phase 7 — Smart, profile-aware generation
+
+Goal: roadmap generation (built in Phase 4) gets meaningfully upgraded for real
+engineering topics — grounded in real sources instead of pure model memory, reasoning
+about genuine prerequisites, mixing in project-based steps, and skipping what the learner
+profile (Phase 6) already shows you know. This is the highest-complexity phase so far —
+review actual generated output carefully, on a real roadmap, before trusting it.
+
+**Search grounding (new capability — see the API note below)**
+- [ ] Integrate a dedicated search API call (separate from the Gemini/Groq chat models —
+  see note) during generation: before finalizing a proposed roadmap, the system checks its
+  own draft structure against real search results (official docs, established curricula)
+  and can revise before presenting it
+- [ ] Surface grounding sources alongside the generated roadmap (even briefly — "based on
+  the official Rust book's structure") so the founder can sanity-check, not just trust
+
+**Prerequisite reasoning**
+- [ ] Generation explicitly reasons about *why* step B needs step A, populating real
+  `depends_on` links (not just sequential order) — the model should be prompted to justify
+  each dependency, not just emit a plausible-looking list
+
+**Project-based steps**
+- [ ] Generated roadmaps mix conceptual steps with applied/project steps (e.g. "build a
+  small CLI tool using traits and generics"), not just a list of topics to read about —
+  this also sets up Phase 8 (Verification) better, since "did you build the thing" is a
+  stronger signal than "can you explain the concept"
+
+**Difficulty/time calibration**
+- [ ] Steps carry an honest relative weight/estimate (not uniform bullet points) so a
+  roadmap doesn't present a huge topic and a tiny one as equally-sized steps
+
+**Profile-aware personalization**
+- [ ] Generation reads the confirmed learner profile (Phase 6) and explicitly skips or
+  condenses topics the profile shows are already known — every skip is stated plainly in
+  the output ("skipping basic syntax — based on your completed C++ roadmap"), never silent
+- [ ] Clarifying questions (from Phase 4) become sharper using profile context — e.g.
+  "you've already covered ownership — skip it here, or just a quick refresher step?"
+  instead of a generic question
+- [ ] **Push + tag `phase-7-complete`. Stop. Let the founder use this for real before
+  continuing.**
+
+---
+
+## Phase 8 — Verification
 
 Goal: roadmap steps can optionally require a real check of understanding before counting
 as done, instead of pure self-reporting.
@@ -129,12 +239,12 @@ as done, instead of pure self-reporting.
   evidence-backed learning technique (spaced repetition) and it's nearly free here since
   it's the same engine firing on a different trigger (completed + due for recheck, via
   the resurfacing service) rather than a new system
-- [ ] **Push + tag `phase-5-complete`. Stop. Let the founder use this for real before
+- [ ] **Push + tag `phase-8-complete`. Stop. Let the founder use this for real before
   continuing.**
 
 ---
 
-## Phase 6 — Follow-through
+## Phase 9 — Follow-through
 
 Goal: standalone captured ideas can turn into real tracked action, not just sit as text.
 
@@ -152,12 +262,12 @@ Goal: standalone captured ideas can turn into real tracked action, not just sit 
 - [ ] Staleness as a passive visual cue on the roadmap list (e.g. "6 days since touched"
   next to a step), separate from the active resurfacing prompt — lets the founder notice
   drift without waiting for the system to interrupt them
-- [ ] **Push + tag `phase-6-complete`. Stop. Let the founder use this for real before
+- [ ] **Push + tag `phase-9-complete`. Stop. Let the founder use this for real before
   continuing.**
 
 ---
 
-## Phase 7 — Depth
+## Phase 10 — Depth
 
 Goal: the system starts noticing patterns across sessions, not just within one thread.
 
@@ -165,7 +275,7 @@ Goal: the system starts noticing patterns across sessions, not just within one t
   steps across separate entries
 - [ ] Weekly self-talk-voice review: a summary of where things stand across all active
   roadmaps and ideas, generated once there's enough history to be meaningful
-- [ ] **Push + tag `phase-7-complete`.**
+- [ ] **Push + tag `phase-10-complete`.**
 
 ---
 
@@ -183,3 +293,19 @@ design (see CLAUDE.md Section 7):
 - Branching/non-linear roadmap diagrams — current data model is intentionally linear
   (`order_index` + optional `depends_on` from Phase 4). Revisit only if a real roadmap
   needs actual branching or parallel tracks, not just for visual polish.
+
+---
+
+## API note — what's needed for Phase 6/7
+
+The existing Gemini/Groq setup (OpenAI-compatible chat completion endpoint) is enough for:
+tone generation, roadmap drafting from the model's own knowledge, and the AI extraction
+pass over resume text (Phase 6) — all plain text-in, text-out tasks.
+
+It is **not** enough on its own for search grounding (Phase 7) — a generic chat completion
+call has no live web access. This needs one new integration: a dedicated search API
+(e.g. Tavily, which is built specifically for LLM-grounding use cases and has a free tier,
+or Serper.dev as an alternative) called from the backend, with results passed into the
+generation prompt as context. Same `.env` pattern as `GEMINI_API_KEY`/`GROQ_API_KEY` — add
+a `SEARCH_API_KEY` and a small `SearchGroundingService`. Resume file parsing itself (PDF/
+DOCX text extraction) needs no external API — Apache PDFBox / Apache POI run locally.
