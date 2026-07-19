@@ -5,6 +5,7 @@ import GenerateRoadmapScreen from './components/GenerateRoadmapScreen'
 import RoadmapsScreen from './components/RoadmapsScreen'
 import RoadmapDetail from './components/RoadmapDetail'
 import AllEntriesScreen from './components/AllEntriesScreen'
+import AdminEventsScreen from './components/AdminEventsScreen'
 import ResurfacingScreen from './components/ResurfacingScreen'
 import { getNextResurfacing } from './api'
 import './App.css'
@@ -52,6 +53,9 @@ export default function App() {
           <NavLink active={view.name === 'all'} onClick={() => go('all')}>
             All
           </NavLink>
+          <NavLink active={view.name === 'events'} onClick={() => go('events')}>
+            Events
+          </NavLink>
         </nav>
       </header>
 
@@ -86,6 +90,7 @@ export default function App() {
         {view.name === 'all' && (
           <AllEntriesScreen onOpenRoadmap={(id) => go('roadmap', { id })} />
         )}
+        {view.name === 'events' && <AdminEventsScreen />}
       </main>
     </div>
   )

@@ -132,7 +132,7 @@ this is a lightweight, human-scannable record for noticing patterns early, not a
   in critical paths) also log a brief event, same table, `source: system`
 - [x] `GET /admin/events` (or similar) — simple list, most recent first, filterable by
   `source`/`severity`
-- [ ] Minimal admin view in the frontend: a plain list of recent events, nothing fancier
+- [x] Minimal admin view in the frontend: a plain list of recent events, nothing fancier
   than the existing plain-list philosophy elsewhere in the app
 - [ ] Retention: cap how much accumulates (e.g. keep the last N events or auto-prune
   anything older than a set window) so this stays a lightweight recent-signal view, not an

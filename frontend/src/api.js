@@ -127,3 +127,16 @@ export function applyRestructure(id, body) {
     body: JSON.stringify(body),
   })
 }
+
+/**
+ * Recent system events, newest first. `filters` is { source?, severity?, limit? } — omit a
+ * filter to include every value. Operational/admin view (Phase 5).
+ */
+export function getAdminEvents(filters = {}) {
+  const params = new URLSearchParams()
+  if (filters.source) params.set('source', filters.source)
+  if (filters.severity) params.set('severity', filters.severity)
+  if (filters.limit) params.set('limit', filters.limit)
+  const query = params.toString()
+  return request('/admin/events' + (query ? `?${query}` : ''))
+}
