@@ -168,7 +168,7 @@ own profile instead of a roadmap edit.
   show the founder a plain-language overview of everything the system understood —
   editable before it's saved as the real profile. Nothing from this phase is used in
   generation (Phase 7) until it's been confirmed at least once.
-- [ ] Decide and implement resume file retention: keep the parsed structured data; discard
+- [x] Decide and implement resume file retention: keep the parsed structured data; discard
   or keep the raw uploaded file only as long as actually needed (avoid holding sensitive
   personal data — name, employer history — longer than necessary)
 - [ ] **Push + tag `phase-6-complete`. Stop. Let the founder use this for real before
