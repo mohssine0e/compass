@@ -1,8 +1,10 @@
 package com.compass.app.profile;
 
+import com.compass.app.ai.ProfileAiService;
 import com.compass.app.profile.dto.SaveProfileRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -23,9 +25,14 @@ public class ProfileService {
     static final Set<String> CONFIDENCE_LEVELS = Set.of("just_started", "comfortable", "solid");
 
     private final LearnerProfileRepository repository;
+    private final ResumeTextExtractor resumeText;
+    private final ProfileAiService profileAi;
 
-    public ProfileService(LearnerProfileRepository repository) {
+    public ProfileService(LearnerProfileRepository repository, ResumeTextExtractor resumeText,
+                          ProfileAiService profileAi) {
         this.repository = repository;
+        this.resumeText = resumeText;
+        this.profileAi = profileAi;
     }
 
     /** The current profile, creating an empty one if none exists yet. */
@@ -48,6 +55,26 @@ public class ProfileService {
         profile.setSelfDescription(req.selfDescription());
         profile.setConfirmedAt(Instant.now());
         return repository.save(profile);
+    }
+
+    /**
+     * Extract structured facts from an uploaded resume — a <em>proposal</em> the founder edits
+     * and confirms before it's saved, never trusted silently (CLAUDE.md). The raw file and its
+     * text are processed in memory and discarded here; only the structure returned (and only if
+     * the founder later confirms) is ever persisted. Throws {@link IllegalStateException} when
+     * the AI can't help, so the caller can fall back to manual entry.
+     */
+    public Map<String, Object> extractResume(MultipartFile file) {
+        String text = resumeText.extract(file); // throws IllegalArgumentException on a bad file
+        if (!profileAi.isAvailable()) {
+            throw new IllegalStateException("Resume reading is unavailable right now — add skills by hand.");
+        }
+        Map<String, Object> extracted = profileAi.extractResume(text);
+        if (extracted == null) {
+            throw new IllegalStateException(
+                    "Couldn't pull structured info from that resume — add skills by hand.");
+        }
+        return extracted;
     }
 
     /** Keep only skills with a real name; normalize confidence to a known level or null. */

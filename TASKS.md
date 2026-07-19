@@ -156,9 +156,9 @@ own profile instead of a roadmap edit.
   (e.g. "just started" / "comfortable" / "solid") — confidence matters here specifically
   because "I know Python" means very different things to different people, which is the
   exact ambiguity that caused the re-teaching problem in the first place
-- [ ] Resume/CV upload: accept PDF/DOCX, extract raw text locally (e.g. Apache PDFBox for
+- [x] Resume/CV upload: accept PDF/DOCX, extract raw text locally (e.g. Apache PDFBox for
   PDF, Apache POI for DOCX — no external API needed for extraction itself)
-- [ ] AI extraction pass: send the extracted resume text to the existing AI provider,
+- [x] AI extraction pass: send the extracted resume text to the existing AI provider,
   prompted to pull out structured skills/experience/education — this reuses the existing
   Gemini/Groq setup, no new provider needed for this step
 - [ ] Free-text self-description field ("how you like to learn/think") — AI-interpreted
