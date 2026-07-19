@@ -25,9 +25,22 @@ export default function StepDeepView({ step, onClose, onChanged }) {
   const [savedNotes, setSavedNotes] = useState(content.notes || '')
   const [savingNotes, setSavingNotes] = useState(false)
   const [sessionOpen, setSessionOpen] = useState(hasOpenSession(content))
+  const [sessionStartedAt, setSessionStartedAt] = useState(openSessionStart(content))
+  const [elapsed, setElapsed] = useState(0)
+  const [ending, setEnding] = useState(false) // showing the "how was it?" feedback prompt
+  const [post, setPost] = useState(null) // post-session next-action suggestion
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const notesTimer = useRef(null)
+
+  // Live timer while a session is running.
+  useEffect(() => {
+    if (!sessionOpen || !sessionStartedAt) return undefined
+    const tick = () => setElapsed(Math.floor((Date.now() - sessionStartedAt) / 1000))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [sessionOpen, sessionStartedAt])
   const panelRef = useRef(null)
   // Text-selection help (Phase 8.5): toolbar at the selection, then a result shown alongside.
   const [selection, setSelection] = useState(null) // { text, top, left }
@@ -104,18 +117,35 @@ export default function StepDeepView({ step, onClose, onChanged }) {
     }
   }
 
-  async function toggleSession() {
+  async function beginSession() {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    setPost(null)
+    try {
+      await startSession(step.id)
+      setSessionOpen(true)
+      setSessionStartedAt(Date.now())
+      onChanged?.()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // "Done for now" opens the feedback prompt; picking one ends the session with that feedback,
+  // then suggests a next action (Phase 9). "Need help" opens the reformulate flow.
+  async function finishSession(feedback, completed) {
     if (busy) return
     setBusy(true)
     setError(null)
     try {
-      if (sessionOpen) {
-        await endSession(step.id, {})
-        setSessionOpen(false)
-      } else {
-        await startSession(step.id)
-        setSessionOpen(true)
-      }
+      await endSession(step.id, { userFeedback: feedback, completed })
+      setSessionOpen(false)
+      setEnding(false)
+      setSessionStartedAt(null)
+      setPost(nextActionFor(feedback, completed))
       onChanged?.()
     } catch (err) {
       setError(err.message)
@@ -234,18 +264,57 @@ export default function StepDeepView({ step, onClose, onChanged }) {
 
         {error && <p className="deep-error">{error}</p>}
 
-        <div className="deep-actions">
-          <button className="deep-toomuch" onClick={() => setReformulating(true)} disabled={busy}>
-            This is too much
-          </button>
-          <button
-            className={'btn-primary' + (sessionOpen ? ' is-active-session' : '')}
-            onClick={toggleSession}
-            disabled={busy}
-          >
-            {busy ? '…' : sessionOpen ? 'End session' : 'Start session'}
-          </button>
-        </div>
+        {post && (
+          <div className="session-post">
+            <p className="session-post-line">{post}</p>
+            <div className="session-post-actions">
+              <button className="btn-ghost" onClick={onClose}>
+                Done
+              </button>
+              <button className="btn-ghost" onClick={() => setReformulating(true)}>
+                Reformulate this
+              </button>
+            </div>
+          </div>
+        )}
+
+        {ending ? (
+          <div className="session-feedback">
+            <p className="session-feedback-q">How was it?</p>
+            <div className="session-feedback-opts">
+              <button className="btn-ghost" onClick={() => finishSession('helpful', true)} disabled={busy}>
+                Helpful — done
+              </button>
+              <button className="btn-ghost" onClick={() => finishSession('helpful', false)} disabled={busy}>
+                Helpful — more to do
+              </button>
+              <button className="btn-ghost" onClick={() => finishSession('too_hard', false)} disabled={busy}>
+                Too hard
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="deep-actions">
+            <button className="deep-toomuch" onClick={() => setReformulating(true)} disabled={busy}>
+              This is too much
+            </button>
+            {sessionOpen ? (
+              <span className="session-live">
+                <span className="session-timer">{formatElapsed(elapsed)}</span>
+                <button className="btn-ghost" onClick={() => setReformulating(true)} disabled={busy}>
+                  Need help
+                </button>
+                <button className="btn-primary is-active-session" onClick={() => setEnding(true)} disabled={busy}>
+                  Done for now
+                </button>
+              </span>
+            ) : (
+              <button className="btn-primary" onClick={beginSession} disabled={busy}>
+                {busy ? '…' : 'Start session'}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {reformulating && (
@@ -267,6 +336,28 @@ function hasOpenSession(content) {
   const history = content.sessionHistory || []
   const last = history[history.length - 1]
   return !!last && last.durationMinutes == null
+}
+
+function openSessionStart(content) {
+  const history = content.sessionHistory || []
+  const last = history[history.length - 1]
+  if (last && last.durationMinutes == null && last.startedAt) {
+    return new Date(last.startedAt).getTime()
+  }
+  return null
+}
+
+function formatElapsed(seconds) {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
+// A plain, self-talk next-action nudge after a session — no pep talk (Phase 9).
+function nextActionFor(feedback, completed) {
+  if (completed) return 'That one holds. Next step, or stop here?'
+  if (feedback === 'too_hard') return 'Too much in one go. Break it down, or come back to it fresh?'
+  return 'Good chunk done. Keep going, or take a break?'
 }
 
 function helpActionLabel(action) {

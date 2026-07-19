@@ -274,3 +274,54 @@
   line-height: 1.55;
   white-space: pre-wrap;
 }
+
+/* --- Guided session (Phase 9) --- */
+.session-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.session-timer {
+  color: var(--brass);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.95rem;
+}
+
+.session-feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.session-feedback-q {
+  margin: 0;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.session-feedback-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.session-post {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.session-post-line {
+  margin: 0;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.session-post-actions {
+  display: flex;
+  gap: 8px;
+}

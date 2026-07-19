@@ -337,10 +337,10 @@ Also: guided learning sessions, behavioral preference inference, and a focused d
   drift without waiting for the system to interrupt them
 
 **Guided session mode (extends Phase 7.5 session tracking)**
-- [ ] Full session flow: user opens deep view → hits "Start Session" → timer runs →
+- [x] Full session flow: user opens deep view → hits "Start Session" → timer runs →
   user marks "done for now" or "need help" → brief feedback prompt ("helpful? too hard?")
-- [ ] Session feedback feeds into behavioral preference inference (see below)
-- [ ] Post-session: system suggests next action — continue to next step, review this one,
+- [x] Session feedback feeds into behavioral preference inference (see below)
+- [x] Post-session: system suggests next action — continue to next step, review this one,
   or take a break
 
 **Behavioral preference inference**
