@@ -19,6 +19,7 @@ public record PatchEntryRequest(
         String text,
         Long dependsOn,
         String notes,
+        String verify,
         Map<String, Object> content
 ) {
 }

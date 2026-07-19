@@ -262,9 +262,9 @@ search grounding from Phase 7, but scoped to resource finding rather than roadma
 Goal: roadmap steps can optionally require a real check of understanding before counting
 as done, instead of pure self-reporting.
 
-- [ ] AI question-generation service: given a roadmap step's content, generate a fair,
+- [x] AI question-generation service: given a roadmap step's content, generate a fair,
   non-trivial check (question or short task)
-- [ ] AI evaluation service: given the user's answer, judge whether it demonstrates real
+- [x] AI evaluation service: given the user's answer, judge whether it demonstrates real
   understanding — return a specific gap, not just pass/fail, when it doesn't
 - [ ] Wire verification into "mark step done" as an optional gate (light-check vs. full
   check — not every step needs the same rigor; let this be configurable per step or per

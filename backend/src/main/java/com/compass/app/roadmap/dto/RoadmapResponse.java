@@ -15,6 +15,7 @@ public record RoadmapResponse(
         String title,
         String notes,
         EntryStatus status,
+        String verify,
         Instant createdAt,
         Instant updatedAt,
         List<EntryResponse> steps,
@@ -32,6 +33,7 @@ public record RoadmapResponse(
     public static RoadmapResponse of(Entry roadmap, List<Entry> steps) {
         String title = asString(roadmap, "title");
         String notes = asString(roadmap, "notes");
+        String verify = asString(roadmap, "verify"); // roadmap-wide default: null/light/full
 
         List<EntryResponse> stepDtos = steps.stream().map(EntryResponse::from).toList();
 
@@ -51,6 +53,7 @@ public record RoadmapResponse(
                 title,
                 notes,
                 roadmap.getStatus(),
+                verify,
                 roadmap.getCreatedAt(),
                 roadmap.getUpdatedAt(),
                 stepDtos,

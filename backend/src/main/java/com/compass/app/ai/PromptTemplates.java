@@ -405,4 +405,62 @@ final class PromptTemplates {
     sb.append("Write what it covers as JSON.");
     return sb.toString();
   }
+
+  // --- Verification (Phase 8) -----------------------------------------------------------
+  //
+  // A check the user answers before a step counts as done, and an honest judgment of their
+  // answer. The check question is plain; the "gap" on a wrong answer is the user's own
+  // clear-headed inner voice — specific, never generic, never harsh.
+
+  static final String CHECK_SYSTEM = """
+      Write ONE fair check for a single step of a learning roadmap — something a person who
+      actually did the step could answer, but someone who only skimmed could not. The point is
+      honest self-knowledge, not a gotcha.
+
+      Rigor:
+      - "light": one short recall/understanding question.
+      - "full": a harder question, or a small concrete task ("write a function that…", "explain
+        why X happens when Y"). Still answerable in a few sentences or a short snippet.
+
+      Hard rules:
+      - Exactly one check. Specific to THIS step, not the whole roadmap. Plain and direct.
+      - No multiple-choice, no trivia, no praise, no preamble, no emoji.
+      - Output ONLY strict JSON, no prose: {"question": "..."}
+      """;
+
+  static String checkUser(String roadmapTitle, String stepText, String rigor) {
+    StringBuilder sb = new StringBuilder();
+    if (roadmapTitle != null && !roadmapTitle.isBlank()) {
+      sb.append("Roadmap: ").append(roadmapTitle.trim()).append('\n');
+    }
+    sb.append("Step: ").append(stepText == null ? "" : stepText.trim()).append('\n');
+    sb.append("Rigor: ").append("full".equals(rigor) ? "full" : "light").append('\n');
+    sb.append("Write the check as JSON.");
+    return sb.toString();
+  }
+
+  static final String EVALUATE_SYSTEM = """
+      Judge whether the user's answer to a check shows they actually understand the step. Be fair
+      and honest — a right answer in their own words passes even if imperfectly worded; a vague,
+      hand-wavy, or wrong answer does not.
+
+      When it does NOT pass, write a "gap": one or two lines in the user's OWN clear-headed inner
+      voice naming the SPECIFIC thing they got wrong or missed — the actual concept, not "not
+      quite" or "review this more". It should read like they caught the hole themselves.
+
+      Hard rules:
+      - Judge understanding, not phrasing or spelling.
+      - gap (only when not passed): specific and plain. No praise, no scolding, no emoji, no
+        "you should". When passed, gap is null.
+      - Output ONLY strict JSON, no prose: {"passed": true, "gap": null}
+      """;
+
+  static String evaluateUser(String stepText, String question, String answer) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Step: ").append(stepText == null ? "" : stepText.trim()).append('\n');
+    sb.append("The check they were asked: ").append(question == null ? "" : question.trim()).append('\n');
+    sb.append("Their answer: ").append(answer == null ? "" : answer.trim()).append('\n');
+    sb.append("Judge it as JSON.");
+    return sb.toString();
+  }
 }

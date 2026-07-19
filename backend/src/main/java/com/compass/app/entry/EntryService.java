@@ -83,6 +83,22 @@ public class EntryService {
             }
             entry.setContent(content);
         }
+        if (patch.verify() != null) {
+            // Verification mode (Phase 8): off/light/full, merged into content. "off" clears it
+            // so a step falls back to its roadmap's default.
+            Map<String, Object> content = entry.getContent() != null
+                    ? new HashMap<>(entry.getContent())
+                    : new HashMap<>();
+            String mode = patch.verify().trim();
+            if (mode.isEmpty() || mode.equals("off")) {
+                content.remove("verify");
+            } else if (mode.equals("light") || mode.equals("full")) {
+                content.put("verify", mode);
+            } else {
+                throw new IllegalArgumentException("Verify mode must be off, light, or full.");
+            }
+            entry.setContent(content);
+        }
 
         Entry saved = repository.save(entry);
         // Working a step counts as touching its roadmap, so an actively-progressing roadmap
