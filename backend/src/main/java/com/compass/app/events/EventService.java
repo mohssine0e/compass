@@ -76,7 +76,9 @@ public class EventService {
         if (message == null) {
             return "";
         }
-        String trimmed = message.strip();
-        return trimmed.length() <= MAX_MESSAGE ? trimmed : trimmed.substring(0, MAX_MESSAGE - 1).strip() + "…";
+        // Collapse newlines/runs of whitespace so a provider's multi-line error body stays one
+        // scannable line, then cap the length.
+        String oneLine = message.strip().replaceAll("\\s+", " ");
+        return oneLine.length() <= MAX_MESSAGE ? oneLine : oneLine.substring(0, MAX_MESSAGE - 1).strip() + "…";
     }
 }

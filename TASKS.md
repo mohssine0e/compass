@@ -134,7 +134,7 @@ this is a lightweight, human-scannable record for noticing patterns early, not a
   `source`/`severity`
 - [x] Minimal admin view in the frontend: a plain list of recent events, nothing fancier
   than the existing plain-list philosophy elsewhere in the app
-- [ ] Retention: cap how much accumulates (e.g. keep the last N events or auto-prune
+- [x] Retention: cap how much accumulates (e.g. keep the last N events or auto-prune
   anything older than a set window) so this stays a lightweight recent-signal view, not an
   ever-growing log dump
 - [ ] **Push + tag `phase-5-complete`. Stop. Let the founder use this for real before
