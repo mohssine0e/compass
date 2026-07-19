@@ -77,6 +77,28 @@ public class ProfileService {
         return extracted;
     }
 
+    /**
+     * Interpret a free-text self-description into a few learning-style traits — a proposal the
+     * founder reviews before it's saved (CLAUDE.md: AI reads of the person are guesses). Throws
+     * {@link IllegalStateException} when the AI can't help; the founder can still save their own
+     * words without traits.
+     */
+    public List<String> interpretSelfDescription(String text) {
+        if (text == null || text.isBlank()) {
+            throw new IllegalArgumentException("Write a sentence or two first.");
+        }
+        if (!profileAi.isAvailable()) {
+            throw new IllegalStateException(
+                    "Interpreting is unavailable right now — you can still save your own words.");
+        }
+        List<String> traits = profileAi.interpretSelfDescription(text);
+        if (traits == null) {
+            throw new IllegalStateException(
+                    "Couldn't pull traits from that — you can still save your own words.");
+        }
+        return traits;
+    }
+
     /** Keep only skills with a real name; normalize confidence to a known level or null. */
     static List<Map<String, Object>> sanitizeSkills(List<Map<String, Object>> raw) {
         List<Map<String, Object>> clean = new ArrayList<>();

@@ -103,6 +103,73 @@
   font-size: 0.95rem;
 }
 
+.profile-section-hint {
+  color: var(--faint);
+  font-size: 0.9rem;
+  margin: -6px 0 12px;
+}
+
+.desc-input {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 1rem;
+  line-height: 1.5;
+  outline: none;
+  resize: vertical;
+}
+
+.desc-input:focus {
+  border-color: var(--faint);
+}
+
+.desc-input::placeholder {
+  color: var(--faint);
+}
+
+.desc-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 10px;
+}
+
+.trait-list {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.trait-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 8px 6px 14px;
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.trait-remove {
+  background: transparent;
+  border: none;
+  color: var(--faint);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.trait-remove:hover {
+  color: #d98a7a;
+}
+
 .profile-actions {
   display: flex;
   align-items: center;

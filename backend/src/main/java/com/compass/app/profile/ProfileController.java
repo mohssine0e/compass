@@ -1,5 +1,6 @@
 package com.compass.app.profile;
 
+import com.compass.app.profile.dto.InterpretDescriptionRequest;
 import com.compass.app.profile.dto.ProfileResponse;
 import com.compass.app.profile.dto.SaveProfileRequest;
 import org.springframework.http.MediaType;
@@ -48,5 +49,14 @@ public class ProfileController {
     @PostMapping(value = "/resume/extract", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public Map<String, Object> extractResume(@RequestParam("file") MultipartFile file) {
         return service.extractResume(file);
+    }
+
+    /**
+     * Interpret a free-text self-description into a few learning-style traits — a proposal to
+     * review, not saved here. 503 when interpreting is unavailable (save your own words instead).
+     */
+    @PostMapping("/self-description/interpret")
+    public Map<String, Object> interpretSelfDescription(@RequestBody InterpretDescriptionRequest request) {
+        return Map.of("traits", service.interpretSelfDescription(request.text()));
     }
 }

@@ -145,6 +145,37 @@ export function saveProfile(payload) {
 }
 
 /**
+ * Upload a PDF/DOCX resume; returns a proposed { skills, experience, education } to review.
+ * Nothing is saved and the raw file isn't stored. Throws (503) when AI reading is unavailable.
+ */
+export function extractResume(file) {
+  const form = new FormData()
+  form.append('file', file)
+  // No Content-Type header: the browser sets the multipart boundary itself.
+  return fetch('/api/profile/resume/extract', { method: 'POST', body: form }).then(async (res) => {
+    if (!res.ok) {
+      let detail = `Request failed (${res.status})`
+      try {
+        const body = await res.json()
+        if (body && body.detail) detail = body.detail
+      } catch {
+        // keep default
+      }
+      throw new Error(detail)
+    }
+    return res.json()
+  })
+}
+
+/** Interpret a free-text self-description into proposed traits (to review). `text` is a string. */
+export function interpretSelfDescription(text) {
+  return request('/profile/self-description/interpret', {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  })
+}
+
+/**
  * Recent system events, newest first. `filters` is { source?, severity?, limit? } — omit a
  * filter to include every value. Operational/admin view (Phase 5).
  */

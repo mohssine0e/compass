@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getProfile, saveProfile } from '../api'
+import { getProfile, interpretSelfDescription, saveProfile } from '../api'
 import './ProfileScreen.css'
 
 // The learner profile (Phase 6): what you already know, so generation later doesn't re-teach
@@ -14,9 +14,11 @@ const CONFIDENCE = [
 
 export default function ProfileScreen() {
   const [skills, setSkills] = useState([])
-  // Preserved across saves so editing skills doesn't wipe AI-derived parts (added next tasks).
+  // Preserved across saves so editing one part doesn't wipe another (resume added next task).
   const [resumeExtracted, setResumeExtracted] = useState(null)
-  const [selfDescription, setSelfDescription] = useState(null)
+  const [descRaw, setDescRaw] = useState('')
+  const [descTraits, setDescTraits] = useState([])
+  const [interpreting, setInterpreting] = useState(false)
   const [confirmedAt, setConfirmedAt] = useState(null)
   const [newSkill, setNewSkill] = useState('')
   const [saving, setSaving] = useState(false)
@@ -30,7 +32,8 @@ export default function ProfileScreen() {
         if (!alive) return
         setSkills(p.skills || [])
         setResumeExtracted(p.resumeExtracted || null)
-        setSelfDescription(p.selfDescription || null)
+        setDescRaw((p.selfDescription && p.selfDescription.raw) || '')
+        setDescTraits((p.selfDescription && p.selfDescription.traits) || [])
         setConfirmedAt(p.confirmedAt || null)
       })
       .catch((err) => alive && setError(err.message))
@@ -38,6 +41,26 @@ export default function ProfileScreen() {
       alive = false
     }
   }, [])
+
+  async function interpret() {
+    if (interpreting || !descRaw.trim()) return
+    setInterpreting(true)
+    setError(null)
+    try {
+      const res = await interpretSelfDescription(descRaw.trim())
+      setDescTraits(res.traits || [])
+      setSaved(false)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setInterpreting(false)
+    }
+  }
+
+  function removeTrait(trait) {
+    setDescTraits((prev) => prev.filter((t) => t !== trait))
+    setSaved(false)
+  }
 
   function addSkill() {
     const name = newSkill.trim()
@@ -72,6 +95,9 @@ export default function ProfileScreen() {
     if (saving) return
     setSaving(true)
     setError(null)
+    const selfDescription = descRaw.trim()
+      ? { raw: descRaw.trim(), traits: descTraits }
+      : null
     try {
       const p = await saveProfile({ skills, resumeExtracted, selfDescription })
       setConfirmedAt(p.confirmedAt || null)
@@ -129,6 +155,40 @@ export default function ProfileScreen() {
                   onClick={() => removeSkill(s.name)}
                   aria-label={`Remove ${s.name}`}
                 >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="profile-section">
+        <h2 className="profile-section-title">How you like to learn</h2>
+        <p className="profile-section-hint">
+          In your own words. The system reads it into a few traits — you decide what stays.
+        </p>
+        <textarea
+          className="desc-input"
+          value={descRaw}
+          onChange={(e) => {
+            setDescRaw(e.target.value)
+            setSaved(false)
+          }}
+          placeholder="e.g. I learn best by building something real, and lose interest reading theory with no payoff."
+          rows={3}
+        />
+        <div className="desc-actions">
+          <button className="btn-ghost" onClick={interpret} disabled={interpreting || !descRaw.trim()}>
+            {interpreting ? 'Reading…' : 'Read into traits'}
+          </button>
+        </div>
+        {descTraits.length > 0 && (
+          <ul className="trait-list">
+            {descTraits.map((t) => (
+              <li className="trait-chip" key={t}>
+                <span>{t}</span>
+                <button className="trait-remove" onClick={() => removeTrait(t)} aria-label={`Remove ${t}`}>
                   ×
                 </button>
               </li>
