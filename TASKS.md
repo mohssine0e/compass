@@ -150,7 +150,7 @@ interpretation of what you provide gets shown back to you for confirmation or co
 before it's trusted — same propose→approve→apply trust pattern as Phase 4, applied to your
 own profile instead of a roadmap edit.
 
-- [ ] Profile data model: a `learner_profile` record (skills list with optional confidence
+- [x] Profile data model: a `learner_profile` record (skills list with optional confidence
   level, free-text self-description, structured data extracted from an uploaded resume)
 - [ ] Manual skills entry: add/remove skill tags, each with an optional confidence level
   (e.g. "just started" / "comfortable" / "solid") — confidence matters here specifically
