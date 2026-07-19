@@ -60,6 +60,11 @@ public class Entry {
     @Column(name = "last_resurfaced_at")
     private Instant lastResurfacedAt;
 
+    // Current streak of skips without acting on it (reset to 0 on any real engagement). Lets
+    // the self-talk voice tell a one-off skip from a pattern of avoidance — see CLAUDE.md §2.
+    @Column(name = "skip_count", nullable = false)
+    private int skipCount = 0;
+
     @PrePersist
     void onCreate() {
         Instant now = Instant.now();
@@ -153,5 +158,13 @@ public class Entry {
 
     public void setLastResurfacedAt(Instant lastResurfacedAt) {
         this.lastResurfacedAt = lastResurfacedAt;
+    }
+
+    public int getSkipCount() {
+        return skipCount;
+    }
+
+    public void setSkipCount(int skipCount) {
+        this.skipCount = skipCount;
     }
 }

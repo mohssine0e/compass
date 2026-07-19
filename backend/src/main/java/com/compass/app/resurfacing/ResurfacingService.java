@@ -50,7 +50,28 @@ public class ResurfacingService {
 
     /** The honest question to ask about an entry, in the self-talk voice (never null). */
     public String question(Entry entry) {
-        return aiVoice.resurfaceQuestion(entry);
+        return aiVoice.resurfaceQuestion(entry, currentStepTextOf(entry), entry.getSkipCount());
+    }
+
+    /** The text of the step a stalled roadmap is currently on, or null (not a roadmap / none left). */
+    String currentStepTextOf(Entry entry) {
+        Entry step = currentStepOf(entry);
+        if (step == null) {
+            return null;
+        }
+        Object text = step.getContent() != null ? step.getContent().get("text") : null;
+        return text instanceof String s ? s : null;
+    }
+
+    /** The first not-done, not-dropped step of a roadmap — where you actually are — or null. */
+    Entry currentStepOf(Entry entry) {
+        if (entry == null || entry.getType() != com.compass.app.entry.EntryType.ROADMAP) {
+            return null;
+        }
+        return repository.findByParentIdOrderByOrderIndexAsc(entry.getId()).stream()
+                .filter(s -> s.getStatus() != EntryStatus.DONE && s.getStatus() != EntryStatus.DROPPED)
+                .findFirst()
+                .orElse(null);
     }
 
     /**
@@ -82,6 +103,14 @@ public class ResurfacingService {
             // still_relevant / stuck / skip: no state change, just the resurface stamp below.
             default -> {
             }
+        }
+
+        // Track a *current streak* of avoidance: a skip adds to it; any real engagement clears
+        // it, so the self-talk voice can tell one skip from a pattern (CLAUDE.md Section 2).
+        if ("skip".equals(choice)) {
+            entry.setSkipCount(entry.getSkipCount() + 1);
+        } else {
+            entry.setSkipCount(0);
         }
 
         appendResurfaceLog(content, choice, note);

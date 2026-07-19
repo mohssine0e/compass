@@ -101,7 +101,7 @@ the actual generated output carefully before trusting it.
 - [ ] If the user picks a restructuring option, the AI proposes a specific edit (e.g. split
   one step into two, or suggest a prerequisite step) — user still approves before it's
   applied; never auto-edit silently
-- [ ] Track repeated skips on the same item distinctly from a single skip (see CLAUDE.md
+- [x] Track repeated skips on the same item distinctly from a single skip (see CLAUDE.md
   Section 2 — this is what lets the self-talk voice eventually ask "is this the wrong next
   step, or are you avoiding it?" honestly, instead of nagging on every skip identically)
 - [ ] **Push + tag `phase-4-complete`. Stop. Let the founder use this for real before

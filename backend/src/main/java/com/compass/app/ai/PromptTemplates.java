@@ -59,7 +59,10 @@ final class PromptTemplates {
             Hard rules:
             - One line, a genuine question ending with "?". At most about sixteen words.
             - Reference the specific thing, and use the fact that it's been sitting / stalled.
+              If a specific stuck step is given, name that step, not just the roadmap.
             - Plain and direct — an honest check, not a gentle nudge.
+            - If they've skipped it repeatedly (a stated pattern, not a first skip), it is fair to
+              ask whether it's the wrong next step or whether they're avoiding it — still one line.
             - NEVER praise or encourage. No exclamation points. No emoji. No "I".
             - No offering help ("want me to", "would you like"). No hedging. No therapy-speak.
             - Output only the question line — no quotation marks around it.

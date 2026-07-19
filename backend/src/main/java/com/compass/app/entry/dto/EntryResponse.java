@@ -23,6 +23,7 @@ public record EntryResponse(
         Instant createdAt,
         Instant updatedAt,
         Instant lastResurfacedAt,
+        int skipCount,
         // A short self-talk-voice line for this moment (capture / mark done). Only set on
         // create and mark-done responses; null elsewhere and when no AI provider is set.
         String acknowledgment
@@ -44,6 +45,7 @@ public record EntryResponse(
                 e.getCreatedAt(),
                 e.getUpdatedAt(),
                 e.getLastResurfacedAt(),
+                e.getSkipCount(),
                 acknowledgment
         );
     }

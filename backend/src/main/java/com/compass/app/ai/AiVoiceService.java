@@ -70,6 +70,15 @@ public class AiVoiceService {
      * fail, so the resurfacing prompt always has something honest to ask.
      */
     public String resurfaceQuestion(Entry entry) {
+        return resurfaceQuestion(entry, null, entry != null ? entry.getSkipCount() : 0);
+    }
+
+    /**
+     * As {@link #resurfaceQuestion(Entry)}, but able to name the specific step the user is
+     * stuck on (for a roadmap) and to weigh a run of skips — repeated avoidance should read
+     * differently from a first skip (CLAUDE.md Section 2). Never null.
+     */
+    public String resurfaceQuestion(Entry entry, String currentStepText, int skipCount) {
         if (entry == null) {
             return null;
         }
@@ -81,8 +90,8 @@ public class AiVoiceService {
         long days = daysSince(entry.getUpdatedAt());
 
         String q = generate(PromptTemplates.RESURFACE_SYSTEM,
-                PromptTemplates.resurfaceUser(type, significance, text, days));
-        return q != null ? q : fallbackQuestion(entry, text);
+                PromptTemplates.resurfaceUser(type, significance, text, days, currentStepText, skipCount));
+        return q != null ? q : fallbackQuestion(entry, text, currentStepText, skipCount);
     }
 
     /** Try primary then backup; null if neither is configured or both fail. */
@@ -94,12 +103,19 @@ public class AiVoiceService {
         return line;
     }
 
-    private static String fallbackQuestion(Entry entry, String text) {
-        String subject = shorten(text);
-        if (entry.getType() == EntryType.ROADMAP) {
-            return "Haven't moved on \"" + subject + "\" in a while. Stuck, or done with it?";
+    private static String fallbackQuestion(Entry entry, String text, String currentStepText, int skipCount) {
+        // Repeated skips get the honest avoidance question even without a provider.
+        if (skipCount >= 2) {
+            String step = shorten(currentStepText != null && !currentStepText.isBlank()
+                    ? currentStepText : text);
+            return "Skipped \"" + step + "\" a few times now. Wrong next step, or avoiding it?";
         }
-        return "\"" + subject + "\" — still worth it, or let it go?";
+        if (entry.getType() == EntryType.ROADMAP) {
+            String step = currentStepText != null && !currentStepText.isBlank()
+                    ? shorten(currentStepText) : shorten(text);
+            return "Haven't moved on \"" + step + "\" in a while. Stuck, or done with it?";
+        }
+        return "\"" + shorten(text) + "\" — still worth it, or let it go?";
     }
 
     private static String shorten(String s) {
