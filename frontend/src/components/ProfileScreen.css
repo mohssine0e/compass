@@ -219,6 +219,33 @@
   line-height: 1.4;
 }
 
+.format-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.format-chip {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 0.92rem;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.format-chip:hover {
+  border-color: var(--faint);
+  color: var(--text);
+}
+
+.format-chip.is-avoided {
+  color: #d98a7a;
+  border-color: #d98a7a;
+  background: rgba(217, 138, 122, 0.1);
+}
+
 .profile-actions {
   display: flex;
   align-items: center;

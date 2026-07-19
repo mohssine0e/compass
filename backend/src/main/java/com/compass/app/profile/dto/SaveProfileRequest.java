@@ -12,6 +12,7 @@ import java.util.Map;
 public record SaveProfileRequest(
         List<Map<String, Object>> skills,
         Map<String, Object> resumeExtracted,
-        Map<String, Object> selfDescription
+        Map<String, Object> selfDescription,
+        Map<String, Object> formatPreferences
 ) {
 }

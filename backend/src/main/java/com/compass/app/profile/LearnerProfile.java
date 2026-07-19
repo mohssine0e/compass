@@ -45,6 +45,11 @@ public class LearnerProfile {
     @Column(name = "self_description", columnDefinition = "jsonb")
     private Map<String, Object> selfDescription;
 
+    /** {avoid:[...], prefer:[...]}: resource formats to steer discovery (Phase 7.5). */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "format_preferences", columnDefinition = "jsonb")
+    private Map<String, Object> formatPreferences;
+
     @Column(name = "confirmed_at")
     private Instant confirmedAt;
 
@@ -86,6 +91,14 @@ public class LearnerProfile {
 
     public void setSelfDescription(Map<String, Object> selfDescription) {
         this.selfDescription = selfDescription;
+    }
+
+    public Map<String, Object> getFormatPreferences() {
+        return formatPreferences;
+    }
+
+    public void setFormatPreferences(Map<String, Object> formatPreferences) {
+        this.formatPreferences = formatPreferences;
     }
 
     public Instant getConfirmedAt() {

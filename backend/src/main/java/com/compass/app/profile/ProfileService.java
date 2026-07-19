@@ -24,6 +24,9 @@ public class ProfileService {
     /** The confidence levels a skill may carry; anything else is dropped to null. */
     static final Set<String> CONFIDENCE_LEVELS = Set.of("just_started", "comfortable", "solid");
 
+    /** The resource formats a founder can prefer/avoid — matches the resource format enum. */
+    static final Set<String> FORMATS = Set.of("written", "video", "interactive", "repo", "book_chapter");
+
     private final LearnerProfileRepository repository;
     private final ResumeTextExtractor resumeText;
     private final ProfileAiService profileAi;
@@ -62,8 +65,31 @@ public class ProfileService {
         profile.setSkills(sanitizeSkills(req.skills()));
         profile.setResumeExtracted(req.resumeExtracted());
         profile.setSelfDescription(req.selfDescription());
+        profile.setFormatPreferences(sanitizeFormatPreferences(req.formatPreferences()));
         profile.setConfirmedAt(Instant.now());
         return repository.save(profile);
+    }
+
+    /** Keep only known format names under avoid/prefer; drop anything else. */
+    static Map<String, Object> sanitizeFormatPreferences(Map<String, Object> raw) {
+        if (raw == null) {
+            return null;
+        }
+        Map<String, Object> clean = new LinkedHashMap<>();
+        for (String key : List.of("avoid", "prefer")) {
+            Object value = raw.get(key);
+            if (value instanceof List<?> list) {
+                List<String> formats = list.stream()
+                        .filter(f -> f instanceof String s && FORMATS.contains(s))
+                        .map(Object::toString)
+                        .distinct()
+                        .toList();
+                if (!formats.isEmpty()) {
+                    clean.put(key, formats);
+                }
+            }
+        }
+        return clean.isEmpty() ? null : clean;
     }
 
     /**

@@ -12,6 +12,15 @@ const CONFIDENCE = [
   { value: 'solid', label: 'solid' },
 ]
 
+// Resource formats a generated roadmap can suggest; you can mark ones to avoid (Phase 7.5).
+const FORMATS = [
+  { value: 'written', label: 'written' },
+  { value: 'video', label: 'video' },
+  { value: 'interactive', label: 'interactive' },
+  { value: 'repo', label: 'code repo' },
+  { value: 'book_chapter', label: 'book' },
+]
+
 export default function ProfileScreen() {
   const [skills, setSkills] = useState([])
   // { experience, education } pulled from a resume; resume skills are merged into the list above.
@@ -20,6 +29,7 @@ export default function ProfileScreen() {
   const fileRef = useRef(null)
   const [descRaw, setDescRaw] = useState('')
   const [descTraits, setDescTraits] = useState([])
+  const [avoidFormats, setAvoidFormats] = useState([])
   const [interpreting, setInterpreting] = useState(false)
   const [confirmedAt, setConfirmedAt] = useState(null)
   const [newSkill, setNewSkill] = useState('')
@@ -36,6 +46,7 @@ export default function ProfileScreen() {
         setResumeExtracted(p.resumeExtracted || null)
         setDescRaw((p.selfDescription && p.selfDescription.raw) || '')
         setDescTraits((p.selfDescription && p.selfDescription.traits) || [])
+        setAvoidFormats((p.formatPreferences && p.formatPreferences.avoid) || [])
         setConfirmedAt(p.confirmedAt || null)
       })
       .catch((err) => alive && setError(err.message))
@@ -127,6 +138,13 @@ export default function ProfileScreen() {
     setSaved(false)
   }
 
+  function toggleAvoidFormat(format) {
+    setAvoidFormats((prev) =>
+      prev.includes(format) ? prev.filter((f) => f !== format) : [...prev, format]
+    )
+    setSaved(false)
+  }
+
   async function save() {
     if (saving) return
     setSaving(true)
@@ -134,8 +152,9 @@ export default function ProfileScreen() {
     const selfDescription = descRaw.trim()
       ? { raw: descRaw.trim(), traits: descTraits }
       : null
+    const formatPreferences = avoidFormats.length ? { avoid: avoidFormats } : null
     try {
-      const p = await saveProfile({ skills, resumeExtracted, selfDescription })
+      const p = await saveProfile({ skills, resumeExtracted, selfDescription, formatPreferences })
       setConfirmedAt(p.confirmedAt || null)
       setSaved(true)
     } catch (err) {
@@ -276,6 +295,27 @@ export default function ProfileScreen() {
             ))}
           </ul>
         )}
+      </section>
+
+      <section className="profile-section">
+        <h2 className="profile-section-title">Learning formats</h2>
+        <p className="profile-section-hint">
+          Formats you&apos;d rather avoid — a generated roadmap won&apos;t suggest resources in these.
+        </p>
+        <div className="format-options">
+          {FORMATS.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              className={'format-chip' + (avoidFormats.includes(f.value) ? ' is-avoided' : '')}
+              onClick={() => toggleAvoidFormat(f.value)}
+              aria-pressed={avoidFormats.includes(f.value)}
+            >
+              {avoidFormats.includes(f.value) ? 'avoid: ' : ''}
+              {f.label}
+            </button>
+          ))}
+        </div>
       </section>
 
       <div className="profile-actions">
