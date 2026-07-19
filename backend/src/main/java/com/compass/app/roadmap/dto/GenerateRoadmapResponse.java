@@ -23,12 +23,20 @@ public record GenerateRoadmapResponse(
 ) {
     /**
      * A proposed step (Phase 7): its text plus its kind (concept|project), relative weight
-     * (small|medium|large), the 0-based index of a prerequisite step (or null), and a one-line
-     * rationale. The user edits these before accepting.
+     * (small|medium|large), the 0-based index of a prerequisite step (or null), a one-line
+     * rationale, and up to 3 suggested learning resources (Phase 7.5). The user edits these
+     * before accepting.
      */
-    public record ProposedStep(String text, String kind, String weight, Integer dependsOn, String rationale) {
-        static ProposedStep from(RoadmapAiService.DraftStep s) {
-            return new ProposedStep(s.text(), s.kind(), s.weight(), s.dependsOn(), s.rationale());
+    public record ProposedStep(String text, String kind, String weight, Integer dependsOn,
+                               String rationale, List<ProposedResource> resources) {
+    }
+
+    /** A suggested resource on a proposed step — a real link the user can keep, drop, or replace. */
+    public record ProposedResource(String title, String url, String format, String sourceType,
+                                   String estimatedTime, String aiGroundingSource) {
+        static ProposedResource from(RoadmapAiService.Resource r) {
+            return new ProposedResource(r.title(), r.url(), r.format(), r.sourceType(),
+                    r.estimatedTime(), r.aiGroundingSource());
         }
     }
 
@@ -37,8 +45,17 @@ public record GenerateRoadmapResponse(
     }
 
     public static GenerateRoadmapResponse proposal(String title, List<RoadmapAiService.DraftStep> steps,
+                                                   List<List<RoadmapAiService.Resource>> resources,
                                                    List<String> skipped, List<String> sources) {
-        return new GenerateRoadmapResponse("proposal", null, title,
-                steps.stream().map(ProposedStep::from).toList(), skipped, sources);
+        List<ProposedStep> proposedSteps = new java.util.ArrayList<>();
+        for (int i = 0; i < steps.size(); i++) {
+            RoadmapAiService.DraftStep s = steps.get(i);
+            List<ProposedResource> stepResources = i < resources.size()
+                    ? resources.get(i).stream().map(ProposedResource::from).toList()
+                    : List.of();
+            proposedSteps.add(new ProposedStep(
+                    s.text(), s.kind(), s.weight(), s.dependsOn(), s.rationale(), stepResources));
+        }
+        return new GenerateRoadmapResponse("proposal", null, title, proposedSteps, skipped, sources);
     }
 }

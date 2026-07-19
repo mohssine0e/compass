@@ -99,6 +99,69 @@
   line-height: 1.4;
 }
 
+.gen-resources {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 32px;
+  margin-top: 4px;
+}
+
+.gen-resource {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+}
+
+.gen-resource-title {
+  color: var(--brass);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.gen-resource-title:hover {
+  border-bottom-color: var(--brass);
+}
+
+.gen-resource-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gen-resource-time {
+  color: var(--faint);
+  font-size: 0.8rem;
+}
+
+.gen-resource-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.gen-resource-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.gen-resource-addbtn {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  color: var(--faint);
+  font-size: 0.82rem;
+  padding: 2px 0;
+}
+
+.gen-resource-addbtn:hover {
+  color: var(--muted);
+}
+
 .gen-sources {
   border-top: 1px solid var(--line);
   padding-top: 14px;

@@ -93,10 +93,11 @@ public class SearchGroundingService {
         }
     }
 
-    private static Grounding toGrounding(List<TavilyResponse.Result> results) {
+    private static Grounding toGrounding(List<TavilyResponse.Result> raw) {
         StringBuilder context = new StringBuilder();
         List<String> sources = new ArrayList<>();
-        for (TavilyResponse.Result r : results) {
+        List<Result> results = new ArrayList<>();
+        for (TavilyResponse.Result r : raw) {
             if (r.title() == null || r.title().isBlank()) {
                 continue;
             }
@@ -109,14 +110,14 @@ public class SearchGroundingService {
                 context.append(": ").append(snippet);
             }
             context.append('\n');
-            sources.add(r.url() != null && !r.url().isBlank()
-                    ? r.title().strip() + " — " + host(r.url())
-                    : r.title().strip());
+            String url = r.url() == null ? "" : r.url().strip();
+            sources.add(!url.isBlank() ? r.title().strip() + " — " + host(url) : r.title().strip());
+            results.add(new Result(r.title().strip(), url, snippet));
         }
         if (sources.isEmpty()) {
             return null;
         }
-        return new Grounding(context.toString().strip(), sources);
+        return new Grounding(context.toString().strip(), sources, results);
     }
 
     private static String host(String url) {
@@ -136,8 +137,15 @@ public class SearchGroundingService {
         return factory;
     }
 
-    /** Grounding for a generation: snippet {@code context} for the prompt, {@code sources} to show. */
-    public record Grounding(String context, List<String> sources) {
+    /**
+     * Grounding for a generation: snippet {@code context} for the prompt, {@code sources} to
+     * show, and the raw {@code results} (with real URLs) that resource discovery draws from.
+     */
+    public record Grounding(String context, List<String> sources, List<Result> results) {
+    }
+
+    /** One real search result — its URL is what resource suggestions are allowed to link to. */
+    public record Result(String title, String url, String content) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

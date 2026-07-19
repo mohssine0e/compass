@@ -227,15 +227,15 @@ the gap between "here's your plan" and "here's how to actually learn it." Built 
 search grounding from Phase 7, but scoped to resource finding rather than roadmap validation.
 
 **Resource metadata on roadmap steps**
-- [ ] Extend `entries.content` JSONB for `roadmap_step` to include a `resources` array:
+- [x] Extend `entries.content` JSONB for `roadmap_step` to include a `resources` array:
   each resource has `id`, `title`, `url`, `format` (enum: written, video, interactive,
   repo, book_chapter), `source_type` (official_docs, community, tutorial), `estimated_time`,
   `ai_grounding_source` (which search result found it), `user_rating` (nullable)
-- [ ] During roadmap generation, AI suggests 2-3 resources per step using search grounding
+- [x] During roadmap generation, AI suggests 2-3 resources per step using search grounding
   results — filtered by the user's format preferences from their learner profile
-- [ ] Proposed resources are shown in the roadmap confirmation screen alongside steps —
+- [x] Proposed resources are shown in the roadmap confirmation screen alongside steps —
   user can remove, reorder, or add their own before accepting
-- [ ] If a user's profile says they avoid videos, no video resources are suggested unless
+- [x] If a user's profile says they avoid videos, no video resources are suggested unless
   explicitly requested
 
 **Step deep view (frontend)**

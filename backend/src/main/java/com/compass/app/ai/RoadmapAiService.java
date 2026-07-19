@@ -1,9 +1,11 @@
 package com.compass.app.ai;
 
+import com.compass.app.ai.SearchGroundingService.Result;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -68,6 +70,91 @@ public class RoadmapAiService {
 
     private static final Set<String> KINDS = Set.of("concept", "project");
     private static final Set<String> WEIGHTS = Set.of("small", "medium", "large");
+    private static final Set<String> FORMATS =
+            Set.of("written", "video", "interactive", "repo", "book_chapter");
+    private static final Set<String> SOURCE_TYPES = Set.of("official_docs", "community", "tutorial");
+
+    /**
+     * Up to 3 real learning resources per step, drawn only from the given search results (real
+     * URLs, never invented) and never in an avoided format. Returns a list aligned to
+     * {@code stepTexts} (empty list for a step with no fitting resources); an all-empty result
+     * when unavailable or nothing fits. Used for Phase 7.5 resource discovery.
+     */
+    public List<List<Resource>> suggestResources(String goal, List<String> stepTexts,
+                                                 List<Result> groundingResults, List<String> avoidFormats) {
+        List<List<Resource>> perStep = new ArrayList<>();
+        for (int i = 0; i < stepTexts.size(); i++) {
+            perStep.add(new ArrayList<>());
+        }
+        if (groundingResults == null || groundingResults.isEmpty()) {
+            return perStep; // resources are a grounded feature; without search there are none
+        }
+
+        Set<String> realUrls = new HashSet<>();
+        StringBuilder results = new StringBuilder();
+        for (Result r : groundingResults) {
+            if (r.url() != null && !r.url().isBlank()) {
+                realUrls.add(r.url());
+                results.append("- ").append(r.title()).append(" [").append(r.url()).append("]");
+                if (r.content() != null && !r.content().isBlank()) {
+                    results.append(": ").append(r.content());
+                }
+                results.append('\n');
+            }
+        }
+        if (realUrls.isEmpty()) {
+            return perStep;
+        }
+
+        Set<String> avoid = avoidFormats == null ? Set.of() : new HashSet<>(avoidFormats);
+        JsonNode json = ai.generate("resource suggestions", PromptTemplates.RESOURCE_SUGGEST_SYSTEM,
+                PromptTemplates.resourceSuggestUser(goal, stepTexts, results.toString(), avoidFormats));
+        if (json == null || json.get("steps") == null || !json.get("steps").isArray()) {
+            return perStep;
+        }
+
+        for (JsonNode stepNode : json.get("steps")) {
+            JsonNode indexNode = stepNode.get("index");
+            if (indexNode == null || !indexNode.isInt()) {
+                continue;
+            }
+            int index = indexNode.asInt();
+            if (index < 0 || index >= perStep.size()) {
+                continue;
+            }
+            List<Resource> resources = perStep.get(index);
+            for (JsonNode resNode : arrayOrEmpty(stepNode.get("resources"))) {
+                Resource resource = toResource(resNode, realUrls, avoid);
+                if (resource != null && resources.size() < 3) {
+                    resources.add(resource);
+                }
+            }
+        }
+        return perStep;
+    }
+
+    private static Resource toResource(JsonNode node, Set<String> realUrls, Set<String> avoid) {
+        String url = AiJsonGenerator.text(node.get("url"));
+        String title = AiJsonGenerator.text(node.get("title"));
+        // Only real URLs from the search results — drop anything invented.
+        if (url == null || !realUrls.contains(url) || title == null || title.isBlank()) {
+            return null;
+        }
+        String format = valueIn(AiJsonGenerator.text(node.get("format")), FORMATS, "written");
+        if (avoid.contains(format)) {
+            return null; // never suggest an avoided format
+        }
+        String sourceType = valueIn(AiJsonGenerator.text(node.get("source_type")), SOURCE_TYPES, "community");
+        String estimatedTime = AiJsonGenerator.text(node.get("estimated_time"));
+        String groundingSource = AiJsonGenerator.text(node.get("ai_grounding_source"));
+        return new Resource(title.trim(), url, format, sourceType,
+                estimatedTime == null ? null : estimatedTime.trim(),
+                groundingSource == null ? null : groundingSource.trim());
+    }
+
+    private static Iterable<JsonNode> arrayOrEmpty(JsonNode node) {
+        return node != null && node.isArray() ? node : List.of();
+    }
 
     /** Parse and sanitize the structured step array; skips entries without real text. */
     private static List<DraftStep> parseSteps(JsonNode array) {
@@ -148,5 +235,13 @@ public class RoadmapAiService {
 
     /** A proposed prerequisite step plus the one-line reason it comes first. */
     public record Prerequisite(String step, String why) {
+    }
+
+    /**
+     * A suggested learning resource for a step (Phase 7.5). {@code url} is always a real link
+     * from the search grounding; {@code aiGroundingSource} names which result it came from.
+     */
+    public record Resource(String title, String url, String format, String sourceType,
+                           String estimatedTime, String aiGroundingSource) {
     }
 }

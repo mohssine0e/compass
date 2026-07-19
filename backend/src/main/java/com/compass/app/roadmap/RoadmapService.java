@@ -84,7 +84,27 @@ public class RoadmapService {
             throw new IllegalStateException(
                     "Drafting is unavailable right now — write the steps yourself.");
         }
-        return GenerateRoadmapResponse.proposal(draft.title(), draft.steps(), draft.skipped(), sources);
+
+        // Suggest real learning resources per step from the grounding pool, honoring the
+        // profile's avoided formats. Empty per step when there's no grounding.
+        List<String> stepTexts = draft.steps().stream()
+                .map(RoadmapAiService.DraftStep::text).toList();
+        List<List<RoadmapAiService.Resource>> resources = roadmapAi.suggestResources(
+                goal, stepTexts, grounding == null ? null : grounding.results(), avoidedFormats());
+
+        return GenerateRoadmapResponse.proposal(
+                draft.title(), draft.steps(), resources, draft.skipped(), sources);
+    }
+
+    /** The formats the founder marked to avoid (confirmed profile only), or empty. */
+    @SuppressWarnings("unchecked")
+    private List<String> avoidedFormats() {
+        return profileService.confirmedProfile()
+                .map(p -> p.getFormatPreferences())
+                .map(prefs -> prefs.get("avoid"))
+                .filter(a -> a instanceof List)
+                .map(a -> (List<String>) a)
+                .orElseGet(List::of);
     }
 
     // (proposal() maps the AI draft steps to the structured response DTO.)
@@ -172,6 +192,10 @@ public class RoadmapService {
             }
             if (draft.weight() != null && !draft.weight().isBlank()) {
                 stepContent.put("weight", draft.weight());
+            }
+            List<Map<String, Object>> resources = buildResources(draft.resources());
+            if (!resources.isEmpty()) {
+                stepContent.put("resources", resources);
             }
             step.setContent(stepContent);
             created.add(repository.save(step));
@@ -331,6 +355,43 @@ public class RoadmapService {
         repository.save(target);
         repository.touchUpdatedAt(roadmapId, Instant.now());
         return prerequisite;
+    }
+
+    /**
+     * Turn accepted resource inputs into stored resource maps: keep only ones with a real url
+     * and title, give each a stable id (generated if the client didn't send one), and start
+     * user_rating null. Drops anything malformed.
+     */
+    private static List<Map<String, Object>> buildResources(List<CreateRoadmapRequest.ResourceInput> inputs) {
+        List<Map<String, Object>> resources = new ArrayList<>();
+        if (inputs == null) {
+            return resources;
+        }
+        for (CreateRoadmapRequest.ResourceInput r : inputs) {
+            if (r == null || r.title() == null || r.title().isBlank()
+                    || r.url() == null || r.url().isBlank()) {
+                continue;
+            }
+            Map<String, Object> map = new java.util.LinkedHashMap<>();
+            map.put("id", r.id() != null && !r.id().isBlank() ? r.id() : java.util.UUID.randomUUID().toString());
+            map.put("title", r.title().trim());
+            map.put("url", r.url().trim());
+            if (r.format() != null && !r.format().isBlank()) {
+                map.put("format", r.format());
+            }
+            if (r.sourceType() != null && !r.sourceType().isBlank()) {
+                map.put("sourceType", r.sourceType());
+            }
+            if (r.estimatedTime() != null && !r.estimatedTime().isBlank()) {
+                map.put("estimatedTime", r.estimatedTime().trim());
+            }
+            if (r.aiGroundingSource() != null && !r.aiGroundingSource().isBlank()) {
+                map.put("aiGroundingSource", r.aiGroundingSource().trim());
+            }
+            map.put("userRating", null);
+            resources.add(map);
+        }
+        return resources;
     }
 
     private Entry newStep(Long roadmapId, String text) {

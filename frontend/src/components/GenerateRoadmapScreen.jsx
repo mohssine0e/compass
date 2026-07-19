@@ -78,6 +78,7 @@ export default function GenerateRoadmapScreen({ onCreated, onManual, onCancel })
       rationale: s.rationale || null,
       dependsOnCid:
         s.dependsOn != null && withIds[s.dependsOn] ? withIds[s.dependsOn].cid : null,
+      resources: (s.resources || []).map((r) => ({ rcid: nextCid(), ...r })),
     }))
     setSteps(steps)
     setSkipped(res.skipped || [])
@@ -103,6 +104,14 @@ export default function GenerateRoadmapScreen({ onCreated, onManual, onCancel })
       dependsOn: s.dependsOnCid != null && indexOfCid.has(s.dependsOnCid)
         ? indexOfCid.get(s.dependsOnCid)
         : null,
+      resources: (s.resources || []).map((r) => ({
+        title: r.title,
+        url: r.url,
+        format: r.format,
+        sourceType: r.sourceType,
+        estimatedTime: r.estimatedTime,
+        aiGroundingSource: r.aiGroundingSource,
+      })),
     }))
     try {
       const roadmap = await createRoadmap({ title: title.trim(), draftSteps })
@@ -131,6 +140,34 @@ export default function GenerateRoadmapScreen({ onCreated, onManual, onCancel })
             .map((s) => (s.dependsOnCid === cid ? { ...s, dependsOnCid: null } : s))
         : prev
     )
+  }
+
+  function updateStepResources(cid, updater) {
+    setSteps((prev) =>
+      prev.map((s) => (s.cid === cid ? { ...s, resources: updater(s.resources || []) } : s))
+    )
+  }
+  function removeResource(cid, rcid) {
+    updateStepResources(cid, (rs) => rs.filter((r) => r.rcid !== rcid))
+  }
+  function moveResource(cid, rcid, dir) {
+    updateStepResources(cid, (rs) => {
+      const i = rs.findIndex((r) => r.rcid === rcid)
+      const j = i + dir
+      if (i < 0 || j < 0 || j >= rs.length) return rs
+      const next = [...rs]
+      ;[next[i], next[j]] = [next[j], next[i]]
+      return next
+    })
+  }
+  function addOwnResource(cid, title, url) {
+    const t = title.trim()
+    const u = url.trim()
+    if (!t || !u) return
+    updateStepResources(cid, (rs) => [
+      ...rs,
+      { rcid: nextCid(), title: t, url: u, format: 'written', sourceType: 'community' },
+    ])
   }
 
   const textByCid = new Map(steps.map((s) => [s.cid, s.text]))
@@ -247,6 +284,12 @@ export default function GenerateRoadmapScreen({ onCreated, onManual, onCancel })
                   )}
                 </div>
                 {step.rationale && <p className="gen-rationale">{step.rationale}</p>}
+                <StepResources
+                  step={step}
+                  onRemove={(rcid) => removeResource(step.cid, rcid)}
+                  onMove={(rcid, dir) => moveResource(step.cid, rcid, dir)}
+                  onAdd={(title, url) => addOwnResource(step.cid, title, url)}
+                />
               </div>
             ))}
             <button type="button" className="btn-ghost step-add" onClick={addStep}>
@@ -273,6 +316,92 @@ export default function GenerateRoadmapScreen({ onCreated, onManual, onCancel })
             </button>
           </div>
         </>
+      )}
+    </div>
+  )
+}
+
+// Curated resources for one proposed step (Phase 7.5): remove, reorder, or add your own.
+function StepResources({ step, onRemove, onMove, onAdd }) {
+  const [adding, setAdding] = useState(false)
+  const [title, setTitle] = useState('')
+  const [url, setUrl] = useState('')
+  const resources = step.resources || []
+
+  function submit() {
+    onAdd(title, url)
+    setTitle('')
+    setUrl('')
+    setAdding(false)
+  }
+
+  return (
+    <div className="gen-resources">
+      {resources.map((r, i) => (
+        <div className="gen-resource" key={r.rcid}>
+          <a className="gen-resource-title" href={r.url} target="_blank" rel="noreferrer">
+            {r.title}
+          </a>
+          <span className="gen-resource-meta">
+            {r.format && <span className="gen-badge">{r.format}</span>}
+            {r.estimatedTime && <span className="gen-resource-time">{r.estimatedTime}</span>}
+          </span>
+          <span className="gen-resource-actions">
+            <button
+              type="button"
+              className="step-move-btn"
+              onClick={() => onMove(r.rcid, -1)}
+              disabled={i === 0}
+              aria-label="Move resource up"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              className="step-move-btn"
+              onClick={() => onMove(r.rcid, 1)}
+              disabled={i === resources.length - 1}
+              aria-label="Move resource down"
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              className="step-remove"
+              onClick={() => onRemove(r.rcid)}
+              aria-label="Remove resource"
+            >
+              ×
+            </button>
+          </span>
+        </div>
+      ))}
+      {adding ? (
+        <div className="gen-resource-add">
+          <input
+            className="step-input"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Resource title"
+            autoFocus
+          />
+          <input
+            className="step-input"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://…"
+          />
+          <button className="step-edit-btn" onClick={submit} disabled={!title.trim() || !url.trim()}>
+            Add
+          </button>
+          <button className="step-edit-btn" onClick={() => setAdding(false)}>
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button type="button" className="gen-resource-addbtn" onClick={() => setAdding(true)}>
+          + Add a resource
+        </button>
       )}
     </div>
   )
