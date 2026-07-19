@@ -217,6 +217,31 @@
   cursor: default;
 }
 
+.step-move {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.step-move-btn {
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  padding: 0 4px;
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+
+.step-move-btn:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.step-move-btn:disabled {
+  color: var(--faint);
+  cursor: default;
+  visibility: hidden;
+}
+
 .step-edit-input {
   flex: 1;
   background: var(--surface);

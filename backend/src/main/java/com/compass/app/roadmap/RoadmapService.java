@@ -8,8 +8,10 @@ import com.compass.app.roadmap.dto.CreateRoadmapRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -93,6 +95,40 @@ public class RoadmapService {
             result.add(new RoadmapWithSteps(roadmap, stepsOf(roadmap.getId())));
         }
         return result;
+    }
+
+    /**
+     * Reorder a roadmap's steps to match {@code orderedStepIds} exactly (every current
+     * step, no more, no less) — a partial or mismatched list is rejected rather than
+     * silently dropping steps.
+     */
+    @Transactional
+    public void reorderSteps(Long roadmapId, List<Long> orderedStepIds) {
+        List<Entry> steps = stepsOf(roadmapId);
+        Map<Long, Entry> byId = new HashMap<>();
+        for (Entry step : steps) {
+            byId.put(step.getId(), step);
+        }
+        if (orderedStepIds == null || orderedStepIds.size() != steps.size()
+                || !byId.keySet().equals(new HashSet<>(orderedStepIds))) {
+            throw new IllegalArgumentException(
+                    "Reorder must include exactly this roadmap's current steps.");
+        }
+
+        List<Entry> reordered = new ArrayList<>();
+        for (Long stepId : orderedStepIds) {
+            reordered.add(byId.get(stepId));
+        }
+        reindexAndSave(reordered);
+        repository.touchUpdatedAt(roadmapId, Instant.now());
+    }
+
+    /** Reassigns order_index 0..n-1 to match list order, then persists all of them. */
+    private void reindexAndSave(List<Entry> orderedSteps) {
+        for (int i = 0; i < orderedSteps.size(); i++) {
+            orderedSteps.get(i).setOrderIndex(i);
+        }
+        repository.saveAll(orderedSteps);
     }
 
     /** Small carrier so controllers can map to the response DTO. */

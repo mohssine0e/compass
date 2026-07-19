@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getRoadmap, patchEntry } from '../api'
+import { getRoadmap, patchEntry, reorderRoadmapSteps } from '../api'
 import ProgressBar from './ProgressBar'
 import './Roadmap.css'
 
@@ -49,6 +49,23 @@ export default function RoadmapDetail({ id, onBack }) {
       setError(err.message)
     } finally {
       setBusyStepId(null)
+    }
+  }
+
+  async function moveStep(index, direction) {
+    const steps = roadmap.steps
+    const target = index + direction
+    if (target < 0 || target >= steps.length) return
+
+    const reordered = steps.map((s) => s.id)
+    ;[reordered[index], reordered[target]] = [reordered[target], reordered[index]]
+
+    setError(null)
+    try {
+      await reorderRoadmapSteps(roadmap.id, reordered)
+      await load()
+    } catch (err) {
+      setError(err.message)
     }
   }
 
@@ -117,7 +134,7 @@ export default function RoadmapDetail({ id, onBack }) {
       {doneNote && <p className="roadmap-done-note">{doneNote}</p>}
 
       <ol className="step-list">
-        {steps.map((step) => {
+        {steps.map((step, index) => {
           const isCurrent = step.orderIndex === progress.currentOrderIndex
           const isDone = step.status === 'done'
           const isDropped = step.status === 'dropped'
@@ -134,6 +151,26 @@ export default function RoadmapDetail({ id, onBack }) {
               <span className="step-marker" aria-hidden="true">
                 {isDone ? '✓' : isDropped ? '–' : isCurrent ? '●' : '○'}
               </span>
+              {!isEditing && (
+                <span className="step-move">
+                  <button
+                    className="step-move-btn"
+                    onClick={() => moveStep(index, -1)}
+                    disabled={index === 0}
+                    aria-label="Move step up"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    className="step-move-btn"
+                    onClick={() => moveStep(index, 1)}
+                    disabled={index === steps.length - 1}
+                    aria-label="Move step down"
+                  >
+                    ↓
+                  </button>
+                </span>
+              )}
               {isEditing ? (
                 <input
                   className="step-edit-input"

@@ -60,6 +60,14 @@ export function getRoadmap(id) {
   return request(`/roadmaps/${id}`)
 }
 
+/** Reorder a roadmap's steps. `stepIds` is the full step id list in the new order. */
+export function reorderRoadmapSteps(roadmapId, stepIds) {
+  return request(`/roadmaps/${roadmapId}/steps/order`, {
+    method: 'PUT',
+    body: JSON.stringify({ stepIds }),
+  })
+}
+
 /** The one thing to resurface before capture, or null when nothing qualifies. */
 export function getNextResurfacing() {
   return request('/resurfacing/next')

@@ -65,7 +65,7 @@ Small, low-risk, ship fast before anything AI-facing gets added on top.
 
 - [x] `PATCH /entries/{id}` supports un-marking a step as done (undo), not just marking done
 - [x] Edit a step's content (title/notes) after creation
-- [ ] Reorder steps within a roadmap
+- [x] Reorder steps within a roadmap
 - [ ] Insert a new step mid-roadmap (not just appended at the end)
 - [ ] Delete a step
 - [ ] **Push + tag `phase-3-complete`. Stop. Let the founder use this for real before
