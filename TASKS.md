@@ -311,7 +311,7 @@ losing its lightweight core. The AI voice stays self-talk, never teacher-mode.
 - [x] `translate` action: detect source language, translate to user's preferred language
   (stored in learner profile or inferred from browser)
 - [x] Translation is shown alongside original text, not replacing it
-- [ ] **Push + tag `phase-8.5-complete`. Stop. Let the founder use this for real before
+- [x] **Push + tag `phase-8.5-complete`. Stop. Let the founder use this for real before
   continuing.**
 
 ---
