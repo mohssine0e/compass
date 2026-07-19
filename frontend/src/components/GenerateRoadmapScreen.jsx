@@ -3,6 +3,13 @@ import { createRoadmap, generateRoadmap } from '../api'
 import './NewRoadmapScreen.css'
 import './GenerateRoadmapScreen.css'
 
+// Stable client ids for proposed steps, so dependency links survive edits/removals.
+let cidCounter = 0
+function nextCid() {
+  cidCounter += 1
+  return cidCounter
+}
+
 // AI drafts a roadmap from a goal; the user edits and owns it before it's kept (Phase 4).
 // Three phases: state a goal → answer 1–2 clarifying questions → edit the proposed steps.
 export default function GenerateRoadmapScreen({ onCreated, onManual, onCancel }) {
@@ -58,21 +65,45 @@ export default function GenerateRoadmapScreen({ onCreated, onManual, onCancel })
 
   function showProposal(res) {
     setTitle(res.title || '')
-    setSteps(res.steps && res.steps.length ? res.steps : [''])
+    const raw = res.steps && res.steps.length ? res.steps : [{ text: '' }]
+    // Give each step a stable client id and resolve dependsOn (an index) to the prerequisite's
+    // id, so edits/removals don't scramble the links.
+    const withIds = raw.map((s, i) => ({ cid: nextCid(), ...s, _index: i }))
+    const steps = withIds.map((s) => ({
+      cid: s.cid,
+      text: s.text || '',
+      kind: s.kind || 'concept',
+      weight: s.weight || 'medium',
+      rationale: s.rationale || null,
+      dependsOnCid:
+        s.dependsOn != null && withIds[s.dependsOn] ? withIds[s.dependsOn].cid : null,
+    }))
+    setSteps(steps)
     setSkipped(res.skipped || [])
     setPhase('proposal')
     setBusy(false)
   }
 
-  const cleanSteps = steps.map((s) => s.trim()).filter(Boolean)
+  const cleanSteps = steps.filter((s) => s.text.trim())
   const canCreate = title.trim().length > 0 && cleanSteps.length > 0 && !busy
 
   async function accept() {
     if (!canCreate) return
     setBusy(true)
     setError(null)
+    // Keep only steps with text, then express each prerequisite as an index into that final list.
+    const kept = cleanSteps
+    const indexOfCid = new Map(kept.map((s, i) => [s.cid, i]))
+    const draftSteps = kept.map((s) => ({
+      text: s.text.trim(),
+      kind: s.kind,
+      weight: s.weight,
+      dependsOn: s.dependsOnCid != null && indexOfCid.has(s.dependsOnCid)
+        ? indexOfCid.get(s.dependsOnCid)
+        : null,
+    }))
     try {
-      const roadmap = await createRoadmap({ title: title.trim(), steps: cleanSteps })
+      const roadmap = await createRoadmap({ title: title.trim(), draftSteps })
       onCreated?.(roadmap.id)
     } catch (err) {
       setError(err.message)
@@ -80,15 +111,27 @@ export default function GenerateRoadmapScreen({ onCreated, onManual, onCancel })
     }
   }
 
-  function setStep(index, value) {
-    setSteps((prev) => prev.map((s, i) => (i === index ? value : s)))
+  function setStepText(cid, value) {
+    setSteps((prev) => prev.map((s) => (s.cid === cid ? { ...s, text: value } : s)))
   }
   function addStep() {
-    setSteps((prev) => [...prev, ''])
+    setSteps((prev) => [
+      ...prev,
+      { cid: nextCid(), text: '', kind: 'concept', weight: 'medium', rationale: null, dependsOnCid: null },
+    ])
   }
-  function removeStep(index) {
-    setSteps((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev))
+  function removeStep(cid) {
+    setSteps((prev) =>
+      prev.length > 1
+        ? prev
+            .filter((s) => s.cid !== cid)
+            // Any step that depended on the removed one loses its prerequisite link.
+            .map((s) => (s.dependsOnCid === cid ? { ...s, dependsOnCid: null } : s))
+        : prev
+    )
   }
+
+  const textByCid = new Map(steps.map((s) => [s.cid, s.text]))
 
   return (
     <div className="roadmap-form">
@@ -175,23 +218,33 @@ export default function GenerateRoadmapScreen({ onCreated, onManual, onCancel })
           />
           <div className="roadmap-steps">
             {steps.map((step, i) => (
-              <div className="step-row" key={i}>
-                <span className="step-index">{i + 1}</span>
-                <input
-                  className="step-input"
-                  value={step}
-                  onChange={(e) => setStep(i, e.target.value)}
-                  placeholder={`Step ${i + 1}`}
-                />
-                <button
-                  type="button"
-                  className="step-remove"
-                  onClick={() => removeStep(i)}
-                  aria-label={`Remove step ${i + 1}`}
-                  disabled={steps.length <= 1}
-                >
-                  ×
-                </button>
+              <div className="gen-step" key={step.cid}>
+                <div className="step-row">
+                  <span className="step-index">{i + 1}</span>
+                  <input
+                    className="step-input"
+                    value={step.text}
+                    onChange={(e) => setStepText(step.cid, e.target.value)}
+                    placeholder={`Step ${i + 1}`}
+                  />
+                  <button
+                    type="button"
+                    className="step-remove"
+                    onClick={() => removeStep(step.cid)}
+                    aria-label={`Remove step ${i + 1}`}
+                    disabled={steps.length <= 1}
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="gen-step-meta">
+                  {step.kind && <span className={`gen-badge kind-${step.kind}`}>{step.kind}</span>}
+                  {step.weight && <span className="gen-badge weight">{step.weight}</span>}
+                  {step.dependsOnCid != null && textByCid.get(step.dependsOnCid) && (
+                    <span className="gen-depends">needs: {textByCid.get(step.dependsOnCid)}</span>
+                  )}
+                </div>
+                {step.rationale && <p className="gen-rationale">{step.rationale}</p>}
               </div>
             ))}
             <button type="button" className="btn-ghost step-add" onClick={addStep}>

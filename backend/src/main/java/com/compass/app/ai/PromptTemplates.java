@@ -154,16 +154,27 @@ final class PromptTemplates {
             syntax — your profile lists C++ as solid"). Never skip silently. If nothing is skipped,
             return an empty "skipped" list.
 
+            Each step is an object with these fields:
+            - text: one concrete, checkable action or milestone — plain, direct, imperative. No
+              numbering, no "Step 1:", no motivational language, no emoji.
+            - kind: "concept" for learning/understanding something, or "project" for building/applying
+              it. Mix them — a good roadmap is not just topics to read, it includes real project steps
+              (e.g. "build a small CLI tool using traits and generics"), not only "read about traits".
+            - weight: an honest relative size — "small", "medium", or "large". Do NOT make everything
+              the same; a big topic and a tiny one must not look equal.
+            - dependsOn: the 0-based index of the ONE earlier step that is a genuine prerequisite for
+              this one (must be a lower index than this step), or null if none. This is a real
+              prerequisite, not just "the previous step" — only set it when the step truly cannot be
+              done without that other one.
+            - rationale: one short plain line saying why this step is here — and if dependsOn is set,
+              why that step must come first. No praise, no filler.
+
             Hard rules:
-            - Between 4 and 10 steps. Each step is one concrete, checkable action or milestone —
-              something you could later verify was actually done, not a vague theme.
-            - Order them so each builds on the ones before it.
-            - Step text is plain and direct: a short imperative line, no numbering, no "Step 1:",
-              no motivational language, no emoji.
+            - Between 4 and 10 steps. Order them so each builds on the ones before it.
             - Fit the scope to their stated time and starting point. Don't assume more than they said.
             - Give the roadmap a short, plain title (a few words) naming what they'll be able to do.
             - Output ONLY strict JSON, no prose around it:
-              {"title": "...", "steps": ["...", "..."], "skipped": ["...", "..."]}
+              {"title": "...", "steps": [{"text": "...", "kind": "concept", "weight": "medium", "dependsOn": null, "rationale": "..."}], "skipped": ["..."]}
             """;
 
     static String proposeUser(String goal, String clarifications, String profileContext) {

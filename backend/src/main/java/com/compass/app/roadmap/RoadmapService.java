@@ -78,6 +78,8 @@ public class RoadmapService {
         return GenerateRoadmapResponse.proposal(draft.title(), draft.steps(), draft.skipped());
     }
 
+    // (proposal() maps the AI draft steps to the structured response DTO.)
+
     /** Fold answered clarifying questions into a plain block for the proposal prompt. */
     private static String formatClarifications(List<GenerateRoadmapRequest.Clarification> items) {
         StringBuilder sb = new StringBuilder();
@@ -113,23 +115,71 @@ public class RoadmapService {
         roadmap.setContent(content);
         roadmap = repository.save(roadmap);
 
+        if (req.draftSteps() != null && !req.draftSteps().isEmpty()) {
+            createDraftSteps(roadmap.getId(), req.draftSteps());
+        } else {
+            int order = 0;
+            for (String stepText : req.steps() != null ? req.steps() : List.<String>of()) {
+                if (stepText == null || stepText.isBlank()) {
+                    continue;
+                }
+                Entry step = new Entry();
+                step.setType(EntryType.ROADMAP_STEP);
+                step.setStatus(EntryStatus.CAPTURED);
+                step.setParentId(roadmap.getId());
+                step.setOrderIndex(order++);
+                Map<String, Object> stepContent = new HashMap<>();
+                stepContent.put("text", stepText.trim());
+                step.setContent(stepContent);
+                repository.save(step);
+            }
+        }
+
+        return roadmap;
+    }
+
+    /**
+     * Create structured steps accepted from an AI proposal (Phase 7): store kind/weight in
+     * content, then resolve each step's {@code dependsOn} index into the real prerequisite
+     * step's id. Two passes because a dependency can only be linked once both steps have ids.
+     */
+    private void createDraftSteps(Long roadmapId, List<CreateRoadmapRequest.DraftStepInput> draftSteps) {
+        List<Entry> created = new ArrayList<>();
         int order = 0;
-        for (String stepText : req.steps() != null ? req.steps() : List.<String>of()) {
-            if (stepText == null || stepText.isBlank()) {
+        for (CreateRoadmapRequest.DraftStepInput draft : draftSteps) {
+            if (draft == null || draft.text() == null || draft.text().isBlank()) {
+                created.add(null); // keep index alignment for dependsOn mapping
                 continue;
             }
             Entry step = new Entry();
             step.setType(EntryType.ROADMAP_STEP);
             step.setStatus(EntryStatus.CAPTURED);
-            step.setParentId(roadmap.getId());
+            step.setParentId(roadmapId);
             step.setOrderIndex(order++);
             Map<String, Object> stepContent = new HashMap<>();
-            stepContent.put("text", stepText.trim());
+            stepContent.put("text", draft.text().trim());
+            if (draft.kind() != null && !draft.kind().isBlank()) {
+                stepContent.put("kind", draft.kind());
+            }
+            if (draft.weight() != null && !draft.weight().isBlank()) {
+                stepContent.put("weight", draft.weight());
+            }
             step.setContent(stepContent);
-            repository.save(step);
+            created.add(repository.save(step));
         }
 
-        return roadmap;
+        for (int i = 0; i < draftSteps.size(); i++) {
+            Entry step = created.get(i);
+            Integer dep = draftSteps.get(i) == null ? null : draftSteps.get(i).dependsOn();
+            if (step == null || dep == null || dep < 0 || dep >= created.size() || dep == i) {
+                continue;
+            }
+            Entry prerequisite = created.get(dep);
+            if (prerequisite != null) {
+                step.setDependsOn(prerequisite.getId());
+                repository.save(step);
+            }
+        }
     }
 
     /** A roadmap's steps in order. */

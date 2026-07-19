@@ -52,3 +52,49 @@
   font-size: 0.92rem;
   line-height: 1.5;
 }
+
+.gen-step {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.gen-step-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-left: 32px;
+}
+
+.gen-badge {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.gen-badge.kind-project {
+  color: var(--brass);
+  border-color: var(--brass);
+}
+
+.gen-badge.weight {
+  color: var(--faint);
+}
+
+.gen-depends {
+  font-size: 0.8rem;
+  color: var(--faint);
+}
+
+.gen-rationale {
+  margin: 0 0 4px;
+  padding-left: 32px;
+  font-size: 0.85rem;
+  color: var(--faint);
+  line-height: 1.4;
+}

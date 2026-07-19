@@ -193,18 +193,18 @@ review actual generated output carefully, on a real roadmap, before trusting it.
   the official Rust book's structure") so the founder can sanity-check, not just trust
 
 **Prerequisite reasoning**
-- [ ] Generation explicitly reasons about *why* step B needs step A, populating real
+- [x] Generation explicitly reasons about *why* step B needs step A, populating real
   `depends_on` links (not just sequential order) — the model should be prompted to justify
   each dependency, not just emit a plausible-looking list
 
 **Project-based steps**
-- [ ] Generated roadmaps mix conceptual steps with applied/project steps (e.g. "build a
+- [x] Generated roadmaps mix conceptual steps with applied/project steps (e.g. "build a
   small CLI tool using traits and generics"), not just a list of topics to read about —
   this also sets up Phase 8 (Verification) better, since "did you build the thing" is a
   stronger signal than "can you explain the concept"
 
 **Difficulty/time calibration**
-- [ ] Steps carry an honest relative weight/estimate (not uniform bullet points) so a
+- [x] Steps carry an honest relative weight/estimate (not uniform bullet points) so a
   roadmap doesn't present a huge topic and a tiny one as equally-sized steps
 
 **Profile-aware personalization**

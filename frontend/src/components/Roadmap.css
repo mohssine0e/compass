@@ -33,6 +33,35 @@
   gap: 12px;
 }
 
+.step-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-left: 10px;
+  vertical-align: middle;
+}
+
+.step-tag {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--faint);
+}
+
+.step-tag.is-project {
+  color: var(--brass);
+  border-color: var(--brass);
+}
+
+.step-needs {
+  font-size: 0.78rem;
+  color: var(--faint);
+}
+
 .roadmap-empty {
   color: var(--muted);
   font-size: 1.05rem;

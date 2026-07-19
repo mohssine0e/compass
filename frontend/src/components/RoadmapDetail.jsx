@@ -204,6 +204,8 @@ export default function RoadmapDetail({ id, onBack }) {
   }
 
   const { title, notes, progress, steps } = roadmap
+  // For showing "needs: <step>" on steps that carry a real prerequisite (Phase 7).
+  const textById = new Map(steps.map((s) => [s.id, s.content.text]))
 
   return (
     <div className="roadmap-detail">
@@ -275,7 +277,24 @@ export default function RoadmapDetail({ id, onBack }) {
                   autoFocus
                 />
               ) : (
-                <span className="step-text">{step.content.text}</span>
+                <span className="step-text">
+                  {step.content.text}
+                  {(step.content.kind === 'project' ||
+                    step.content.weight ||
+                    (step.dependsOn && textById.get(step.dependsOn))) && (
+                    <span className="step-tags">
+                      {step.content.kind === 'project' && (
+                        <span className="step-tag is-project">project</span>
+                      )}
+                      {step.content.weight && step.content.weight !== 'medium' && (
+                        <span className="step-tag">{step.content.weight}</span>
+                      )}
+                      {step.dependsOn && textById.get(step.dependsOn) && (
+                        <span className="step-needs">needs: {textById.get(step.dependsOn)}</span>
+                      )}
+                    </span>
+                  )}
+                </span>
               )}
               {isEditing ? (
                 <span className="step-edit-actions">
