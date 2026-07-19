@@ -15,6 +15,7 @@ public record ProfileResponse(
         Map<String, Object> resumeExtracted,
         Map<String, Object> selfDescription,
         Map<String, Object> formatPreferences,
+        List<String> inferredPreferences,
         boolean confirmed,
         Instant confirmedAt,
         Instant updatedAt
@@ -25,6 +26,7 @@ public record ProfileResponse(
                 p.getResumeExtracted(),
                 p.getSelfDescription(),
                 p.getFormatPreferences(),
+                p.getInferredPreferences(),
                 p.getConfirmedAt() != null,
                 p.getConfirmedAt(),
                 p.getUpdatedAt());

@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { extractResume, getProfile, interpretSelfDescription, saveProfile } from '../api'
+import {
+  extractResume,
+  getInference,
+  getProfile,
+  interpretSelfDescription,
+  saveProfile,
+} from '../api'
 import './ProfileScreen.css'
 
 // The learner profile (Phase 6): what you already know, so generation later doesn't re-teach
@@ -30,6 +36,9 @@ export default function ProfileScreen() {
   const [descRaw, setDescRaw] = useState('')
   const [descTraits, setDescTraits] = useState([])
   const [avoidFormats, setAvoidFormats] = useState([])
+  const [inferred, setInferred] = useState([])
+  const [proposal, setProposal] = useState(null) // { preferences, basis } | null
+  const [analyzing, setAnalyzing] = useState(false)
   const [interpreting, setInterpreting] = useState(false)
   const [confirmedAt, setConfirmedAt] = useState(null)
   const [newSkill, setNewSkill] = useState('')
@@ -47,6 +56,7 @@ export default function ProfileScreen() {
         setDescRaw((p.selfDescription && p.selfDescription.raw) || '')
         setDescTraits((p.selfDescription && p.selfDescription.traits) || [])
         setAvoidFormats((p.formatPreferences && p.formatPreferences.avoid) || [])
+        setInferred(p.inferredPreferences || [])
         setConfirmedAt(p.confirmedAt || null)
       })
       .catch((err) => alive && setError(err.message))
@@ -145,6 +155,35 @@ export default function ProfileScreen() {
     setSaved(false)
   }
 
+  async function analyze() {
+    if (analyzing) return
+    setAnalyzing(true)
+    setError(null)
+    try {
+      setProposal(await getInference())
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
+  function keepPreference(pref) {
+    if (!inferred.includes(pref.text)) setInferred((prev) => [...prev, pref.text])
+    if (pref.avoidFormat && !avoidFormats.includes(pref.avoidFormat)) {
+      setAvoidFormats((prev) => [...prev, pref.avoidFormat])
+    }
+    setProposal((prev) =>
+      prev ? { ...prev, preferences: prev.preferences.filter((p) => p.text !== pref.text) } : prev
+    )
+    setSaved(false)
+  }
+
+  function removeInferred(text) {
+    setInferred((prev) => prev.filter((t) => t !== text))
+    setSaved(false)
+  }
+
   async function save() {
     if (saving) return
     setSaving(true)
@@ -154,7 +193,13 @@ export default function ProfileScreen() {
       : null
     const formatPreferences = avoidFormats.length ? { avoid: avoidFormats } : null
     try {
-      const p = await saveProfile({ skills, resumeExtracted, selfDescription, formatPreferences })
+      const p = await saveProfile({
+        skills,
+        resumeExtracted,
+        selfDescription,
+        formatPreferences,
+        inferredPreferences: inferred,
+      })
       setConfirmedAt(p.confirmedAt || null)
       setSaved(true)
     } catch (err) {
@@ -316,6 +361,50 @@ export default function ProfileScreen() {
             </button>
           ))}
         </div>
+      </section>
+
+      <section className="profile-section">
+        <h2 className="profile-section-title">What the system noticed</h2>
+        <p className="profile-section-hint">
+          Guesses from how you actually work — keep the ones that ring true. Nothing is used
+          until you save.
+        </p>
+        <button className="btn-ghost" onClick={analyze} disabled={analyzing}>
+          {analyzing ? 'Looking…' : 'Analyze my sessions'}
+        </button>
+
+        {proposal && (
+          <div className="inferred-proposal">
+            <p className="profile-section-hint">{proposal.basis}</p>
+            {proposal.preferences.length === 0 ? (
+              <p className="profile-empty">Nothing clear enough to suggest yet.</p>
+            ) : (
+              <ul className="inferred-candidates">
+                {proposal.preferences.map((p) => (
+                  <li className="inferred-candidate" key={p.text}>
+                    <span>{p.text}</span>
+                    <button className="btn-ghost" onClick={() => keepPreference(p)}>
+                      Keep
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {inferred.length > 0 && (
+          <ul className="trait-list">
+            {inferred.map((t) => (
+              <li className="trait-chip" key={t}>
+                <span>{t}</span>
+                <button className="trait-remove" onClick={() => removeInferred(t)} aria-label={`Remove`}>
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       <div className="profile-actions">

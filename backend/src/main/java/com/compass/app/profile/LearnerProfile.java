@@ -50,6 +50,11 @@ public class LearnerProfile {
     @Column(name = "format_preferences", columnDefinition = "jsonb")
     private Map<String, Object> formatPreferences;
 
+    /** Behaviour-inferred preferences, confirmed by the founder (Phase 9) — plain strings. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "inferred_preferences", columnDefinition = "jsonb")
+    private List<String> inferredPreferences;
+
     @Column(name = "confirmed_at")
     private Instant confirmedAt;
 
@@ -99,6 +104,14 @@ public class LearnerProfile {
 
     public void setFormatPreferences(Map<String, Object> formatPreferences) {
         this.formatPreferences = formatPreferences;
+    }
+
+    public List<String> getInferredPreferences() {
+        return inferredPreferences;
+    }
+
+    public void setInferredPreferences(List<String> inferredPreferences) {
+        this.inferredPreferences = inferredPreferences;
     }
 
     public Instant getConfirmedAt() {

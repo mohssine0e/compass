@@ -199,6 +199,11 @@ export function getProfile() {
   return request('/profile')
 }
 
+/** Behaviour-inferred preferences to review (Phase 9). Returns { preferences, basis }. */
+export function getInference() {
+  return request('/profile/inference')
+}
+
 /**
  * Save the reviewed learner profile — this also marks it confirmed. `payload` is
  * { skills, resumeExtracted?, selfDescription? }.

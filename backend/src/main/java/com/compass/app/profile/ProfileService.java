@@ -66,8 +66,21 @@ public class ProfileService {
         profile.setResumeExtracted(req.resumeExtracted());
         profile.setSelfDescription(req.selfDescription());
         profile.setFormatPreferences(sanitizeFormatPreferences(req.formatPreferences()));
+        profile.setInferredPreferences(sanitizeStrings(req.inferredPreferences()));
         profile.setConfirmedAt(Instant.now());
         return repository.save(profile);
+    }
+
+    /** Keep only non-blank strings, trimmed; null when empty. */
+    static List<String> sanitizeStrings(List<String> raw) {
+        if (raw == null) {
+            return null;
+        }
+        List<String> clean = raw.stream()
+                .filter(s -> s != null && !s.isBlank())
+                .map(String::trim)
+                .toList();
+        return clean.isEmpty() ? null : clean;
     }
 
     /** Keep only known format names under avoid/prefer; drop anything else. */

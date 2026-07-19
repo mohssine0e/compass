@@ -344,12 +344,12 @@ Also: guided learning sessions, behavioral preference inference, and a focused d
   or take a break
 
 **Behavioral preference inference**
-- [ ] Analyze session history + step completion patterns to infer preferences:
+- [x] Analyze session history + step completion patterns to infer preferences:
   "always skips video resources," "completes hands-on steps faster than reading steps,"
   "reformulates steps >30 min estimated time"
-- [ ] Propose inferred preferences to user on a confirmation screen — editable before
+- [x] Propose inferred preferences to user on a confirmation screen — editable before
   saved to `learner_profile`
-- [ ] Use inferred preferences to filter resource suggestions and calibrate step estimates
+- [x] Use inferred preferences to filter resource suggestions and calibrate step estimates
   in future roadmaps
 - [ ] **Push + tag `phase-9-complete`. Stop. Let the founder use this for real before
   continuing.**

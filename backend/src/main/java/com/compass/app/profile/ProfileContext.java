@@ -36,6 +36,11 @@ public final class ProfileContext {
             sb.append("Experience: ").append(experience).append('\n');
         }
 
+        List<String> inferred = profile.getInferredPreferences();
+        if (inferred != null && !inferred.isEmpty()) {
+            sb.append("Noticed about how they work: ").append(String.join("; ", inferred)).append('\n');
+        }
+
         return sb.length() == 0 ? null : sb.toString().strip();
     }
 

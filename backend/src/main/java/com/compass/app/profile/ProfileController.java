@@ -1,5 +1,6 @@
 package com.compass.app.profile;
 
+import com.compass.app.profile.dto.InferenceResult;
 import com.compass.app.profile.dto.InterpretDescriptionRequest;
 import com.compass.app.profile.dto.ProfileResponse;
 import com.compass.app.profile.dto.SaveProfileRequest;
@@ -24,9 +25,17 @@ import java.util.Map;
 public class ProfileController {
 
     private final ProfileService service;
+    private final InferenceService inferenceService;
 
-    public ProfileController(ProfileService service) {
+    public ProfileController(ProfileService service, InferenceService inferenceService) {
         this.service = service;
+        this.inferenceService = inferenceService;
+    }
+
+    /** Behaviour-inferred preferences to review before saving (Phase 9). */
+    @GetMapping("/inference")
+    public InferenceResult inference() {
+        return inferenceService.infer();
     }
 
     /** The current profile — an empty, unconfirmed one until the founder fills it in. */
