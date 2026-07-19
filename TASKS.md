@@ -351,7 +351,7 @@ Also: guided learning sessions, behavioral preference inference, and a focused d
   saved to `learner_profile`
 - [x] Use inferred preferences to filter resource suggestions and calibrate step estimates
   in future roadmaps
-- [ ] **Push + tag `phase-9-complete`. Stop. Let the founder use this for real before
+- [x] **Push + tag `phase-9-complete`. Stop. Let the founder use this for real before
   continuing.**
 
 ---
