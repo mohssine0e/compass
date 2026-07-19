@@ -130,7 +130,7 @@ this is a lightweight, human-scannable record for noticing patterns early, not a
   "both AI providers failed, fell back to plain acknowledgment" — not the raw exception
 - [x] Key system-side failures (DB errors, failed migrations at runtime, unexpected nulls
   in critical paths) also log a brief event, same table, `source: system`
-- [ ] `GET /admin/events` (or similar) — simple list, most recent first, filterable by
+- [x] `GET /admin/events` (or similar) — simple list, most recent first, filterable by
   `source`/`severity`
 - [ ] Minimal admin view in the frontend: a plain list of recent events, nothing fancier
   than the existing plain-list philosophy elsewhere in the app
