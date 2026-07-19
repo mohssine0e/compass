@@ -277,7 +277,7 @@ as done, instead of pure self-reporting.
   evidence-backed learning technique (spaced repetition) and it's nearly free here since
   it's the same engine firing on a different trigger (completed + due for recheck, via
   the resurfacing service) rather than a new system
-- [ ] **Push + tag `phase-8-complete`. Stop. Let the founder use this for real before
+- [x] **Push + tag `phase-8-complete`. Stop. Let the founder use this for real before
   continuing.**
 
 ---
