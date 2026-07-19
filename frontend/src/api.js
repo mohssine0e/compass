@@ -76,6 +76,13 @@ export function insertRoadmapStep(roadmapId, text, position) {
   })
 }
 
+/** Delete a step from a roadmap. */
+export function deleteRoadmapStep(roadmapId, stepId) {
+  return request(`/roadmaps/${roadmapId}/steps/${stepId}`, {
+    method: 'DELETE',
+  })
+}
+
 /** The one thing to resurface before capture, or null when nothing qualifies. */
 export function getNextResurfacing() {
   return request('/resurfacing/next')

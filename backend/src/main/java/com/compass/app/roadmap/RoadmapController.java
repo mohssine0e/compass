@@ -7,6 +7,7 @@ import com.compass.app.roadmap.dto.ReorderStepsRequest;
 import com.compass.app.roadmap.dto.RoadmapResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -65,6 +66,14 @@ public class RoadmapController {
     public RoadmapResponse reorderSteps(@PathVariable Long id,
                                          @RequestBody ReorderStepsRequest request) {
         service.reorderSteps(id, request.stepIds());
+        Entry roadmap = service.getRoadmap(id);
+        return RoadmapResponse.of(roadmap, service.stepsOf(id));
+    }
+
+    /** Delete a step from a roadmap. */
+    @DeleteMapping("/{id}/steps/{stepId}")
+    public RoadmapResponse deleteStep(@PathVariable Long id, @PathVariable Long stepId) {
+        service.deleteStep(id, stepId);
         Entry roadmap = service.getRoadmap(id);
         return RoadmapResponse.of(roadmap, service.stepsOf(id));
     }

@@ -154,6 +154,22 @@ public class RoadmapService {
         return step;
     }
 
+    /** Delete a step and close the order_index gap it leaves behind. */
+    @Transactional
+    public void deleteStep(Long roadmapId, Long stepId) {
+        List<Entry> steps = stepsOf(roadmapId);
+        Entry toDelete = steps.stream()
+                .filter(s -> s.getId().equals(stepId))
+                .findFirst()
+                .orElseThrow(() -> new java.util.NoSuchElementException(
+                        "No step " + stepId + " on roadmap " + roadmapId));
+
+        steps.remove(toDelete);
+        repository.delete(toDelete);
+        reindexAndSave(steps);
+        repository.touchUpdatedAt(roadmapId, Instant.now());
+    }
+
     /** Reassigns order_index 0..n-1 to match list order, then persists all of them. */
     private void reindexAndSave(List<Entry> orderedSteps) {
         for (int i = 0; i < orderedSteps.size(); i++) {

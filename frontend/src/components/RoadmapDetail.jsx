@@ -1,5 +1,11 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
-import { getRoadmap, insertRoadmapStep, patchEntry, reorderRoadmapSteps } from '../api'
+import {
+  deleteRoadmapStep,
+  getRoadmap,
+  insertRoadmapStep,
+  patchEntry,
+  reorderRoadmapSteps,
+} from '../api'
 import ProgressBar from './ProgressBar'
 import './Roadmap.css'
 
@@ -97,6 +103,20 @@ export default function RoadmapDetail({ id, onBack }) {
       setError(err.message)
     } finally {
       setSavingInsert(false)
+    }
+  }
+
+  async function deleteStep(step) {
+    if (!window.confirm(`Delete "${step.content.text}"? This can't be undone.`)) return
+    setBusyStepId(step.id)
+    setError(null)
+    try {
+      await deleteRoadmapStep(roadmap.id, step.id)
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusyStepId(null)
     }
   }
 
@@ -275,9 +295,18 @@ export default function RoadmapDetail({ id, onBack }) {
                   </button>
                 </span>
               ) : (
-                <button className="step-edit-btn" onClick={() => startEdit(step)}>
-                  Edit
-                </button>
+                <span className="step-edit-actions">
+                  <button className="step-edit-btn" onClick={() => startEdit(step)}>
+                    Edit
+                  </button>
+                  <button
+                    className="step-edit-btn step-delete-btn"
+                    onClick={() => deleteStep(step)}
+                    disabled={busyStepId === step.id}
+                  >
+                    Delete
+                  </button>
+                </span>
               )}
               {!isEditing && isCurrent && (
                 <button

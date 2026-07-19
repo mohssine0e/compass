@@ -67,7 +67,7 @@ Small, low-risk, ship fast before anything AI-facing gets added on top.
 - [x] Edit a step's content (title/notes) after creation
 - [x] Reorder steps within a roadmap
 - [x] Insert a new step mid-roadmap (not just appended at the end)
-- [ ] Delete a step
+- [x] Delete a step
 - [ ] **Push + tag `phase-3-complete`. Stop. Let the founder use this for real before
   continuing.**
 

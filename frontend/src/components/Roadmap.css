@@ -276,6 +276,10 @@
   cursor: default;
 }
 
+.step-delete-btn:hover:not(:disabled) {
+  color: #d98a7a;
+}
+
 .step-insert-row {
   display: flex;
   align-items: center;
