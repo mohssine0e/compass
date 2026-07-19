@@ -1,7 +1,10 @@
 package com.compass.app.profile;
 
 import com.compass.app.profile.dto.ProfileResponse;
+import com.compass.app.profile.dto.SaveProfileRequest;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -23,5 +26,11 @@ public class ProfileController {
     @GetMapping
     public ProfileResponse get() {
         return ProfileResponse.from(service.getOrCreate());
+    }
+
+    /** Save the reviewed profile and mark it confirmed. Sent from the review screen. */
+    @PutMapping
+    public ProfileResponse save(@RequestBody SaveProfileRequest request) {
+        return ProfileResponse.from(service.save(request));
     }
 }

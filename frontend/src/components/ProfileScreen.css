@@ -1,0 +1,128 @@
+.profile {
+  width: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.profile-lead {
+  color: var(--muted);
+  font-size: 1rem;
+  margin: 4px 0 28px;
+}
+
+.profile-section {
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+  margin-bottom: 24px;
+}
+
+.profile-section-title {
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 500;
+  margin: 0 0 14px;
+}
+
+.skill-add {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.skill-input {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 1rem;
+  outline: none;
+}
+
+.skill-input:focus {
+  border-color: var(--faint);
+}
+
+.skill-input::placeholder {
+  color: var(--faint);
+}
+
+.skill-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skill-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.skill-name {
+  flex: 1;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.skill-confidence {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 0.88rem;
+  outline: none;
+}
+
+.skill-remove {
+  background: transparent;
+  border: none;
+  color: var(--faint);
+  font-size: 1.3rem;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.skill-remove:hover {
+  color: #d98a7a;
+}
+
+.profile-empty {
+  color: var(--faint);
+  font-size: 0.95rem;
+}
+
+.profile-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.profile-error {
+  margin-right: auto;
+  color: #d98a7a;
+  font-size: 0.95rem;
+}
+
+.profile-saved {
+  color: var(--brass);
+  font-size: 0.95rem;
+}
+
+.profile-hint {
+  color: var(--faint);
+  font-size: 0.9rem;
+}

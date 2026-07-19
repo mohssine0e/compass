@@ -152,7 +152,7 @@ own profile instead of a roadmap edit.
 
 - [x] Profile data model: a `learner_profile` record (skills list with optional confidence
   level, free-text self-description, structured data extracted from an uploaded resume)
-- [ ] Manual skills entry: add/remove skill tags, each with an optional confidence level
+- [x] Manual skills entry: add/remove skill tags, each with an optional confidence level
   (e.g. "just started" / "comfortable" / "solid") — confidence matters here specifically
   because "I know Python" means very different things to different people, which is the
   exact ambiguity that caused the re-teaching problem in the first place

@@ -128,6 +128,22 @@ export function applyRestructure(id, body) {
   })
 }
 
+/** The current learner profile (Phase 6). */
+export function getProfile() {
+  return request('/profile')
+}
+
+/**
+ * Save the reviewed learner profile — this also marks it confirmed. `payload` is
+ * { skills, resumeExtracted?, selfDescription? }.
+ */
+export function saveProfile(payload) {
+  return request('/profile', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  })
+}
+
 /**
  * Recent system events, newest first. `filters` is { source?, severity?, limit? } — omit a
  * filter to include every value. Operational/admin view (Phase 5).

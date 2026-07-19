@@ -1,0 +1,150 @@
+import { useEffect, useState } from 'react'
+import { getProfile, saveProfile } from '../api'
+import './ProfileScreen.css'
+
+// The learner profile (Phase 6): what you already know, so generation later doesn't re-teach
+// it. Everything here is reviewed and owned by you — saving is what confirms it. Grows across
+// Phase 6 tasks (skills now; resume + self-description added next).
+const CONFIDENCE = [
+  { value: '', label: '—' },
+  { value: 'just_started', label: 'just started' },
+  { value: 'comfortable', label: 'comfortable' },
+  { value: 'solid', label: 'solid' },
+]
+
+export default function ProfileScreen() {
+  const [skills, setSkills] = useState([])
+  // Preserved across saves so editing skills doesn't wipe AI-derived parts (added next tasks).
+  const [resumeExtracted, setResumeExtracted] = useState(null)
+  const [selfDescription, setSelfDescription] = useState(null)
+  const [confirmedAt, setConfirmedAt] = useState(null)
+  const [newSkill, setNewSkill] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    getProfile()
+      .then((p) => {
+        if (!alive) return
+        setSkills(p.skills || [])
+        setResumeExtracted(p.resumeExtracted || null)
+        setSelfDescription(p.selfDescription || null)
+        setConfirmedAt(p.confirmedAt || null)
+      })
+      .catch((err) => alive && setError(err.message))
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  function addSkill() {
+    const name = newSkill.trim()
+    if (!name) return
+    if (skills.some((s) => s.name.toLowerCase() === name.toLowerCase())) {
+      setNewSkill('')
+      return
+    }
+    setSkills((prev) => [...prev, { name }])
+    setNewSkill('')
+    setSaved(false)
+  }
+
+  function removeSkill(name) {
+    setSkills((prev) => prev.filter((s) => s.name !== name))
+    setSaved(false)
+  }
+
+  function setConfidence(name, confidence) {
+    setSkills((prev) =>
+      prev.map((s) => {
+        if (s.name !== name) return s
+        const next = { name: s.name }
+        if (confidence) next.confidence = confidence
+        return next
+      })
+    )
+    setSaved(false)
+  }
+
+  async function save() {
+    if (saving) return
+    setSaving(true)
+    setError(null)
+    try {
+      const p = await saveProfile({ skills, resumeExtracted, selfDescription })
+      setConfirmedAt(p.confirmedAt || null)
+      setSaved(true)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="profile">
+      <h1 className="screen-title">Your profile</h1>
+      <p className="profile-lead">
+        What you already know, so a generated roadmap doesn&apos;t waste your time on it.
+      </p>
+
+      <section className="profile-section">
+        <h2 className="profile-section-title">Skills</h2>
+        <div className="skill-add">
+          <input
+            className="skill-input"
+            value={newSkill}
+            onChange={(e) => setNewSkill(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addSkill()}
+            placeholder="Add a skill (e.g. Python, SQL, React)"
+          />
+          <button className="btn-ghost" onClick={addSkill} disabled={!newSkill.trim()}>
+            Add
+          </button>
+        </div>
+
+        {skills.length === 0 ? (
+          <p className="profile-empty">No skills yet. Add what you already know.</p>
+        ) : (
+          <ul className="skill-list">
+            {skills.map((s) => (
+              <li className="skill-row" key={s.name}>
+                <span className="skill-name">{s.name}</span>
+                <select
+                  className="skill-confidence"
+                  value={s.confidence || ''}
+                  onChange={(e) => setConfidence(s.name, e.target.value)}
+                  aria-label={`Confidence in ${s.name}`}
+                >
+                  {CONFIDENCE.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="skill-remove"
+                  onClick={() => removeSkill(s.name)}
+                  aria-label={`Remove ${s.name}`}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <div className="profile-actions">
+        {error && <span className="profile-error">{error}</span>}
+        {saved && <span className="profile-saved">Saved.</span>}
+        {!saved && confirmedAt && <span className="profile-hint">Unsaved changes</span>}
+        <button className="btn-primary" onClick={save} disabled={saving}>
+          {saving ? 'Saving…' : 'Save profile'}
+        </button>
+      </div>
+    </div>
+  )
+}
