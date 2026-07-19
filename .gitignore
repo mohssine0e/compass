@@ -25,3 +25,6 @@ frontend/dist-ssr/
 .vscode/
 .DS_Store
 *.log
+
+# the regenirated files like the dist folder
+dist/
