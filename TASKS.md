@@ -128,7 +128,7 @@ this is a lightweight, human-scannable record for noticing patterns early, not a
 - [x] Every AI call site (voice acknowledgment, roadmap generation, resurfacing questions)
   logs a brief event on failure or fallback — e.g. "Gemini timed out, Groq backup used" or
   "both AI providers failed, fell back to plain acknowledgment" — not the raw exception
-- [ ] Key system-side failures (DB errors, failed migrations at runtime, unexpected nulls
+- [x] Key system-side failures (DB errors, failed migrations at runtime, unexpected nulls
   in critical paths) also log a brief event, same table, `source: system`
 - [ ] `GET /admin/events` (or similar) — simple list, most recent first, filterable by
   `source`/`severity`
