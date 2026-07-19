@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import CaptureScreen from './components/CaptureScreen'
 import NewRoadmapScreen from './components/NewRoadmapScreen'
+import GenerateRoadmapScreen from './components/GenerateRoadmapScreen'
 import RoadmapsScreen from './components/RoadmapsScreen'
 import RoadmapDetail from './components/RoadmapDetail'
 import AllEntriesScreen from './components/AllEntriesScreen'
@@ -39,7 +40,11 @@ export default function App() {
             Capture
           </NavLink>
           <NavLink
-            active={view.name.startsWith('roadmap') || view.name === 'newRoadmap'}
+            active={
+              view.name.startsWith('roadmap') ||
+              view.name === 'newRoadmap' ||
+              view.name === 'generateRoadmap'
+            }
             onClick={() => go('roadmaps')}
           >
             Roadmaps
@@ -58,12 +63,20 @@ export default function App() {
         {view.name === 'roadmaps' && (
           <RoadmapsScreen
             onNew={() => go('newRoadmap')}
+            onDraft={() => go('generateRoadmap')}
             onOpen={(id) => go('roadmap', { id })}
           />
         )}
         {view.name === 'newRoadmap' && (
           <NewRoadmapScreen
             onCreated={(id) => go('roadmap', { id })}
+            onCancel={() => go('roadmaps')}
+          />
+        )}
+        {view.name === 'generateRoadmap' && (
+          <GenerateRoadmapScreen
+            onCreated={(id) => go('roadmap', { id })}
+            onManual={() => go('newRoadmap')}
             onCancel={() => go('roadmaps')}
           />
         )}

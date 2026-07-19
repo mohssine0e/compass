@@ -3,7 +3,7 @@ import { listRoadmaps } from '../api'
 import ProgressBar from './ProgressBar'
 import './Roadmap.css'
 
-export default function RoadmapsScreen({ onNew, onOpen }) {
+export default function RoadmapsScreen({ onNew, onDraft, onOpen }) {
   const [roadmaps, setRoadmaps] = useState(null)
   const [error, setError] = useState(null)
 
@@ -21,9 +21,14 @@ export default function RoadmapsScreen({ onNew, onOpen }) {
     <div className="roadmap-list">
       <div className="roadmap-list-head">
         <h1 className="screen-title">Roadmaps</h1>
-        <button className="btn-primary" onClick={onNew}>
-          + New roadmap
-        </button>
+        <div className="roadmap-list-actions">
+          <button className="btn-ghost" onClick={onDraft}>
+            Draft with AI
+          </button>
+          <button className="btn-primary" onClick={onNew}>
+            + New roadmap
+          </button>
+        </div>
       </div>
 
       {error && <p className="roadmap-error">{error}</p>}

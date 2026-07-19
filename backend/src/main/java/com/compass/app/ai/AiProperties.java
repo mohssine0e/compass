@@ -14,6 +14,10 @@ public class AiProperties {
 
     private long timeoutSeconds = 6;
     private int maxTokens = 64;
+    // Roadmap generation/restructuring returns a multi-step payload, so it needs a bigger
+    // token budget and a longer timeout than a one-line acknowledgment.
+    private long generationTimeoutSeconds = 30;
+    private int generationMaxTokens = 1200;
     private Provider primary = new Provider();
     private Provider backup = new Provider();
 
@@ -31,6 +35,22 @@ public class AiProperties {
 
     public void setMaxTokens(int maxTokens) {
         this.maxTokens = maxTokens;
+    }
+
+    public long getGenerationTimeoutSeconds() {
+        return generationTimeoutSeconds;
+    }
+
+    public void setGenerationTimeoutSeconds(long generationTimeoutSeconds) {
+        this.generationTimeoutSeconds = generationTimeoutSeconds;
+    }
+
+    public int getGenerationMaxTokens() {
+        return generationMaxTokens;
+    }
+
+    public void setGenerationMaxTokens(int generationMaxTokens) {
+        this.generationMaxTokens = generationMaxTokens;
     }
 
     public Provider getPrimary() {

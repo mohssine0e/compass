@@ -1,0 +1,36 @@
+.gen-label {
+  color: var(--text);
+  font-size: 1.25rem;
+}
+
+.gen-goal {
+  font-size: 1.15rem;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.gen-lead {
+  color: var(--muted);
+  font-size: 1rem;
+  margin: 0;
+}
+
+.gen-questions {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+
+.gen-question {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gen-question-text {
+  color: var(--text);
+  font-size: 1.05rem;
+  line-height: 1.4;
+}

@@ -50,6 +50,18 @@ export function createRoadmap(payload) {
   })
 }
 
+/**
+ * One turn of AI roadmap drafting. Call with `{ goal }` to get clarifying questions back,
+ * then with `{ goal, clarifications: [{ question, answer }] }` to get an editable proposal.
+ * Throws (503) when drafting is unavailable — fall back to the manual form.
+ */
+export function generateRoadmap(payload) {
+  return request('/roadmaps/generate', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
 /** All roadmaps with their steps and progress, newest first. */
 export function listRoadmaps() {
   return request('/roadmaps')

@@ -83,10 +83,10 @@ it." This phase is more AI-facing and higher-risk to tone/quality than Phase 3 �
 the actual generated output carefully before trusting it.
 
 **AI-generated roadmap from a goal**
-- [ ] `POST /roadmaps/generate` (or similar): given a goal in plain text, the AI asks 1–2
+- [x] `POST /roadmaps/generate` (or similar): given a goal in plain text, the AI asks 1–2
   clarifying questions (time available per week, prior experience) before proposing an
   ordered step breakdown — not a single-shot generation, per CLAUDE.md tone/quality bar
-- [ ] Proposed roadmap is editable before the user accepts it — AI drafts, user owns the
+- [x] Proposed roadmap is editable before the user accepts it — AI drafts, user owns the
   final version
 - [ ] `roadmap_step` gains an optional `depends_on` field (references another step's id)
   so steps can express real prerequisites, not just position-in-list order. Needed for

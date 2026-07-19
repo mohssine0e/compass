@@ -1,10 +1,13 @@
 package com.compass.app.roadmap;
 
+import com.compass.app.ai.RoadmapAiService;
 import com.compass.app.entry.Entry;
 import com.compass.app.entry.EntryRepository;
 import com.compass.app.entry.EntryStatus;
 import com.compass.app.entry.EntryType;
 import com.compass.app.roadmap.dto.CreateRoadmapRequest;
+import com.compass.app.roadmap.dto.GenerateRoadmapRequest;
+import com.compass.app.roadmap.dto.GenerateRoadmapResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,9 +26,62 @@ import java.util.Map;
 public class RoadmapService {
 
     private final EntryRepository repository;
+    private final RoadmapAiService roadmapAi;
 
-    public RoadmapService(EntryRepository repository) {
+    public RoadmapService(EntryRepository repository, RoadmapAiService roadmapAi) {
         this.repository = repository;
+        this.roadmapAi = roadmapAi;
+    }
+
+    /**
+     * One turn of the AI drafting flow (Phase 4). With no clarifications yet, returns the
+     * clarifying questions to ask first; once they're answered, returns a proposed step
+     * breakdown the user edits and owns. Nothing is persisted until the user creates the
+     * roadmap the normal way. Throws {@link IllegalStateException} when no AI provider can
+     * serve the request, so the caller can fall back to writing steps by hand.
+     */
+    public GenerateRoadmapResponse generate(GenerateRoadmapRequest req) {
+        String goal = req.goal() != null ? req.goal().trim() : "";
+        if (goal.isEmpty()) {
+            throw new IllegalArgumentException("Say what you want a roadmap for first.");
+        }
+        if (!roadmapAi.isAvailable()) {
+            throw new IllegalStateException(
+                    "Drafting is unavailable right now — write the steps yourself.");
+        }
+
+        if (req.clarifications() == null) {
+            List<String> questions = roadmapAi.clarifyingQuestions(goal);
+            if (questions == null) {
+                throw new IllegalStateException(
+                        "Drafting is unavailable right now — write the steps yourself.");
+            }
+            return GenerateRoadmapResponse.needsClarification(questions);
+        }
+
+        RoadmapAiService.RoadmapDraft draft =
+                roadmapAi.proposeRoadmap(goal, formatClarifications(req.clarifications()));
+        if (draft == null) {
+            throw new IllegalStateException(
+                    "Drafting is unavailable right now — write the steps yourself.");
+        }
+        return GenerateRoadmapResponse.proposal(draft.title(), draft.steps());
+    }
+
+    /** Fold answered clarifying questions into a plain block for the proposal prompt. */
+    private static String formatClarifications(List<GenerateRoadmapRequest.Clarification> items) {
+        StringBuilder sb = new StringBuilder();
+        for (GenerateRoadmapRequest.Clarification c : items) {
+            String answer = c.answer() != null ? c.answer().trim() : "";
+            if (answer.isEmpty()) {
+                continue;
+            }
+            if (c.question() != null && !c.question().isBlank()) {
+                sb.append("Q: ").append(c.question().trim()).append('\n');
+            }
+            sb.append("A: ").append(answer).append('\n');
+        }
+        return sb.toString();
     }
 
     @Transactional

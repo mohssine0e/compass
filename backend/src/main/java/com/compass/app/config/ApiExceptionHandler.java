@@ -23,4 +23,10 @@ public class ApiExceptionHandler {
     public ProblemDetail handleNotFound(NoSuchElementException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
     }
+
+    /** AI-backed features that can't run right now (no provider configured, or all failed). */
+    @ExceptionHandler(IllegalStateException.class)
+    public ProblemDetail handleUnavailable(IllegalStateException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+    }
 }

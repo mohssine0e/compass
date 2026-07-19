@@ -2,6 +2,8 @@ package com.compass.app.roadmap;
 
 import com.compass.app.entry.Entry;
 import com.compass.app.roadmap.dto.CreateRoadmapRequest;
+import com.compass.app.roadmap.dto.GenerateRoadmapRequest;
+import com.compass.app.roadmap.dto.GenerateRoadmapResponse;
 import com.compass.app.roadmap.dto.InsertStepRequest;
 import com.compass.app.roadmap.dto.ReorderStepsRequest;
 import com.compass.app.roadmap.dto.RoadmapResponse;
@@ -34,6 +36,16 @@ public class RoadmapController {
         Entry roadmap = service.create(request);
         RoadmapResponse body = RoadmapResponse.of(roadmap, service.stepsOf(roadmap.getId()));
         return ResponseEntity.status(HttpStatus.CREATED).body(body);
+    }
+
+    /**
+     * One turn of AI drafting. Body {goal} with no clarifications → clarifying questions;
+     * body {goal, clarifications:[{question, answer}]} → an editable step proposal. 503 when
+     * no AI provider is configured/reachable, so the UI falls back to the manual form.
+     */
+    @PostMapping("/generate")
+    public GenerateRoadmapResponse generate(@RequestBody GenerateRoadmapRequest request) {
+        return service.generate(request);
     }
 
     /** All roadmaps with their steps and progress, newest first. */
