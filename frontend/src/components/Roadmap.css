@@ -196,6 +196,27 @@
   cursor: default;
 }
 
+.step-undo-btn {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 5px 14px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.step-undo-btn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--faint);
+}
+
+.step-undo-btn:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
 .step-item.is-done .step-marker {
   color: var(--brass);
 }

@@ -35,6 +35,20 @@ export default function RoadmapDetail({ id, onBack }) {
     }
   }
 
+  async function undoStep(stepId) {
+    setBusyStepId(stepId)
+    setError(null)
+    setDoneNote(null)
+    try {
+      await patchEntry(stepId, { status: 'captured' })
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusyStepId(null)
+    }
+  }
+
   if (error) {
     return (
       <div className="roadmap-detail">
@@ -97,6 +111,15 @@ export default function RoadmapDetail({ id, onBack }) {
                   disabled={busyStepId === step.id}
                 >
                   {busyStepId === step.id ? 'Marking…' : 'Mark done'}
+                </button>
+              )}
+              {isDone && (
+                <button
+                  className="step-undo-btn"
+                  onClick={() => undoStep(step.id)}
+                  disabled={busyStepId === step.id}
+                >
+                  {busyStepId === step.id ? 'Undoing…' : 'Undo'}
                 </button>
               )}
             </li>
