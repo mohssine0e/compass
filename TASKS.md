@@ -321,9 +321,9 @@ losing its lightweight core. The AI voice stays self-talk, never teacher-mode.
 Goal: standalone captured ideas can turn into real tracked action, not just sit as text.
 Also: guided learning sessions, behavioral preference inference, and a focused daily view.
 
-- [ ] "Next step" answers from the resurfacing loop become their own trackable
+- [x] "Next step" answers from the resurfacing loop become their own trackable
   entry (linked via `parent_id`, type `task` or similar)
-- [ ] Progress states for standalone ideas: captured → developing → in motion →
+- [x] Progress states for standalone ideas: captured → developing → in motion →
   done/dropped, reflected in the list/roadmap views
 - [ ] Per-topic personalization: when generating the default-options list for the honest
   question, check for real history on that specific thread first (per CLAUDE.md — per-topic,

@@ -10,7 +10,8 @@ import com.fasterxml.jackson.annotation.JsonValue;
 public enum EntryType {
     IDEA("idea"),
     ROADMAP("roadmap"),
-    ROADMAP_STEP("roadmap_step");
+    ROADMAP_STEP("roadmap_step"),
+    TASK("task");
 
     private final String value;
 

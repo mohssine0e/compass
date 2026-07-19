@@ -141,6 +141,10 @@ public class ResurfacingService {
                 if (entry.getStatus() == EntryStatus.CAPTURED) {
                     entry.setStatus(EntryStatus.DEVELOPING);
                 }
+                // The next step they named becomes its own trackable task (Phase 9).
+                if (note != null && !note.isBlank()) {
+                    createNextStepTask(entry, note.trim());
+                }
             }
             // still_relevant / stuck / skip: no state change, just the resurface stamp below.
             default -> {
@@ -256,6 +260,18 @@ public class ResurfacingService {
     private static String stringField(Entry entry, String key) {
         Object value = entry != null && entry.getContent() != null ? entry.getContent().get(key) : null;
         return value instanceof String s ? s : null;
+    }
+
+    /** Turn a named next step into its own trackable task, linked to what it came from. */
+    private void createNextStepTask(Entry parent, String text) {
+        Entry task = new Entry();
+        task.setType(EntryType.TASK);
+        task.setStatus(EntryStatus.CAPTURED);
+        task.setParentId(parent.getId());
+        Map<String, Object> content = new HashMap<>();
+        content.put("text", text);
+        task.setContent(content);
+        repository.save(task);
     }
 
     @SuppressWarnings("unchecked")

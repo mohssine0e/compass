@@ -97,3 +97,56 @@
 .all-status.status-dropped {
   color: var(--faint);
 }
+
+/* Editable idea status + follow-through tasks (Phase 9). */
+.all-status-select {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  outline: none;
+}
+
+.all-status-select.status-done {
+  color: var(--brass);
+}
+
+.all-tasks {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0 0 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.all-task {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+}
+
+.all-task-check {
+  background: transparent;
+  border: none;
+  color: var(--faint);
+  font-size: 0.9rem;
+  padding: 0;
+  line-height: 1;
+}
+
+.all-task.is-done .all-task-check {
+  color: var(--brass);
+}
+
+.all-task-text {
+  color: var(--muted);
+}
+
+.all-task.is-done .all-task-text {
+  text-decoration: line-through;
+  color: var(--faint);
+}
