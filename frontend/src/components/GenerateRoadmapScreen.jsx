@@ -12,6 +12,7 @@ export default function GenerateRoadmapScreen({ onCreated, onManual, onCancel })
   const [answers, setAnswers] = useState([])
   const [title, setTitle] = useState('')
   const [steps, setSteps] = useState([])
+  const [skipped, setSkipped] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   // 503 = drafting unavailable; offer the manual form instead of a dead end.
@@ -58,6 +59,7 @@ export default function GenerateRoadmapScreen({ onCreated, onManual, onCancel })
   function showProposal(res) {
     setTitle(res.title || '')
     setSteps(res.steps && res.steps.length ? res.steps : [''])
+    setSkipped(res.skipped || [])
     setPhase('proposal')
     setBusy(false)
   }
@@ -155,6 +157,16 @@ export default function GenerateRoadmapScreen({ onCreated, onManual, onCancel })
       {phase === 'proposal' && (
         <>
           <p className="gen-lead">A draft. Change anything before you keep it — it's yours.</p>
+          {skipped.length > 0 && (
+            <div className="gen-skipped">
+              <span className="gen-skipped-label">Skipped, based on your profile:</span>
+              <ul className="gen-skipped-list">
+                {skipped.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <input
             className="roadmap-title"
             value={title}

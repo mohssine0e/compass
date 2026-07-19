@@ -30,10 +30,13 @@ public class RoadmapAiService {
         return ai.isAvailable();
     }
 
-    /** 1–2 clarifying questions for a goal, or {@code null} if unavailable / both providers fail. */
-    public List<String> clarifyingQuestions(String goal) {
+    /**
+     * 1–2 clarifying questions for a goal, sharpened by the profile context if given, or
+     * {@code null} if unavailable / both providers fail.
+     */
+    public List<String> clarifyingQuestions(String goal, String profileContext) {
         JsonNode json = ai.generate("roadmap clarifying questions",
-                PromptTemplates.CLARIFY_SYSTEM, PromptTemplates.clarifyUser(goal));
+                PromptTemplates.CLARIFY_SYSTEM, PromptTemplates.clarifyUser(goal, profileContext));
         if (json == null) {
             return null;
         }
@@ -41,10 +44,13 @@ public class RoadmapAiService {
         return questions.isEmpty() ? null : questions.subList(0, Math.min(2, questions.size()));
     }
 
-    /** A proposed roadmap for a goal + clarifying answers, or {@code null} on failure. */
-    public RoadmapDraft proposeRoadmap(String goal, String clarifications) {
-        JsonNode json = ai.generate("roadmap proposal",
-                PromptTemplates.PROPOSE_SYSTEM, PromptTemplates.proposeUser(goal, clarifications));
+    /**
+     * A proposed roadmap for a goal + clarifying answers, using the profile context to skip what
+     * the user already knows (each skip stated plainly). {@code null} on failure.
+     */
+    public RoadmapDraft proposeRoadmap(String goal, String clarifications, String profileContext) {
+        JsonNode json = ai.generate("roadmap proposal", PromptTemplates.PROPOSE_SYSTEM,
+                PromptTemplates.proposeUser(goal, clarifications, profileContext));
         if (json == null) {
             return null;
         }
@@ -53,7 +59,8 @@ public class RoadmapAiService {
         if (steps.isEmpty()) {
             return null;
         }
-        return new RoadmapDraft(title, steps);
+        List<String> skipped = AiJsonGenerator.strings(json.get("skipped"));
+        return new RoadmapDraft(title, steps, skipped);
     }
 
     /** Smaller sub-steps that replace one stalled step, or {@code null} on failure. */
@@ -84,8 +91,11 @@ public class RoadmapAiService {
         return new Prerequisite(step, AiJsonGenerator.text(json.get("why")));
     }
 
-    /** A drafted roadmap the user will edit and own. */
-    public record RoadmapDraft(String title, List<String> steps) {
+    /**
+     * A drafted roadmap the user will edit and own. {@code skipped} lists topics left out
+     * because the profile shows they're already known, each with its plainly-stated reason.
+     */
+    public record RoadmapDraft(String title, List<String> steps, List<String> skipped) {
     }
 
     /** A proposed prerequisite step plus the one-line reason it comes first. */

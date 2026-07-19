@@ -43,6 +43,15 @@ public class ProfileService {
     }
 
     /**
+     * The profile only if it's been confirmed at least once — generation must not read an
+     * unconfirmed profile (CLAUDE.md: AI reads of the person are guesses until approved).
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<LearnerProfile> confirmedProfile() {
+        return repository.findFirstByOrderByIdAsc().filter(p -> p.getConfirmedAt() != null);
+    }
+
+    /**
      * Save the reviewed profile and mark it confirmed — saving from the review screen is the
      * act of approving it (CLAUDE.md: nothing here is trusted by generation until confirmed).
      * Skills are sanitized to {name, confidence?} with a valid confidence or none.

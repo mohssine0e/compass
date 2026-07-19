@@ -117,17 +117,26 @@ final class PromptTemplates {
             ask the 1–2 questions whose answers would most change the shape of that roadmap —
             usually how much time they have per week and what they already know / have done.
 
+            If a profile of what they already know is given, use it to make the questions SHARPER,
+            not generic: don't ask about something the profile already answers — instead ask the
+            follow-up it raises (e.g. "you've already covered ownership — skip it here, or want a
+            quick refresher step?" rather than "how much Rust do you know?").
+
             Hard rules:
             - At most two questions. Fewer is better if one already covers it.
             - Each question is one plain line, in the user's own clear-headed inner voice — not a
               form field, not a chatbot. No greeting, no preamble, no "let me ask".
-            - Specific to this goal, not generic. Reference the actual goal.
+            - Specific to this goal (and their profile, if given), not generic.
             - No praise, no encouragement, no emoji, no exclamation points.
             - Output ONLY strict JSON, no prose around it: {"questions": ["...", "..."]}
             """;
 
-    static String clarifyUser(String goal) {
-        return "Goal: " + (goal == null ? "" : goal.trim()) + "\nWrite the clarifying questions as JSON.";
+    static String clarifyUser(String goal, String profileContext) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Goal: ").append(goal == null ? "" : goal.trim()).append('\n');
+        appendProfile(sb, profileContext);
+        sb.append("Write the clarifying questions as JSON.");
+        return sb.toString();
     }
 
     /**
@@ -139,6 +148,12 @@ final class PromptTemplates {
             clarifying questions to size and sequence it. The user will edit this before keeping it —
             draft honestly, don't pad.
 
+            If a profile of what they already know is given, use it: SKIP or condense topics the
+            profile shows they already have, and don't re-teach them. State every such skip plainly
+            in a "skipped" list, each with the reason grounded in their profile (e.g. "skipping basic
+            syntax — your profile lists C++ as solid"). Never skip silently. If nothing is skipped,
+            return an empty "skipped" list.
+
             Hard rules:
             - Between 4 and 10 steps. Each step is one concrete, checkable action or milestone —
               something you could later verify was actually done, not a vague theme.
@@ -147,17 +162,27 @@ final class PromptTemplates {
               no motivational language, no emoji.
             - Fit the scope to their stated time and starting point. Don't assume more than they said.
             - Give the roadmap a short, plain title (a few words) naming what they'll be able to do.
-            - Output ONLY strict JSON, no prose around it: {"title": "...", "steps": ["...", "..."]}
+            - Output ONLY strict JSON, no prose around it:
+              {"title": "...", "steps": ["...", "..."], "skipped": ["...", "..."]}
             """;
 
-    static String proposeUser(String goal, String clarifications) {
+    static String proposeUser(String goal, String clarifications, String profileContext) {
         StringBuilder sb = new StringBuilder();
         sb.append("Goal: ").append(goal == null ? "" : goal.trim()).append('\n');
         if (clarifications != null && !clarifications.isBlank()) {
             sb.append("What they told you:\n").append(clarifications.trim()).append('\n');
         }
+        appendProfile(sb, profileContext);
         sb.append("Write the roadmap as JSON.");
         return sb.toString();
+    }
+
+    /** Append the learner-profile context block to a prompt, if there is one. */
+    private static void appendProfile(StringBuilder sb, String profileContext) {
+        if (profileContext != null && !profileContext.isBlank()) {
+            sb.append("What they already know (their confirmed profile):\n")
+                    .append(profileContext.trim()).append('\n');
+        }
     }
 
     /**

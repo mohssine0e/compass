@@ -208,10 +208,10 @@ review actual generated output carefully, on a real roadmap, before trusting it.
   roadmap doesn't present a huge topic and a tiny one as equally-sized steps
 
 **Profile-aware personalization**
-- [ ] Generation reads the confirmed learner profile (Phase 6) and explicitly skips or
+- [x] Generation reads the confirmed learner profile (Phase 6) and explicitly skips or
   condenses topics the profile shows are already known — every skip is stated plainly in
   the output ("skipping basic syntax — based on your completed C++ roadmap"), never silent
-- [ ] Clarifying questions (from Phase 4) become sharper using profile context — e.g.
+- [x] Clarifying questions (from Phase 4) become sharper using profile context — e.g.
   "you've already covered ownership — skip it here, or just a quick refresher step?"
   instead of a generic question
 - [ ] **Push + tag `phase-7-complete`. Stop. Let the founder use this for real before

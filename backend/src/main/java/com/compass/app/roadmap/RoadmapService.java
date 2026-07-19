@@ -5,6 +5,8 @@ import com.compass.app.entry.Entry;
 import com.compass.app.entry.EntryRepository;
 import com.compass.app.entry.EntryStatus;
 import com.compass.app.entry.EntryType;
+import com.compass.app.profile.ProfileContext;
+import com.compass.app.profile.ProfileService;
 import com.compass.app.roadmap.dto.CreateRoadmapRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapResponse;
@@ -27,10 +29,13 @@ public class RoadmapService {
 
     private final EntryRepository repository;
     private final RoadmapAiService roadmapAi;
+    private final ProfileService profileService;
 
-    public RoadmapService(EntryRepository repository, RoadmapAiService roadmapAi) {
+    public RoadmapService(EntryRepository repository, RoadmapAiService roadmapAi,
+                          ProfileService profileService) {
         this.repository = repository;
         this.roadmapAi = roadmapAi;
+        this.profileService = profileService;
     }
 
     /**
@@ -50,8 +55,13 @@ public class RoadmapService {
                     "Drafting is unavailable right now — write the steps yourself.");
         }
 
+        // Only a confirmed profile feeds generation (CLAUDE.md); null when none/unconfirmed.
+        String profileContext = profileService.confirmedProfile()
+                .map(ProfileContext::forPrompt)
+                .orElse(null);
+
         if (req.clarifications() == null) {
-            List<String> questions = roadmapAi.clarifyingQuestions(goal);
+            List<String> questions = roadmapAi.clarifyingQuestions(goal, profileContext);
             if (questions == null) {
                 throw new IllegalStateException(
                         "Drafting is unavailable right now — write the steps yourself.");
@@ -59,13 +69,13 @@ public class RoadmapService {
             return GenerateRoadmapResponse.needsClarification(questions);
         }
 
-        RoadmapAiService.RoadmapDraft draft =
-                roadmapAi.proposeRoadmap(goal, formatClarifications(req.clarifications()));
+        RoadmapAiService.RoadmapDraft draft = roadmapAi.proposeRoadmap(
+                goal, formatClarifications(req.clarifications()), profileContext);
         if (draft == null) {
             throw new IllegalStateException(
                     "Drafting is unavailable right now — write the steps yourself.");
         }
-        return GenerateRoadmapResponse.proposal(draft.title(), draft.steps());
+        return GenerateRoadmapResponse.proposal(draft.title(), draft.steps(), draft.skipped());
     }
 
     /** Fold answered clarifying questions into a plain block for the proposal prompt. */

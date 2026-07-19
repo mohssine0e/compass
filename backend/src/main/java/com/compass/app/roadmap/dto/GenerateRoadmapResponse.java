@@ -14,13 +14,14 @@ public record GenerateRoadmapResponse(
         String status,
         List<String> questions,
         String title,
-        List<String> steps
+        List<String> steps,
+        List<String> skipped
 ) {
     public static GenerateRoadmapResponse needsClarification(List<String> questions) {
-        return new GenerateRoadmapResponse("needs_clarification", questions, null, null);
+        return new GenerateRoadmapResponse("needs_clarification", questions, null, null, null);
     }
 
-    public static GenerateRoadmapResponse proposal(String title, List<String> steps) {
-        return new GenerateRoadmapResponse("proposal", null, title, steps);
+    public static GenerateRoadmapResponse proposal(String title, List<String> steps, List<String> skipped) {
+        return new GenerateRoadmapResponse("proposal", null, title, steps, skipped);
     }
 }
