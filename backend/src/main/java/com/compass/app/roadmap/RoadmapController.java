@@ -2,6 +2,7 @@ package com.compass.app.roadmap;
 
 import com.compass.app.entry.Entry;
 import com.compass.app.roadmap.dto.CreateRoadmapRequest;
+import com.compass.app.roadmap.dto.InsertStepRequest;
 import com.compass.app.roadmap.dto.ReorderStepsRequest;
 import com.compass.app.roadmap.dto.RoadmapResponse;
 import org.springframework.http.HttpStatus;
@@ -47,6 +48,16 @@ public class RoadmapController {
     public RoadmapResponse get(@PathVariable Long id) {
         Entry roadmap = service.getRoadmap(id);
         return RoadmapResponse.of(roadmap, service.stepsOf(id));
+    }
+
+    /** Insert a new step. Body is {text, position?} — appended when position is omitted. */
+    @PostMapping("/{id}/steps")
+    public ResponseEntity<RoadmapResponse> insertStep(@PathVariable Long id,
+                                                        @RequestBody InsertStepRequest request) {
+        service.insertStep(id, request.text(), request.position());
+        Entry roadmap = service.getRoadmap(id);
+        RoadmapResponse body = RoadmapResponse.of(roadmap, service.stepsOf(id));
+        return ResponseEntity.status(HttpStatus.CREATED).body(body);
     }
 
     /** Reorder a roadmap's steps. Body is the full ordered list of step ids. */

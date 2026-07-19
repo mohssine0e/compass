@@ -276,6 +276,26 @@
   cursor: default;
 }
 
+.step-insert-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0;
+}
+
+.step-insert-btn {
+  background: transparent;
+  color: var(--faint);
+  border: none;
+  padding: 3px 0;
+  font-size: 0.78rem;
+  transition: color 0.15s ease;
+}
+
+.step-insert-btn:hover {
+  color: var(--muted);
+}
+
 .step-item.is-done .step-marker {
   color: var(--brass);
 }

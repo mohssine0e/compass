@@ -68,6 +68,14 @@ export function reorderRoadmapSteps(roadmapId, stepIds) {
   })
 }
 
+/** Insert a step into a roadmap. `position` is 0-based; omit to append. */
+export function insertRoadmapStep(roadmapId, text, position) {
+  return request(`/roadmaps/${roadmapId}/steps`, {
+    method: 'POST',
+    body: JSON.stringify({ text, position }),
+  })
+}
+
 /** The one thing to resurface before capture, or null when nothing qualifies. */
 export function getNextResurfacing() {
   return request('/resurfacing/next')

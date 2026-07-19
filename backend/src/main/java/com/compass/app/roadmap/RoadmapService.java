@@ -123,6 +123,37 @@ public class RoadmapService {
         repository.touchUpdatedAt(roadmapId, Instant.now());
     }
 
+    /**
+     * Insert a new step at {@code position} (0-based), shifting later steps down.
+     * A null or out-of-range position appends to the end.
+     */
+    @Transactional
+    public Entry insertStep(Long roadmapId, String text, Integer position) {
+        getRoadmap(roadmapId);
+        String trimmed = text != null ? text.trim() : "";
+        if (trimmed.isEmpty()) {
+            throw new IllegalArgumentException("A step needs some text.");
+        }
+
+        List<Entry> steps = stepsOf(roadmapId);
+        int insertAt = position == null
+                ? steps.size()
+                : Math.max(0, Math.min(position, steps.size()));
+
+        Entry step = new Entry();
+        step.setType(EntryType.ROADMAP_STEP);
+        step.setStatus(EntryStatus.CAPTURED);
+        step.setParentId(roadmapId);
+        Map<String, Object> content = new HashMap<>();
+        content.put("text", trimmed);
+        step.setContent(content);
+
+        steps.add(insertAt, step);
+        reindexAndSave(steps);
+        repository.touchUpdatedAt(roadmapId, Instant.now());
+        return step;
+    }
+
     /** Reassigns order_index 0..n-1 to match list order, then persists all of them. */
     private void reindexAndSave(List<Entry> orderedSteps) {
         for (int i = 0; i < orderedSteps.size(); i++) {

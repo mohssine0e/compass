@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { getRoadmap, patchEntry, reorderRoadmapSteps } from '../api'
+import { Fragment, useCallback, useEffect, useState } from 'react'
+import { getRoadmap, insertRoadmapStep, patchEntry, reorderRoadmapSteps } from '../api'
 import ProgressBar from './ProgressBar'
 import './Roadmap.css'
 
@@ -11,6 +11,9 @@ export default function RoadmapDetail({ id, onBack }) {
   const [editingStepId, setEditingStepId] = useState(null)
   const [editText, setEditText] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
+  const [insertAtIndex, setInsertAtIndex] = useState(null)
+  const [insertText, setInsertText] = useState('')
+  const [savingInsert, setSavingInsert] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -69,6 +72,34 @@ export default function RoadmapDetail({ id, onBack }) {
     }
   }
 
+  function startInsert(atIndex) {
+    setInsertAtIndex(atIndex)
+    setInsertText('')
+    setError(null)
+  }
+
+  function cancelInsert() {
+    setInsertAtIndex(null)
+    setInsertText('')
+  }
+
+  async function submitInsert() {
+    const trimmed = insertText.trim()
+    if (!trimmed) return
+    setSavingInsert(true)
+    setError(null)
+    try {
+      await insertRoadmapStep(roadmap.id, trimmed, insertAtIndex)
+      setInsertAtIndex(null)
+      setInsertText('')
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSavingInsert(false)
+    }
+  }
+
   function startEdit(step) {
     setEditingStepId(step.id)
     setEditText(step.content.text || '')
@@ -113,6 +144,45 @@ export default function RoadmapDetail({ id, onBack }) {
     )
   }
 
+  function renderInsertRow(atIndex) {
+    if (insertAtIndex === atIndex) {
+      return (
+        <li className="step-insert-row">
+          <input
+            className="step-edit-input"
+            value={insertText}
+            onChange={(e) => setInsertText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') submitInsert()
+              if (e.key === 'Escape') cancelInsert()
+            }}
+            placeholder="New step"
+            autoFocus
+          />
+          <span className="step-edit-actions">
+            <button
+              className="step-edit-btn"
+              onClick={submitInsert}
+              disabled={savingInsert || !insertText.trim()}
+            >
+              {savingInsert ? 'Adding…' : 'Add'}
+            </button>
+            <button className="step-edit-btn" onClick={cancelInsert} disabled={savingInsert}>
+              Cancel
+            </button>
+          </span>
+        </li>
+      )
+    }
+    return (
+      <li className="step-insert-row">
+        <button className="step-insert-btn" onClick={() => startInsert(atIndex)}>
+          + Insert step
+        </button>
+      </li>
+    )
+  }
+
   const { title, notes, progress, steps } = roadmap
 
   return (
@@ -147,7 +217,9 @@ export default function RoadmapDetail({ id, onBack }) {
                 : 'is-upcoming'
           const isEditing = editingStepId === step.id
           return (
-            <li key={step.id} className={`step-item ${state}`}>
+            <Fragment key={step.id}>
+              {renderInsertRow(index)}
+              <li className={`step-item ${state}`}>
               <span className="step-marker" aria-hidden="true">
                 {isDone ? '✓' : isDropped ? '–' : isCurrent ? '●' : '○'}
               </span>
@@ -225,9 +297,11 @@ export default function RoadmapDetail({ id, onBack }) {
                   {busyStepId === step.id ? 'Undoing…' : 'Undo'}
                 </button>
               )}
-            </li>
+              </li>
+            </Fragment>
           )
         })}
+        {renderInsertRow(steps.length)}
       </ol>
     </div>
   )
