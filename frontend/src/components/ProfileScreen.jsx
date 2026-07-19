@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { getProfile, interpretSelfDescription, saveProfile } from '../api'
+import { useEffect, useRef, useState } from 'react'
+import { extractResume, getProfile, interpretSelfDescription, saveProfile } from '../api'
 import './ProfileScreen.css'
 
 // The learner profile (Phase 6): what you already know, so generation later doesn't re-teach
@@ -14,8 +14,10 @@ const CONFIDENCE = [
 
 export default function ProfileScreen() {
   const [skills, setSkills] = useState([])
-  // Preserved across saves so editing one part doesn't wipe another (resume added next task).
+  // { experience, education } pulled from a resume; resume skills are merged into the list above.
   const [resumeExtracted, setResumeExtracted] = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef(null)
   const [descRaw, setDescRaw] = useState('')
   const [descTraits, setDescTraits] = useState([])
   const [interpreting, setInterpreting] = useState(false)
@@ -41,6 +43,40 @@ export default function ProfileScreen() {
       alive = false
     }
   }, [])
+
+  async function uploadResume(file) {
+    if (!file || uploading) return
+    setUploading(true)
+    setError(null)
+    try {
+      const res = await extractResume(file)
+      // Resume skills join the editable skills list (you set confidence); the rest is kept as-is.
+      const existing = new Set(skills.map((s) => s.name.toLowerCase()))
+      const added = (res.skills || [])
+        .filter((name) => name && !existing.has(name.toLowerCase()))
+        .map((name) => ({ name }))
+      setSkills((prev) => [...prev, ...added])
+      setResumeExtracted({
+        experience: res.experience || [],
+        education: res.education || [],
+      })
+      setSaved(false)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  function removeResumeItem(kind, index) {
+    setResumeExtracted((prev) => {
+      if (!prev) return prev
+      const next = { ...prev, [kind]: prev[kind].filter((_, i) => i !== index) }
+      return next
+    })
+    setSaved(false)
+  }
 
   async function interpret() {
     if (interpreting || !descRaw.trim()) return
@@ -114,6 +150,7 @@ export default function ProfileScreen() {
       <h1 className="screen-title">Your profile</h1>
       <p className="profile-lead">
         What you already know, so a generated roadmap doesn&apos;t waste your time on it.
+        Review everything below — saving is what confirms it.
       </p>
 
       <section className="profile-section">
@@ -161,6 +198,50 @@ export default function ProfileScreen() {
             ))}
           </ul>
         )}
+      </section>
+
+      <section className="profile-section">
+        <h2 className="profile-section-title">Resume</h2>
+        <p className="profile-section-hint">
+          Optional. Upload a PDF or DOCX — skills join the list above, the rest stays here for
+          you to trim. The file itself isn&apos;t stored.
+        </p>
+        <div className="resume-upload">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".pdf,.docx"
+            className="resume-file"
+            onChange={(e) => uploadResume(e.target.files[0])}
+            disabled={uploading}
+          />
+          {uploading && <span className="profile-hint">Reading…</span>}
+        </div>
+
+        {resumeExtracted &&
+          ['experience', 'education'].map((kind) =>
+            (resumeExtracted[kind] || []).length > 0 ? (
+              <div className="resume-group" key={kind}>
+                <h3 className="resume-group-title">{kind}</h3>
+                <ul className="resume-items">
+                  {resumeExtracted[kind].map((item, i) => (
+                    <li className="resume-item" key={i}>
+                      <span className="resume-item-text">
+                        {Object.values(item).filter(Boolean).join(' · ')}
+                      </span>
+                      <button
+                        className="skill-remove"
+                        onClick={() => removeResumeItem(kind, i)}
+                        aria-label={`Remove ${kind} entry`}
+                      >
+                        ×
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null
+          )}
       </section>
 
       <section className="profile-section">

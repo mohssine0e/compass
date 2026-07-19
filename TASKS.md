@@ -164,7 +164,7 @@ own profile instead of a roadmap edit.
 - [x] Free-text self-description field ("how you like to learn/think") — AI-interpreted
   into a few structured traits (e.g. "prefers concrete examples," "learns fast, skips
   fundamentals if bored"), not stored as a raw guess
-- [ ] **Confirmation screen**: after skills + resume + self-description are submitted,
+- [x] **Confirmation screen**: after skills + resume + self-description are submitted,
   show the founder a plain-language overview of everything the system understood —
   editable before it's saved as the real profile. Nothing from this phase is used in
   generation (Phase 7) until it's been confirmed at least once.
