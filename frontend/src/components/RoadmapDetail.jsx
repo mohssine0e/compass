@@ -8,6 +8,9 @@ export default function RoadmapDetail({ id, onBack }) {
   const [error, setError] = useState(null)
   const [busyStepId, setBusyStepId] = useState(null)
   const [doneNote, setDoneNote] = useState(null)
+  const [editingStepId, setEditingStepId] = useState(null)
+  const [editText, setEditText] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -46,6 +49,33 @@ export default function RoadmapDetail({ id, onBack }) {
       setError(err.message)
     } finally {
       setBusyStepId(null)
+    }
+  }
+
+  function startEdit(step) {
+    setEditingStepId(step.id)
+    setEditText(step.content.text || '')
+    setError(null)
+  }
+
+  function cancelEdit() {
+    setEditingStepId(null)
+    setEditText('')
+  }
+
+  async function saveEdit(stepId) {
+    const trimmed = editText.trim()
+    if (!trimmed) return
+    setSavingEdit(true)
+    setError(null)
+    try {
+      await patchEntry(stepId, { text: trimmed })
+      setEditingStepId(null)
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSavingEdit(false)
     }
   }
 
@@ -98,13 +128,49 @@ export default function RoadmapDetail({ id, onBack }) {
               : isCurrent
                 ? 'is-current'
                 : 'is-upcoming'
+          const isEditing = editingStepId === step.id
           return (
             <li key={step.id} className={`step-item ${state}`}>
               <span className="step-marker" aria-hidden="true">
                 {isDone ? '✓' : isDropped ? '–' : isCurrent ? '●' : '○'}
               </span>
-              <span className="step-text">{step.content.text}</span>
-              {isCurrent && (
+              {isEditing ? (
+                <input
+                  className="step-edit-input"
+                  value={editText}
+                  onChange={(e) => setEditText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveEdit(step.id)
+                    if (e.key === 'Escape') cancelEdit()
+                  }}
+                  autoFocus
+                />
+              ) : (
+                <span className="step-text">{step.content.text}</span>
+              )}
+              {isEditing ? (
+                <span className="step-edit-actions">
+                  <button
+                    className="step-edit-btn"
+                    onClick={() => saveEdit(step.id)}
+                    disabled={savingEdit || !editText.trim()}
+                  >
+                    {savingEdit ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    className="step-edit-btn"
+                    onClick={cancelEdit}
+                    disabled={savingEdit}
+                  >
+                    Cancel
+                  </button>
+                </span>
+              ) : (
+                <button className="step-edit-btn" onClick={() => startEdit(step)}>
+                  Edit
+                </button>
+              )}
+              {!isEditing && isCurrent && (
                 <button
                   className="step-done-btn"
                   onClick={() => markDone(step.id)}
@@ -113,7 +179,7 @@ export default function RoadmapDetail({ id, onBack }) {
                   {busyStepId === step.id ? 'Marking…' : 'Mark done'}
                 </button>
               )}
-              {isDone && (
+              {!isEditing && isDone && (
                 <button
                   className="step-undo-btn"
                   onClick={() => undoStep(step.id)}

@@ -64,7 +64,7 @@ Goal: fix the current roadmap view's biggest gap — there's no way to correct a
 Small, low-risk, ship fast before anything AI-facing gets added on top.
 
 - [x] `PATCH /entries/{id}` supports un-marking a step as done (undo), not just marking done
-- [ ] Edit a step's content (title/notes) after creation
+- [x] Edit a step's content (title/notes) after creation
 - [ ] Reorder steps within a roadmap
 - [ ] Insert a new step mid-roadmap (not just appended at the end)
 - [ ] Delete a step

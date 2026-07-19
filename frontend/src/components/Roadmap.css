@@ -217,6 +217,40 @@
   cursor: default;
 }
 
+.step-edit-input {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--faint);
+  border-radius: 6px;
+  padding: 5px 8px;
+  color: var(--text);
+  font-size: 1rem;
+  font-family: inherit;
+}
+
+.step-edit-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.step-edit-btn {
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  padding: 5px 8px;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.step-edit-btn:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.step-edit-btn:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
 .step-item.is-done .step-marker {
   color: var(--brass);
 }
