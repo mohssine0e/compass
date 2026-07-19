@@ -1,6 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { endSession, getStepCovers, patchEntry, startSession } from '../api'
+import { endSession, explainText, getStepCovers, patchEntry, startSession } from '../api'
 import './StepDeepView.css'
+
+// Select-text help actions (Phase 8.5). Labels stay plain, never teacher-y.
+const HELP_ACTIONS = [
+  { action: 'explain', label: 'Explain' },
+  { action: 'simplify', label: 'Simplify' },
+  { action: 'concrete_example', label: 'Example' },
+  { action: 'explain_with_background', label: 'Background' },
+  { action: 'translate', label: 'Translate' },
+]
 
 // The optional deep view for a roadmap step (Phase 7.5): description, effort, what it covers,
 // attached resources, your own notes, and lightweight session time-tracking. The roadmap list
@@ -18,6 +27,46 @@ export default function StepDeepView({ step, onClose, onChanged }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const notesTimer = useRef(null)
+  const panelRef = useRef(null)
+  // Text-selection help (Phase 8.5): toolbar at the selection, then a result shown alongside.
+  const [selection, setSelection] = useState(null) // { text, top, left }
+  const [help, setHelp] = useState(null) // { action, text, loading, response, error }
+
+  // Show the action toolbar when the user selects text inside the panel (but not in the notes).
+  function onMouseUp(e) {
+    if (e.target.tagName === 'TEXTAREA') return
+    const sel = window.getSelection()
+    const text = sel ? sel.toString().trim() : ''
+    if (!text || !sel.rangeCount) {
+      setSelection(null)
+      return
+    }
+    const rect = sel.getRangeAt(0).getBoundingClientRect()
+    if (!rect || rect.width === 0) {
+      setSelection(null)
+      return
+    }
+    setSelection({ text, top: rect.top - 8, left: rect.left + rect.width / 2 })
+  }
+
+  async function runHelp(action) {
+    if (!selection) return
+    const text = selection.text
+    setSelection(null)
+    window.getSelection()?.removeAllRanges()
+    setHelp({ action, text, loading: true })
+    try {
+      const res = await explainText(text, {
+        stepId: step.id,
+        action,
+        preferredDepth: 'brief',
+        preferredLanguage: navigator.language,
+      })
+      setHelp({ action, text, response: res.response })
+    } catch (err) {
+      setHelp({ action, text, error: err.message })
+    }
+  }
 
   // Fetch "what this covers" once when opened, if not already cached on the step.
   useEffect(() => {
@@ -79,12 +128,48 @@ export default function StepDeepView({ step, onClose, onChanged }) {
 
   return (
     <div className="deep-overlay" onClick={onClose}>
-      <div className="deep-panel" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+      <div
+        className="deep-panel"
+        ref={panelRef}
+        onClick={(e) => e.stopPropagation()}
+        onMouseUp={onMouseUp}
+        role="dialog"
+        aria-modal="true"
+      >
         <button className="deep-close" onClick={onClose} aria-label="Close">
           ×
         </button>
 
         <h2 className="deep-title">{content.text}</h2>
+
+        {selection && (
+          <div
+            className="help-toolbar"
+            style={{ top: selection.top, left: selection.left }}
+            onMouseUp={(e) => e.stopPropagation()}
+          >
+            {HELP_ACTIONS.map((a) => (
+              <button key={a.action} className="help-toolbar-btn" onClick={() => runHelp(a.action)}>
+                {a.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {help && (
+          <div className="help-result">
+            <div className="help-result-head">
+              <span className="help-result-action">{helpActionLabel(help.action)}</span>
+              <button className="help-result-close" onClick={() => setHelp(null)} aria-label="Dismiss">
+                ×
+              </button>
+            </div>
+            <p className="help-result-quote">“{help.text}”</p>
+            {help.loading && <p className="deep-faint">Thinking…</p>}
+            {help.response && <p className="help-result-body">{help.response}</p>}
+            {help.error && <p className="deep-error">{help.error}</p>}
+          </div>
+        )}
         <div className="deep-meta">
           {content.kind && <span className={`gen-badge kind-${content.kind}`}>{content.kind}</span>}
           {content.weight && (
@@ -94,6 +179,7 @@ export default function StepDeepView({ step, onClose, onChanged }) {
         </div>
 
         {content.rationale && <p className="deep-rationale">{content.rationale}</p>}
+        <p className="deep-faint help-hint">Select any text below for help — explain, simplify, translate…</p>
 
         <section className="deep-section">
           <h3 className="deep-section-title">What this covers</h3>
@@ -164,4 +250,9 @@ function hasOpenSession(content) {
   const history = content.sessionHistory || []
   const last = history[history.length - 1]
   return !!last && last.durationMinutes == null
+}
+
+function helpActionLabel(action) {
+  const found = HELP_ACTIONS.find((a) => a.action === action)
+  return found ? found.label : 'Help'
 }

@@ -290,13 +290,13 @@ This turns Compass from a roadmap planner into an integrated learning environmen
 losing its lightweight core. The AI voice stays self-talk, never teacher-mode.
 
 **Select-text AI help**
-- [ ] `POST /ai/explain` endpoint: accepts `{selected_text, context: {step_id,
+- [x] `POST /ai/explain` endpoint: accepts `{selected_text, context: {step_id,
   user_skill_level, preferred_depth, action}}` where `action` is one of: `explain`,
   `explain_with_background`, `translate`, `concrete_example`, `simplify`
-- [ ] Response is generated in self-talk voice, calibrated to the user's learner profile
+- [x] Response is generated in self-talk voice, calibrated to the user's learner profile
   (e.g., if they know C++, explain Rust ownership by contrasting with C++ pointers)
-- [ ] Response appears in a side panel or modal — original resource text is never replaced
-- [ ] Frontend: text selection in deep view triggers a floating toolbar with action options
+- [x] Response appears in a side panel or modal — original resource text is never replaced
+- [x] Frontend: text selection in deep view triggers a floating toolbar with action options
 
 **Reformulate on demand**
 - [ ] "This is too hard / too big / too abstract" button in deep view — user-initiated
@@ -308,9 +308,9 @@ losing its lightweight core. The AI voice stays self-talk, never teacher-mode.
   Is the topic wrong, or the approach?")
 
 **Translation support**
-- [ ] `translate` action: detect source language, translate to user's preferred language
+- [x] `translate` action: detect source language, translate to user's preferred language
   (stored in learner profile or inferred from browser)
-- [ ] Translation is shown alongside original text, not replacing it
+- [x] Translation is shown alongside original text, not replacing it
 - [ ] **Push + tag `phase-8.5-complete`. Stop. Let the founder use this for real before
   continuing.**
 

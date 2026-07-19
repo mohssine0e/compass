@@ -169,3 +169,91 @@
   border-color: #d98a7a;
   background: rgba(217, 138, 122, 0.12);
 }
+
+/* --- Select-text help (Phase 8.5) --- */
+
+.help-hint {
+  margin: 0;
+  font-size: 0.82rem;
+}
+
+.help-toolbar {
+  position: fixed;
+  transform: translate(-50%, -100%);
+  display: flex;
+  gap: 2px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 3px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  z-index: 60;
+}
+
+.help-toolbar-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 0.82rem;
+  padding: 5px 9px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.help-toolbar-btn:hover {
+  color: var(--brass);
+  background: var(--surface);
+}
+
+.help-result {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.help-result-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.help-result-action {
+  color: var(--faint);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.help-result-close {
+  background: transparent;
+  border: none;
+  color: var(--faint);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.help-result-close:hover {
+  color: var(--text);
+}
+
+.help-result-quote {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-style: italic;
+  border-left: 2px solid var(--line);
+  padding-left: 10px;
+}
+
+.help-result-body {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.98rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}

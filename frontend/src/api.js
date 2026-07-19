@@ -113,6 +113,17 @@ export function endSession(stepId, body = {}) {
   })
 }
 
+/**
+ * In-content help for selected text (Phase 8.5). `context` is
+ * { stepId?, action, preferredDepth?, preferredLanguage? }. Returns { response }.
+ */
+export function explainText(selectedText, context) {
+  return request('/ai/explain', {
+    method: 'POST',
+    body: JSON.stringify({ selectedText, context }),
+  })
+}
+
 /** Generate a verification check for a step (Phase 8). Returns { question }. */
 export function getStepCheck(stepId) {
   return request(`/verification/steps/${stepId}/check`, { method: 'POST' })
