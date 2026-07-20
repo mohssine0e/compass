@@ -364,7 +364,7 @@ Goal: the system starts noticing patterns across sessions, not just within one t
   steps across separate entries
 - [x] Weekly self-talk-voice review: a summary of where things stand across all active
   roadmaps and ideas, generated once there's enough history to be meaningful
-- [ ] **Push + tag `phase-10-complete`.**
+- [x] **Push + tag `phase-10-complete`.**
 
 ---
 
