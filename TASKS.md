@@ -388,10 +388,10 @@ Goal: a small, documented, reusable component library and a coherent visual lang
 later v2 feature is built by reuse — not rebuilt from scratch. Directly addresses maintainability
 and the "make the UI/UX better" feedback. No behaviour change in this phase — it's groundwork.
 
-- [ ] Extract shared components from the patterns already scattered across screens: `Button`
+- [x] Extract shared components from the patterns already scattered across screens: `Button`
   (primary/ghost/danger), `Modal`/overlay, `Card`, `Badge`/`Chip`, `EditableList`
   (add/remove/reorder), `Menu` (kebab), `Section`, `Field`/input. One place, one style.
-- [ ] Document every component — a concise one-line summary plus a detailed block (props, when to
+- [x] Document every component — a concise one-line summary plus a detailed block (props, when to
   use, examples). Add a short `frontend/README` on the component conventions and how to add a screen.
 - [ ] Refactor existing screens onto the shared components with **no behaviour change** — the deep
   view, verify, reformulate, and restructure modals; trait/format/skill chips; kind/weight badges.

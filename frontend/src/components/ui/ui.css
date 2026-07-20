@@ -1,0 +1,230 @@
+/*
+ * Shared styles for the reusable UI kit (Phase 11). One place, one style — every screen builds
+ * from these rather than re-declaring buttons/cards/modals. Uses the design tokens in index.css.
+ * Imported once via the ui/ barrel; component files reference these classes.
+ */
+
+/* --- Button --- */
+.ui-btn {
+  border-radius: var(--radius);
+  padding: 9px 18px;
+  font-size: 0.95rem;
+  border: 1px solid transparent;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.ui-btn:disabled {
+  cursor: default;
+  color: var(--faint);
+  border-color: var(--line);
+  background: transparent;
+}
+.ui-btn--primary {
+  background: var(--brass-dim);
+  color: var(--brass);
+  border-color: var(--brass);
+  padding: 9px 20px;
+  font-size: 1rem;
+}
+.ui-btn--primary:hover:not(:disabled) {
+  background: rgba(207, 157, 91, 0.22);
+}
+.ui-btn--ghost {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--line);
+}
+.ui-btn--ghost:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--faint);
+}
+.ui-btn--danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: var(--line);
+}
+.ui-btn--danger:hover:not(:disabled) {
+  border-color: var(--danger);
+}
+
+/* --- Badge --- */
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--faint);
+  white-space: nowrap;
+}
+.ui-badge--brass {
+  color: var(--brass);
+  border-color: var(--brass);
+}
+.ui-badge--danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+/* --- Card --- */
+.ui-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.ui-card--interactive {
+  width: 100%;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.ui-card--interactive:hover {
+  border-color: var(--faint);
+  background: var(--surface-2);
+}
+
+/* --- Modal (overlay + panel) --- */
+.ui-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 20px;
+  overflow-y: auto;
+  z-index: 50;
+}
+.ui-modal {
+  position: relative;
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 28px 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ui-modal--md {
+  max-width: 520px;
+}
+.ui-modal--lg {
+  max-width: 560px;
+}
+.ui-modal__close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  color: var(--faint);
+  font-size: 1.5rem;
+  line-height: 1;
+  padding: 2px 6px;
+}
+.ui-modal__close:hover {
+  color: var(--text);
+}
+.ui-modal__title {
+  margin: 0;
+  padding-right: 28px;
+  color: var(--text);
+  font-size: 1.35rem;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+/* --- Section --- */
+.ui-section {
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+.ui-section__title {
+  margin: 0 0 8px;
+  color: var(--faint);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.ui-section__hint {
+  color: var(--faint);
+  font-size: 0.9rem;
+  margin: 0 0 12px;
+}
+
+/* --- Field (input / textarea) --- */
+.ui-input,
+.ui-textarea {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.ui-textarea {
+  line-height: 1.5;
+  resize: vertical;
+}
+.ui-input:focus,
+.ui-textarea:focus {
+  border-color: var(--faint);
+}
+.ui-input::placeholder,
+.ui-textarea::placeholder {
+  color: var(--faint);
+}
+
+/* --- Menu (kebab) --- */
+.ui-menu {
+  position: relative;
+  display: inline-flex;
+}
+.ui-menu__trigger {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.ui-menu__trigger:hover {
+  color: var(--text);
+}
+.ui-menu__list {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  min-width: 130px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+}
+.ui-menu__item {
+  background: transparent;
+  border: none;
+  text-align: left;
+  color: var(--text);
+  font-size: 0.9rem;
+  padding: 7px 10px;
+  border-radius: 6px;
+}
+.ui-menu__item:hover {
+  background: var(--surface);
+}
+.ui-menu__item--danger {
+  color: var(--danger);
+}

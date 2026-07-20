@@ -8,6 +8,8 @@
   --faint: #5b6070;
   --brass: #cf9d5b;
   --brass-dim: rgba(207, 157, 91, 0.32);
+  --danger: #d98a7a;
+  --radius: 8px;
 
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
     Arial, sans-serif;
