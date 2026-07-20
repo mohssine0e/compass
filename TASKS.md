@@ -360,9 +360,9 @@ Also: guided learning sessions, behavioral preference inference, and a focused d
 
 Goal: the system starts noticing patterns across sessions, not just within one thread.
 
-- [ ] Idea/roadmap threading: detect and surface recurring themes or repeatedly-stalled
+- [x] Idea/roadmap threading: detect and surface recurring themes or repeatedly-stalled
   steps across separate entries
-- [ ] Weekly self-talk-voice review: a summary of where things stand across all active
+- [x] Weekly self-talk-voice review: a summary of where things stand across all active
   roadmaps and ideas, generated once there's enough history to be meaningful
 - [ ] **Push + tag `phase-10-complete`.**
 

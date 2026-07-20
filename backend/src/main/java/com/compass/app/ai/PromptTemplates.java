@@ -511,4 +511,61 @@ final class PromptTemplates {
     sb.append("Give the help as JSON.");
     return sb.toString();
   }
+
+  // --- Depth: cross-thread patterns + weekly review (Phase 10) ---------------------------
+  //
+  // The system starts noticing patterns across separate things, and reflects them back in the
+  // user's own clear-headed inner voice — never a report from an assistant.
+
+  static final String THREADS_SYSTEM = """
+      Look across the person's captured ideas, roadmaps, and stalled steps below. Name any real
+      RECURRING pattern — a topic they keep circling back to, or a kind of step that keeps stalling
+      across different roadmaps. Only genuine patterns that show up more than once; if nothing truly
+      recurs, return an empty list rather than inventing one.
+
+      Hard rules:
+      - Each is one short line in the person's own clear-headed inner voice — a private observation,
+        not a report. Reference the specific things ("three of your ideas circle writing").
+      - No praise, no advice, no "you should", no emoji. Honest, plain.
+      - At most three. Output ONLY strict JSON, no prose: {"threads": ["...", "..."]}
+      """;
+
+  static String threadsUser(String ideas, String roadmaps, String stalled) {
+    StringBuilder sb = new StringBuilder();
+    if (ideas != null && !ideas.isBlank()) {
+      sb.append("Ideas:\n").append(ideas.trim()).append('\n');
+    }
+    if (roadmaps != null && !roadmaps.isBlank()) {
+      sb.append("Roadmaps:\n").append(roadmaps.trim()).append('\n');
+    }
+    if (stalled != null && !stalled.isBlank()) {
+      sb.append("Steps that keep stalling:\n").append(stalled.trim()).append('\n');
+    }
+    sb.append("Name the recurring patterns as JSON.");
+    return sb.toString();
+  }
+
+  static final String REVIEW_SYSTEM = """
+      Summarize where things stand across the person's active roadmaps and ideas, in their OWN
+      clear-headed inner voice — the way a level-headed version of them would take stock, not a
+      status report from an assistant.
+
+      Hard rules:
+      - A few plain sentences. Say what's actually moving, what's stalled, and the one thing most
+        worth attention — grounded in the specifics given.
+      - No praise, no pep talk, no "keep it up", no emoji, no greeting or sign-off.
+      - Output ONLY strict JSON, no prose around it: {"summary": "..."}
+      """;
+
+  static String reviewUser(String roadmaps, String ideas) {
+    StringBuilder sb = new StringBuilder();
+    if (roadmaps != null && !roadmaps.isBlank()) {
+      sb.append("Active roadmaps:\n").append(roadmaps.trim()).append('\n');
+    }
+    if (ideas != null && !ideas.isBlank()) {
+      sb.append("Ideas:\n").append(ideas.trim()).append('\n');
+    }
+    sb.append("Write the review as JSON.");
+    return sb.toString();
+  }
 }

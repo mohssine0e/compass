@@ -1,0 +1,47 @@
+.review {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.review-summary {
+  color: var(--text);
+  font-size: 1.2rem;
+  line-height: 1.6;
+  margin: 8px 0 28px;
+}
+
+.review-faint {
+  color: var(--faint);
+  font-size: 1.05rem;
+  line-height: 1.5;
+}
+
+.review-error {
+  color: #d98a7a;
+  font-size: 0.95rem;
+}
+
+.review-threads {
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.review-threads-label {
+  color: var(--faint);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.review-threads-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.6;
+}

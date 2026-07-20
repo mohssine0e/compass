@@ -158,6 +158,11 @@ export function getNextResurfacing() {
   return request('/resurfacing/next')
 }
 
+/** Cross-thread depth (Phase 10): { threads, summary, enough }. */
+export function getReview() {
+  return request('/review')
+}
+
 /** Record a response to a resurfacing prompt. `body` is { option, text? }. */
 export function respondResurfacing(id, body) {
   return request(`/resurfacing/${id}/respond`, {
