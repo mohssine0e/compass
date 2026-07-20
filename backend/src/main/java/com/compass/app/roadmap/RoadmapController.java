@@ -1,6 +1,7 @@
 package com.compass.app.roadmap;
 
 import com.compass.app.entry.Entry;
+import com.compass.app.roadmap.dto.ArchiveRoadmapRequest;
 import com.compass.app.roadmap.dto.CreateRoadmapRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapResponse;
@@ -48,11 +49,19 @@ public class RoadmapController {
         return service.generate(request);
     }
 
-    /** All roadmaps with their steps and progress, newest first. */
+    /** Active roadmaps with their steps and progress, newest first (archived excluded). */
     @GetMapping
     public List<RoadmapResponse> list() {
         return service.listRoadmapsWithSteps().stream()
                 .map(r -> RoadmapResponse.of(r.roadmap(), r.steps()))
+                .toList();
+    }
+
+    /** Archived roadmaps only — the Archive view (Phase 12). */
+    @GetMapping("/archived")
+    public List<RoadmapResponse> listArchived() {
+        return service.listArchivedRoadmaps().stream()
+                .map(r -> RoadmapResponse.of(r, service.stepsOf(r.getId())))
                 .toList();
     }
 
@@ -88,6 +97,20 @@ public class RoadmapController {
         service.deleteStep(id, stepId);
         Entry roadmap = service.getRoadmap(id);
         return RoadmapResponse.of(roadmap, service.stepsOf(id));
+    }
+
+    /** Archive or unarchive a whole roadmap. Body is {archived}. */
+    @PutMapping("/{id}/archive")
+    public RoadmapResponse archive(@PathVariable Long id, @RequestBody ArchiveRoadmapRequest request) {
+        Entry roadmap = service.setArchived(id, request.archived());
+        return RoadmapResponse.of(roadmap, service.stepsOf(id));
+    }
+
+    /** Delete a whole roadmap and its steps. */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id) {
+        service.deleteRoadmap(id);
+        return ResponseEntity.noContent().build();
     }
 
     /** "What this step covers" bullets for the deep view — generated once, then cached. */

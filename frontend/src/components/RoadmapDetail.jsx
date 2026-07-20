@@ -1,10 +1,12 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import {
+  deleteRoadmap,
   deleteRoadmapStep,
   getRoadmap,
   insertRoadmapStep,
   patchEntry,
   reorderRoadmapSteps,
+  setRoadmapArchived,
 } from '../api'
 import ProgressBar from './ProgressBar'
 import StepDeepView from './StepDeepView'
@@ -12,7 +14,7 @@ import VerifyModal from './VerifyModal'
 import { Badge, Button, Menu } from './ui'
 import './Roadmap.css'
 
-export default function RoadmapDetail({ id, onBack }) {
+export default function RoadmapDetail({ id, onBack, onGone }) {
   const [roadmap, setRoadmap] = useState(null)
   const [error, setError] = useState(null)
   const [busyStepId, setBusyStepId] = useState(null)
@@ -164,6 +166,27 @@ export default function RoadmapDetail({ id, onBack }) {
     }
   }
 
+  async function archiveRoadmap() {
+    setError(null)
+    try {
+      await setRoadmapArchived(id, true)
+      onGone?.()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  async function deleteWholeRoadmap() {
+    if (!window.confirm(`Delete "${roadmap.title}" and all its steps? This can't be undone.`)) return
+    setError(null)
+    try {
+      await deleteRoadmap(id)
+      onGone?.()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
   async function deleteStep(step) {
     if (!window.confirm(`Delete "${step.content.text}"? This can't be undone.`)) return
     setBusyStepId(step.id)
@@ -292,11 +315,20 @@ export default function RoadmapDetail({ id, onBack }) {
             </Button>
           </>
         ) : (
-          steps.length > 1 && (
-            <Button variant="ghost" onClick={enterReorder}>
-              Reorder
-            </Button>
-          )
+          <>
+            {steps.length > 1 && (
+              <Button variant="ghost" onClick={enterReorder}>
+                Reorder
+              </Button>
+            )}
+            <Menu
+              label="Roadmap actions"
+              items={[
+                { label: 'Archive', onClick: archiveRoadmap },
+                { label: 'Delete roadmap', onClick: deleteWholeRoadmap, danger: true },
+              ]}
+            />
+          </>
         )}
       </div>
 

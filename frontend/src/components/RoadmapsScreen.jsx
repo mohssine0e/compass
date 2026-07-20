@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { listRoadmaps } from '../api'
+import { useCallback, useEffect, useState } from 'react'
+import { listArchivedRoadmaps, listRoadmaps, setRoadmapArchived } from '../api'
 import ProgressBar from './ProgressBar'
 import { Button } from './ui'
 import './Roadmap.css'
@@ -14,48 +14,79 @@ function staleness(updatedAt) {
 
 export default function RoadmapsScreen({ onNew, onDraft, onOpen }) {
   const [roadmaps, setRoadmaps] = useState(null)
+  const [archived, setArchived] = useState(null)
+  const [showArchived, setShowArchived] = useState(false)
   const [error, setError] = useState(null)
 
-  useEffect(() => {
-    let alive = true
+  const loadActive = useCallback(() => {
     listRoadmaps()
-      .then((data) => alive && setRoadmaps(data))
-      .catch((err) => alive && setError(err.message))
-    return () => {
-      alive = false
-    }
+      .then(setRoadmaps)
+      .catch((err) => setError(err.message))
   }, [])
+
+  const loadArchived = useCallback(() => {
+    listArchivedRoadmaps()
+      .then(setArchived)
+      .catch((err) => setError(err.message))
+  }, [])
+
+  useEffect(() => {
+    loadActive()
+    loadArchived()
+  }, [loadActive, loadArchived])
+
+  async function unarchive(id) {
+    setError(null)
+    try {
+      await setRoadmapArchived(id, false)
+      loadActive()
+      loadArchived()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  const archivedCount = archived ? archived.length : 0
+  const list = showArchived ? archived : roadmaps
 
   return (
     <div className="roadmap-list">
       <div className="roadmap-list-head">
-        <h1 className="screen-title">Roadmaps</h1>
+        <h1 className="screen-title">{showArchived ? 'Archived' : 'Roadmaps'}</h1>
         <div className="roadmap-list-actions">
-          <Button variant="ghost" onClick={onDraft}>
-            Draft with AI
-          </Button>
-          <Button variant="primary" onClick={onNew}>
-            + New roadmap
-          </Button>
+          {showArchived ? (
+            <Button variant="ghost" onClick={() => setShowArchived(false)}>
+              ← Back to roadmaps
+            </Button>
+          ) : (
+            <>
+              <Button variant="ghost" onClick={onDraft}>
+                Draft with AI
+              </Button>
+              <Button variant="primary" onClick={onNew}>
+                + New roadmap
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
       {error && <p className="roadmap-error">{error}</p>}
 
-      {roadmaps && roadmaps.length === 0 && (
+      {list && list.length === 0 && (
         <p className="roadmap-empty">
-          Nothing here yet. Start one when you know where you're headed.
+          {showArchived
+            ? 'Nothing archived.'
+            : "Nothing here yet. Start one when you know where you're headed."}
         </p>
       )}
 
-      {roadmaps && roadmaps.length > 0 && (
+      {list && list.length > 0 && (
         <ul className="roadmap-cards">
-          {roadmaps.map((r) => {
-            const current = r.steps.find(
-              (s) => s.orderIndex === r.progress.currentOrderIndex
-            )
+          {list.map((r) => {
+            const current = r.steps.find((s) => s.orderIndex === r.progress.currentOrderIndex)
             return (
-              <li key={r.id}>
+              <li key={r.id} className="roadmap-card-row">
                 <button className="roadmap-card" onClick={() => onOpen(r.id)}>
                   <div className="roadmap-card-top">
                     <span className="roadmap-card-title">{r.title}</span>
@@ -71,14 +102,27 @@ export default function RoadmapsScreen({ onNew, onDraft, onOpen }) {
                         ? `Now: ${current.content.text}`
                         : ''}
                   </span>
-                  {r.progress.currentOrderIndex !== null && staleness(r.updatedAt) && (
-                    <span className="roadmap-card-stale">{staleness(r.updatedAt)}</span>
-                  )}
+                  {!showArchived &&
+                    r.progress.currentOrderIndex !== null &&
+                    staleness(r.updatedAt) && (
+                      <span className="roadmap-card-stale">{staleness(r.updatedAt)}</span>
+                    )}
                 </button>
+                {showArchived && (
+                  <Button variant="ghost" onClick={() => unarchive(r.id)}>
+                    Unarchive
+                  </Button>
+                )}
               </li>
             )
           })}
         </ul>
+      )}
+
+      {!showArchived && archivedCount > 0 && (
+        <button className="roadmap-archived-link" onClick={() => setShowArchived(true)}>
+          Archived ({archivedCount})
+        </button>
       )}
     </div>
   )

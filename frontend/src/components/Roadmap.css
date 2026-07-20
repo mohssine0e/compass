@@ -109,6 +109,30 @@
   gap: 12px;
 }
 
+.roadmap-card-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.roadmap-card-row .roadmap-card {
+  flex: 1;
+}
+
+.roadmap-archived-link {
+  margin-top: 20px;
+  background: transparent;
+  border: none;
+  color: var(--faint);
+  font-size: 0.85rem;
+  padding: 4px 0;
+  transition: color 0.15s ease;
+}
+
+.roadmap-archived-link:hover {
+  color: var(--muted);
+}
+
 .roadmap-card {
   width: 100%;
   text-align: left;

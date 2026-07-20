@@ -12,7 +12,8 @@ public enum EntryStatus {
     DEVELOPING("developing"),
     IN_MOTION("in_motion"),
     DONE("done"),
-    DROPPED("dropped");
+    DROPPED("dropped"),
+    ARCHIVED("archived");
 
     private final String value;
 

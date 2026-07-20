@@ -97,7 +97,11 @@ export default function App() {
           />
         )}
         {view.name === 'roadmap' && (
-          <RoadmapDetail id={view.id} onBack={() => go('roadmaps')} />
+          <RoadmapDetail
+            id={view.id}
+            onBack={() => go('roadmaps')}
+            onGone={() => go('roadmaps')}
+          />
         )}
         {view.name === 'focus' && (
           <FocusScreen

@@ -62,14 +62,32 @@ export function generateRoadmap(payload) {
   })
 }
 
-/** All roadmaps with their steps and progress, newest first. */
+/** Active roadmaps with their steps and progress, newest first (archived excluded). */
 export function listRoadmaps() {
   return request('/roadmaps')
+}
+
+/** Archived roadmaps only — the Archive view. */
+export function listArchivedRoadmaps() {
+  return request('/roadmaps/archived')
 }
 
 /** One roadmap with its ordered steps and progress. */
 export function getRoadmap(id) {
   return request(`/roadmaps/${id}`)
+}
+
+/** Archive or unarchive a whole roadmap. */
+export function setRoadmapArchived(roadmapId, archived) {
+  return request(`/roadmaps/${roadmapId}/archive`, {
+    method: 'PUT',
+    body: JSON.stringify({ archived }),
+  })
+}
+
+/** Delete a whole roadmap and its steps. Not reversible. */
+export function deleteRoadmap(roadmapId) {
+  return request(`/roadmaps/${roadmapId}`, { method: 'DELETE' })
 }
 
 /** Reorder a roadmap's steps. `stepIds` is the full step id list in the new order. */

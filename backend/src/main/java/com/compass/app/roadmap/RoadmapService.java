@@ -260,10 +260,39 @@ public class RoadmapService {
         return repository.findByParentIdOrderByOrderIndexAsc(roadmapId);
     }
 
-    /** All roadmaps, newest first. */
+    /** Active roadmaps (archived ones excluded), newest first. */
     @Transactional(readOnly = true)
     public List<Entry> listRoadmaps() {
-        return repository.findByTypeOrderByCreatedAtDesc(EntryType.ROADMAP);
+        return repository.findByTypeOrderByCreatedAtDesc(EntryType.ROADMAP).stream()
+                .filter(r -> r.getStatus() != EntryStatus.ARCHIVED)
+                .toList();
+    }
+
+    /** Archived roadmaps only, newest first (the Archive view). */
+    @Transactional(readOnly = true)
+    public List<Entry> listArchivedRoadmaps() {
+        return repository.findByTypeOrderByCreatedAtDesc(EntryType.ROADMAP).stream()
+                .filter(r -> r.getStatus() == EntryStatus.ARCHIVED)
+                .toList();
+    }
+
+    /**
+     * Archive or unarchive a roadmap (Phase 12): archiving drops it out of the main list into
+     * the Archive view without losing it; unarchiving restores it. Nothing is deleted.
+     */
+    @Transactional
+    public Entry setArchived(Long roadmapId, boolean archived) {
+        Entry roadmap = getRoadmap(roadmapId);
+        roadmap.setStatus(archived ? EntryStatus.ARCHIVED : EntryStatus.IN_MOTION);
+        return repository.save(roadmap);
+    }
+
+    /** Delete a whole roadmap and every step under it (Phase 12). Not reversible. */
+    @Transactional
+    public void deleteRoadmap(Long roadmapId) {
+        getRoadmap(roadmapId); // 404 if it isn't a roadmap
+        repository.deleteAll(stepsOf(roadmapId));
+        repository.deleteById(roadmapId);
     }
 
     @Transactional(readOnly = true)
