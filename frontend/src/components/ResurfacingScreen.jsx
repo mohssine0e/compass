@@ -6,6 +6,7 @@ import {
   respondResurfacing,
 } from '../api'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
+import { Button } from './ui'
 import './ResurfacingScreen.css'
 
 // Shown before capture when something stalled is worth an honest look (Phase 2).
@@ -285,9 +286,9 @@ function RestructureReview({
                 </button>
               </div>
             ))}
-            <button type="button" className="btn-ghost step-add" onClick={addStep}>
+            <Button type="button" variant="ghost" className="step-add" onClick={addStep}>
               + Add step
-            </button>
+            </Button>
           </div>
         </>
       ) : (
@@ -309,12 +310,12 @@ function RestructureReview({
       {error && <p className="resurface-error">{error}</p>}
 
       <div className="resurface-restructure-actions">
-        <button className="btn-ghost" onClick={onCancel} disabled={busy}>
+        <Button variant="ghost" onClick={onCancel} disabled={busy}>
           Never mind
-        </button>
-        <button className="btn-primary" onClick={onApply} disabled={!canApply}>
+        </Button>
+        <Button variant="primary" onClick={onApply} disabled={!canApply}>
           {busy ? 'Applying…' : 'Apply'}
-        </button>
+        </Button>
       </div>
     </div>
   )
@@ -364,9 +365,9 @@ function RecheckView({ prompt, onDone }) {
             {result.passed ? 'Still solid.' : 'Worth another look.'}
           </p>
           {!result.passed && result.gap && <p className="verify-gap">{result.gap}</p>}
-          <button className="btn-primary recheck-done" onClick={onDone}>
+          <Button variant="primary" className="recheck-done" onClick={onDone}>
             Done
-          </button>
+          </Button>
         </>
       ) : (
         <>
@@ -384,9 +385,9 @@ function RecheckView({ prompt, onDone }) {
             <button className="resurface-skip" disabled={busy} onClick={skip}>
               Skip for now
             </button>
-            <button className="btn-primary" disabled={busy || !answer.trim()} onClick={submit}>
+            <Button variant="primary" disabled={busy || !answer.trim()} onClick={submit}>
               {busy ? 'Checking…' : 'Check'}
-            </button>
+            </Button>
           </div>
         </>
       )}

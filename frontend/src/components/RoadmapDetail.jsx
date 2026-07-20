@@ -9,6 +9,7 @@ import {
 import ProgressBar from './ProgressBar'
 import StepDeepView from './StepDeepView'
 import VerifyModal from './VerifyModal'
+import { Badge } from './ui'
 import './Roadmap.css'
 
 export default function RoadmapDetail({ id, onBack }) {
@@ -321,11 +322,9 @@ export default function RoadmapDetail({ id, onBack }) {
                     step.content.weight ||
                     (step.dependsOn && textById.get(step.dependsOn))) && (
                     <span className="step-tags">
-                      {step.content.kind === 'project' && (
-                        <span className="step-tag is-project">project</span>
-                      )}
+                      {step.content.kind === 'project' && <Badge tone="brass">project</Badge>}
                       {step.content.weight && step.content.weight !== 'medium' && (
-                        <span className="step-tag">{step.content.weight}</span>
+                        <Badge>{step.content.weight}</Badge>
                       )}
                       {step.dependsOn && textById.get(step.dependsOn) && (
                         <span className="step-needs">needs: {textById.get(step.dependsOn)}</span>

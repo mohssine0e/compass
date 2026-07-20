@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { createRoadmap, generateRoadmap } from '../api'
+import { Button } from './ui'
 import './NewRoadmapScreen.css'
 import './GenerateRoadmapScreen.css'
 
@@ -190,17 +191,17 @@ export default function GenerateRoadmapScreen({ onCreated, onManual, onCancel })
           />
           <div className="roadmap-actions">
             {error && <span className="roadmap-error">{error}</span>}
-            <button className="btn-ghost" onClick={onCancel}>
+            <Button variant="ghost" onClick={onCancel}>
               Cancel
-            </button>
+            </Button>
             {unavailable ? (
-              <button className="btn-primary" onClick={onManual}>
+              <Button variant="primary" onClick={onManual}>
                 Write it yourself
-              </button>
+              </Button>
             ) : (
-              <button className="btn-primary" onClick={askQuestions} disabled={!goal.trim() || busy}>
+              <Button variant="primary" onClick={askQuestions} disabled={!goal.trim() || busy}>
                 {busy ? 'Thinking…' : 'Draft steps'}
-              </button>
+              </Button>
             )}
           </div>
         </>
@@ -226,12 +227,12 @@ export default function GenerateRoadmapScreen({ onCreated, onManual, onCancel })
           </div>
           <div className="roadmap-actions">
             {error && <span className="roadmap-error">{error}</span>}
-            <button className="btn-ghost" onClick={onCancel}>
+            <Button variant="ghost" onClick={onCancel}>
               Cancel
-            </button>
-            <button className="btn-primary" onClick={propose} disabled={busy}>
+            </Button>
+            <Button variant="primary" onClick={propose} disabled={busy}>
               {busy ? 'Drafting…' : 'Draft the steps'}
-            </button>
+            </Button>
           </div>
         </>
       )}
@@ -292,9 +293,9 @@ export default function GenerateRoadmapScreen({ onCreated, onManual, onCancel })
                 />
               </div>
             ))}
-            <button type="button" className="btn-ghost step-add" onClick={addStep}>
+            <Button type="button" variant="ghost" className="step-add" onClick={addStep}>
               + Add step
-            </button>
+            </Button>
           </div>
           {sources.length > 0 && (
             <div className="gen-sources">
@@ -308,12 +309,12 @@ export default function GenerateRoadmapScreen({ onCreated, onManual, onCancel })
           )}
           <div className="roadmap-actions">
             {error && <span className="roadmap-error">{error}</span>}
-            <button className="btn-ghost" onClick={onCancel}>
+            <Button variant="ghost" onClick={onCancel}>
               Cancel
-            </button>
-            <button className="btn-primary" onClick={accept} disabled={!canCreate}>
+            </Button>
+            <Button variant="primary" onClick={accept} disabled={!canCreate}>
               {busy ? 'Creating…' : 'Create roadmap'}
-            </button>
+            </Button>
           </div>
         </>
       )}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { listRoadmaps } from '../api'
 import ProgressBar from './ProgressBar'
+import { Button } from './ui'
 import './Roadmap.css'
 
 // A passive drift cue (Phase 9): how long since this roadmap was last touched. Only once it's
@@ -30,12 +31,12 @@ export default function RoadmapsScreen({ onNew, onDraft, onOpen }) {
       <div className="roadmap-list-head">
         <h1 className="screen-title">Roadmaps</h1>
         <div className="roadmap-list-actions">
-          <button className="btn-ghost" onClick={onDraft}>
+          <Button variant="ghost" onClick={onDraft}>
             Draft with AI
-          </button>
-          <button className="btn-primary" onClick={onNew}>
+          </Button>
+          <Button variant="primary" onClick={onNew}>
             + New roadmap
-          </button>
+          </Button>
         </div>
       </div>
 

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { createRoadmap } from '../api'
+import { Button } from './ui'
 import './NewRoadmapScreen.css'
 
 const EMPTY_STEPS = ['', '', '']
@@ -88,19 +89,19 @@ export default function NewRoadmapScreen({ onCreated, onCancel }) {
             </button>
           </div>
         ))}
-        <button type="button" className="btn-ghost step-add" onClick={addStep}>
+        <Button type="button" variant="ghost" className="step-add" onClick={addStep}>
           + Add step
-        </button>
+        </Button>
       </div>
 
       <div className="roadmap-actions">
         {error && <span className="roadmap-error">{error}</span>}
-        <button className="btn-ghost" onClick={onCancel}>
+        <Button variant="ghost" onClick={onCancel}>
           Cancel
-        </button>
-        <button className="btn-primary" onClick={submit} disabled={!canCreate}>
+        </Button>
+        <Button variant="primary" onClick={submit} disabled={!canCreate}>
           {saving ? 'Creating…' : 'Create roadmap'}
-        </button>
+        </Button>
       </div>
     </div>
   )

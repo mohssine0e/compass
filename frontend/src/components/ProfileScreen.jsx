@@ -6,6 +6,7 @@ import {
   interpretSelfDescription,
   saveProfile,
 } from '../api'
+import { Button } from './ui'
 import './ProfileScreen.css'
 
 // The learner profile (Phase 6): what you already know, so generation later doesn't re-teach
@@ -227,9 +228,9 @@ export default function ProfileScreen() {
             onKeyDown={(e) => e.key === 'Enter' && addSkill()}
             placeholder="Add a skill (e.g. Python, SQL, React)"
           />
-          <button className="btn-ghost" onClick={addSkill} disabled={!newSkill.trim()}>
+          <Button variant="ghost" onClick={addSkill} disabled={!newSkill.trim()}>
             Add
-          </button>
+          </Button>
         </div>
 
         {skills.length === 0 ? (
@@ -324,9 +325,9 @@ export default function ProfileScreen() {
           rows={3}
         />
         <div className="desc-actions">
-          <button className="btn-ghost" onClick={interpret} disabled={interpreting || !descRaw.trim()}>
+          <Button variant="ghost" onClick={interpret} disabled={interpreting || !descRaw.trim()}>
             {interpreting ? 'Reading…' : 'Read into traits'}
-          </button>
+          </Button>
         </div>
         {descTraits.length > 0 && (
           <ul className="trait-list">
@@ -369,9 +370,9 @@ export default function ProfileScreen() {
           Guesses from how you actually work — keep the ones that ring true. Nothing is used
           until you save.
         </p>
-        <button className="btn-ghost" onClick={analyze} disabled={analyzing}>
+        <Button variant="ghost" onClick={analyze} disabled={analyzing}>
           {analyzing ? 'Looking…' : 'Analyze my sessions'}
-        </button>
+        </Button>
 
         {proposal && (
           <div className="inferred-proposal">
@@ -383,9 +384,9 @@ export default function ProfileScreen() {
                 {proposal.preferences.map((p) => (
                   <li className="inferred-candidate" key={p.text}>
                     <span>{p.text}</span>
-                    <button className="btn-ghost" onClick={() => keepPreference(p)}>
+                    <Button variant="ghost" onClick={() => keepPreference(p)}>
                       Keep
-                    </button>
+                    </Button>
                   </li>
                 ))}
               </ul>
@@ -411,9 +412,9 @@ export default function ProfileScreen() {
         {error && <span className="profile-error">{error}</span>}
         {saved && <span className="profile-saved">Saved.</span>}
         {!saved && confirmedAt && <span className="profile-hint">Unsaved changes</span>}
-        <button className="btn-primary" onClick={save} disabled={saving}>
+        <Button variant="primary" onClick={save} disabled={saving}>
           {saving ? 'Saving…' : 'Save profile'}
-        </button>
+        </Button>
       </div>
     </div>
   )
