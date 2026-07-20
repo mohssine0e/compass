@@ -66,11 +66,21 @@
   cursor: pointer;
 }
 
+.roadmap-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.roadmap-toolbar-spacer {
+  flex: 1;
+}
+
 .roadmap-verify {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 20px;
   color: var(--faint);
   font-size: 0.85rem;
 }
@@ -232,72 +242,28 @@
   letter-spacing: 0.02em;
 }
 
-.step-done-btn {
-  background: transparent;
-  color: var(--brass);
-  border: 1px solid var(--brass-dim);
-  border-radius: 7px;
-  padding: 5px 14px;
-  font-size: 0.85rem;
-  white-space: nowrap;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.step-done-btn:hover:not(:disabled) {
-  background: var(--brass-dim);
-  border-color: var(--brass);
-}
-
-.step-done-btn:disabled {
-  color: var(--faint);
-  border-color: var(--line);
-  cursor: default;
-}
-
-.step-undo-btn {
-  background: transparent;
-  color: var(--muted);
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  padding: 5px 14px;
-  font-size: 0.85rem;
-  white-space: nowrap;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
-
-.step-undo-btn:hover:not(:disabled) {
-  color: var(--text);
-  border-color: var(--faint);
-}
-
-.step-undo-btn:disabled {
-  color: var(--faint);
-  cursor: default;
-}
-
-.step-move {
+/* Primary step action (Mark done) + the ⋯ menu, kept tight on the right of the row. */
+.step-actions {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
+  align-items: center;
+  gap: 6px;
 }
 
-.step-move-btn {
-  background: transparent;
-  color: var(--muted);
-  border: none;
-  padding: 0 4px;
-  font-size: 0.75rem;
-  line-height: 1.2;
+/* Reorder mode (Phase 12): draggable rows with a handle, no other controls. */
+.step-list.is-reordering .step-reorder-row {
+  cursor: grab;
+  gap: 12px;
 }
 
-.step-move-btn:hover:not(:disabled) {
-  color: var(--text);
-}
-
-.step-move-btn:disabled {
+.step-drag-handle {
   color: var(--faint);
-  cursor: default;
-  visibility: hidden;
+  font-size: 1.1rem;
+  line-height: 1;
+  user-select: none;
+}
+
+.step-reorder-row.is-dragging {
+  opacity: 0.4;
 }
 
 .step-edit-input {
@@ -314,28 +280,6 @@
 .step-edit-actions {
   display: flex;
   gap: 6px;
-}
-
-.step-edit-btn {
-  background: transparent;
-  color: var(--muted);
-  border: none;
-  padding: 5px 8px;
-  font-size: 0.85rem;
-  white-space: nowrap;
-}
-
-.step-edit-btn:hover:not(:disabled) {
-  color: var(--text);
-}
-
-.step-edit-btn:disabled {
-  color: var(--faint);
-  cursor: default;
-}
-
-.step-delete-btn:hover:not(:disabled) {
-  color: var(--danger);
 }
 
 .step-insert-row {

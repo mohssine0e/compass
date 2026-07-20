@@ -9,7 +9,7 @@ import {
 import ProgressBar from './ProgressBar'
 import StepDeepView from './StepDeepView'
 import VerifyModal from './VerifyModal'
-import { Badge } from './ui'
+import { Badge, Button, Menu } from './ui'
 import './Roadmap.css'
 
 export default function RoadmapDetail({ id, onBack }) {
@@ -25,6 +25,12 @@ export default function RoadmapDetail({ id, onBack }) {
   const [savingInsert, setSavingInsert] = useState(false)
   const [deepStepId, setDeepStepId] = useState(null)
   const [verifyStepId, setVerifyStepId] = useState(null)
+  // Reorder mode (Phase 12): a dedicated drag-to-reorder mode, saved explicitly — no
+  // per-step ↑/↓ buttons, no save-on-every-nudge.
+  const [reorderMode, setReorderMode] = useState(false)
+  const [draftOrder, setDraftOrder] = useState([])
+  const [savingOrder, setSavingOrder] = useState(false)
+  const [dragIndex, setDragIndex] = useState(null)
 
   const load = useCallback(async () => {
     try {
@@ -87,23 +93,6 @@ export default function RoadmapDetail({ id, onBack }) {
     }
   }
 
-  async function moveStep(index, direction) {
-    const steps = roadmap.steps
-    const target = index + direction
-    if (target < 0 || target >= steps.length) return
-
-    const reordered = steps.map((s) => s.id)
-    ;[reordered[index], reordered[target]] = [reordered[target], reordered[index]]
-
-    setError(null)
-    try {
-      await reorderRoadmapSteps(roadmap.id, reordered)
-      await load()
-    } catch (err) {
-      setError(err.message)
-    }
-  }
-
   function startInsert(atIndex) {
     setInsertAtIndex(atIndex)
     setInsertText('')
@@ -129,6 +118,49 @@ export default function RoadmapDetail({ id, onBack }) {
       setError(err.message)
     } finally {
       setSavingInsert(false)
+    }
+  }
+
+  function enterReorder() {
+    setDraftOrder(roadmap.steps)
+    setReorderMode(true)
+    setEditingStepId(null)
+    setInsertAtIndex(null)
+    setError(null)
+  }
+
+  function cancelReorder() {
+    setReorderMode(false)
+    setDraftOrder([])
+    setDragIndex(null)
+  }
+
+  // Local-only drag reordering; nothing is saved until "Save order" (Phase 12).
+  function onDragEnter(overIndex) {
+    if (dragIndex === null || dragIndex === overIndex) return
+    setDraftOrder((prev) => {
+      const next = [...prev]
+      const [moved] = next.splice(dragIndex, 1)
+      next.splice(overIndex, 0, moved)
+      return next
+    })
+    setDragIndex(overIndex)
+  }
+
+  async function saveOrder() {
+    if (savingOrder) return
+    setSavingOrder(true)
+    setError(null)
+    try {
+      await reorderRoadmapSteps(roadmap.id, draftOrder.map((s) => s.id))
+      setReorderMode(false)
+      setDraftOrder([])
+      setDragIndex(null)
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSavingOrder(false)
     }
   }
 
@@ -190,41 +222,30 @@ export default function RoadmapDetail({ id, onBack }) {
     )
   }
 
-  function renderInsertRow(atIndex) {
-    if (insertAtIndex === atIndex) {
-      return (
-        <li className="step-insert-row">
-          <input
-            className="step-edit-input"
-            value={insertText}
-            onChange={(e) => setInsertText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') submitInsert()
-              if (e.key === 'Escape') cancelInsert()
-            }}
-            placeholder="New step"
-            autoFocus
-          />
-          <span className="step-edit-actions">
-            <button
-              className="step-edit-btn"
-              onClick={submitInsert}
-              disabled={savingInsert || !insertText.trim()}
-            >
-              {savingInsert ? 'Adding…' : 'Add'}
-            </button>
-            <button className="step-edit-btn" onClick={cancelInsert} disabled={savingInsert}>
-              Cancel
-            </button>
-          </span>
-        </li>
-      )
-    }
+  // The active inline "insert step" input, shown at one position at a time.
+  function renderInsertInput(atIndex) {
+    if (insertAtIndex !== atIndex) return null
     return (
       <li className="step-insert-row">
-        <button className="step-insert-btn" onClick={() => startInsert(atIndex)}>
-          + Insert step
-        </button>
+        <input
+          className="step-edit-input"
+          value={insertText}
+          onChange={(e) => setInsertText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') submitInsert()
+            if (e.key === 'Escape') cancelInsert()
+          }}
+          placeholder="New step"
+          autoFocus
+        />
+        <span className="step-edit-actions">
+          <Button variant="ghost" onClick={submitInsert} disabled={savingInsert || !insertText.trim()}>
+            {savingInsert ? 'Adding…' : 'Add'}
+          </Button>
+          <Button variant="ghost" onClick={cancelInsert} disabled={savingInsert}>
+            Cancel
+          </Button>
+        </span>
       </li>
     )
   }
@@ -249,145 +270,154 @@ export default function RoadmapDetail({ id, onBack }) {
         </span>
       </div>
 
-      <label className="roadmap-verify">
-        <span>Check before done</span>
-        <select value={roadmap.verify || 'off'} onChange={(e) => setVerifyMode(e.target.value)}>
-          <option value="off">off — self-report</option>
-          <option value="light">light — quick question</option>
-          <option value="full">full — real check</option>
-        </select>
-      </label>
+      <div className="roadmap-toolbar">
+        {!reorderMode && (
+          <label className="roadmap-verify">
+            <span>Check before done</span>
+            <select value={roadmap.verify || 'off'} onChange={(e) => setVerifyMode(e.target.value)}>
+              <option value="off">off — self-report</option>
+              <option value="light">light — quick question</option>
+              <option value="full">full — real check</option>
+            </select>
+          </label>
+        )}
+        <span className="roadmap-toolbar-spacer" />
+        {reorderMode ? (
+          <>
+            <Button variant="ghost" onClick={cancelReorder} disabled={savingOrder}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={saveOrder} disabled={savingOrder}>
+              {savingOrder ? 'Saving…' : 'Save order'}
+            </Button>
+          </>
+        ) : (
+          steps.length > 1 && (
+            <Button variant="ghost" onClick={enterReorder}>
+              Reorder
+            </Button>
+          )
+        )}
+      </div>
 
       {doneNote && <p className="roadmap-done-note">{doneNote}</p>}
 
-      <ol className="step-list">
-        {steps.map((step, index) => {
-          const isCurrent = step.orderIndex === progress.currentOrderIndex
-          const isDone = step.status === 'done'
-          const isDropped = step.status === 'dropped'
-          const state = isDone
-            ? 'is-done'
-            : isDropped
-              ? 'is-dropped'
-              : isCurrent
-                ? 'is-current'
-                : 'is-upcoming'
-          const isEditing = editingStepId === step.id
-          return (
-            <Fragment key={step.id}>
-              {renderInsertRow(index)}
-              <li className={`step-item ${state}`}>
-              <span className="step-marker" aria-hidden="true">
-                {isDone ? '✓' : isDropped ? '–' : isCurrent ? '●' : '○'}
-              </span>
-              {!isEditing && (
-                <span className="step-move">
-                  <button
-                    className="step-move-btn"
-                    onClick={() => moveStep(index, -1)}
-                    disabled={index === 0}
-                    aria-label="Move step up"
-                  >
-                    ↑
-                  </button>
-                  <button
-                    className="step-move-btn"
-                    onClick={() => moveStep(index, 1)}
-                    disabled={index === steps.length - 1}
-                    aria-label="Move step down"
-                  >
-                    ↓
-                  </button>
-                </span>
-              )}
-              {isEditing ? (
-                <input
-                  className="step-edit-input"
-                  value={editText}
-                  onChange={(e) => setEditText(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') saveEdit(step.id)
-                    if (e.key === 'Escape') cancelEdit()
-                  }}
-                  autoFocus
-                />
-              ) : (
-                <span
-                  className="step-text step-text-openable"
-                  onDoubleClick={() => setDeepStepId(step.id)}
-                  title="Double-click for details"
-                >
-                  {step.content.text}
-                  {(step.content.kind === 'project' ||
-                    step.content.weight ||
-                    (step.dependsOn && textById.get(step.dependsOn))) && (
-                    <span className="step-tags">
-                      {step.content.kind === 'project' && <Badge tone="brass">project</Badge>}
-                      {step.content.weight && step.content.weight !== 'medium' && (
-                        <Badge>{step.content.weight}</Badge>
-                      )}
-                      {step.dependsOn && textById.get(step.dependsOn) && (
-                        <span className="step-needs">needs: {textById.get(step.dependsOn)}</span>
+      {reorderMode ? (
+        <ol className="step-list is-reordering">
+          {draftOrder.map((step, index) => (
+            <li
+              key={step.id}
+              className={'step-item step-reorder-row' + (dragIndex === index ? ' is-dragging' : '')}
+              draggable
+              onDragStart={() => setDragIndex(index)}
+              onDragEnter={() => onDragEnter(index)}
+              onDragOver={(e) => e.preventDefault()}
+              onDragEnd={() => setDragIndex(null)}
+            >
+              <span className="step-drag-handle" aria-hidden="true">⠿</span>
+              <span className="step-text">{step.content.text}</span>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <ol className="step-list">
+          {steps.map((step, index) => {
+            const isCurrent = step.orderIndex === progress.currentOrderIndex
+            const isDone = step.status === 'done'
+            const isDropped = step.status === 'dropped'
+            const state = isDone
+              ? 'is-done'
+              : isDropped
+                ? 'is-dropped'
+                : isCurrent
+                  ? 'is-current'
+                  : 'is-upcoming'
+            const isEditing = editingStepId === step.id
+            const menuItems = [
+              { label: 'Edit', onClick: () => startEdit(step) },
+              { label: 'Insert step above', onClick: () => startInsert(index) },
+              ...(isDone ? [{ label: 'Undo', onClick: () => undoStep(step.id) }] : []),
+              { label: 'Delete', onClick: () => deleteStep(step), danger: true },
+            ]
+            return (
+              <Fragment key={step.id}>
+                {renderInsertInput(index)}
+                <li className={`step-item ${state}`}>
+                  <span className="step-marker" aria-hidden="true">
+                    {isDone ? '✓' : isDropped ? '–' : isCurrent ? '●' : '○'}
+                  </span>
+                  {isEditing ? (
+                    <input
+                      className="step-edit-input"
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveEdit(step.id)
+                        if (e.key === 'Escape') cancelEdit()
+                      }}
+                      autoFocus
+                    />
+                  ) : (
+                    <span
+                      className="step-text step-text-openable"
+                      onDoubleClick={() => setDeepStepId(step.id)}
+                      title="Double-click for details"
+                    >
+                      {step.content.text}
+                      {(step.content.kind === 'project' ||
+                        step.content.weight ||
+                        (step.dependsOn && textById.get(step.dependsOn))) && (
+                        <span className="step-tags">
+                          {step.content.kind === 'project' && <Badge tone="brass">project</Badge>}
+                          {step.content.weight && step.content.weight !== 'medium' && (
+                            <Badge>{step.content.weight}</Badge>
+                          )}
+                          {step.dependsOn && textById.get(step.dependsOn) && (
+                            <span className="step-needs">needs: {textById.get(step.dependsOn)}</span>
+                          )}
+                        </span>
                       )}
                     </span>
                   )}
-                </span>
-              )}
-              {isEditing ? (
-                <span className="step-edit-actions">
-                  <button
-                    className="step-edit-btn"
-                    onClick={() => saveEdit(step.id)}
-                    disabled={savingEdit || !editText.trim()}
-                  >
-                    {savingEdit ? 'Saving…' : 'Save'}
-                  </button>
-                  <button
-                    className="step-edit-btn"
-                    onClick={cancelEdit}
-                    disabled={savingEdit}
-                  >
-                    Cancel
-                  </button>
-                </span>
-              ) : (
-                <span className="step-edit-actions">
-                  <button className="step-edit-btn" onClick={() => startEdit(step)}>
-                    Edit
-                  </button>
-                  <button
-                    className="step-edit-btn step-delete-btn"
-                    onClick={() => deleteStep(step)}
-                    disabled={busyStepId === step.id}
-                  >
-                    Delete
-                  </button>
-                </span>
-              )}
-              {!isEditing && isCurrent && (
-                <button
-                  className="step-done-btn"
-                  onClick={() => requestMarkDone(step)}
-                  disabled={busyStepId === step.id}
-                >
-                  {busyStepId === step.id ? 'Marking…' : 'Mark done'}
-                </button>
-              )}
-              {!isEditing && isDone && (
-                <button
-                  className="step-undo-btn"
-                  onClick={() => undoStep(step.id)}
-                  disabled={busyStepId === step.id}
-                >
-                  {busyStepId === step.id ? 'Undoing…' : 'Undo'}
-                </button>
-              )}
-              </li>
-            </Fragment>
-          )
-        })}
-        {renderInsertRow(steps.length)}
-      </ol>
+                  {isEditing ? (
+                    <span className="step-edit-actions">
+                      <Button
+                        variant="ghost"
+                        onClick={() => saveEdit(step.id)}
+                        disabled={savingEdit || !editText.trim()}
+                      >
+                        {savingEdit ? 'Saving…' : 'Save'}
+                      </Button>
+                      <Button variant="ghost" onClick={cancelEdit} disabled={savingEdit}>
+                        Cancel
+                      </Button>
+                    </span>
+                  ) : (
+                    <span className="step-actions">
+                      {isCurrent && (
+                        <Button
+                          variant="primary"
+                          onClick={() => requestMarkDone(step)}
+                          disabled={busyStepId === step.id}
+                        >
+                          {busyStepId === step.id ? 'Marking…' : 'Mark done'}
+                        </Button>
+                      )}
+                      <Menu items={menuItems} label={`Actions for step ${index + 1}`} />
+                    </span>
+                  )}
+                </li>
+              </Fragment>
+            )
+          })}
+          {renderInsertInput(steps.length)}
+          <li className="step-insert-row">
+            <button className="step-insert-btn" onClick={() => startInsert(steps.length)}>
+              + Add step
+            </button>
+          </li>
+        </ol>
+      )}
 
       {deepStepId && steps.find((s) => s.id === deepStepId) && (
         <StepDeepView
