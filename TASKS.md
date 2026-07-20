@@ -427,9 +427,10 @@ substeps), generation stops dumping one flat list, and resources stop duplicatin
 core product gap from real use — highest value, highest risk. Design and get sign-off before coding.
 
 **Search grounding infrastructure (independent of the hierarchy design — safe to do first)**
-- [x] Add Brave Search as the **primary** grounding provider (`BRAVE_API_KEY`, 2,000 free
-  queries/month) using the same primary/fallback pattern as Gemini/Groq; keep **Tavily** as the
-  automatic fallback. Normalize both providers to one result shape; fail over on error/empty.
+- [x] Add **Exa** as the **primary** grounding provider (`EXA_API_KEY`, `/search` with
+  `type: auto` + `contents.highlights`) using the same primary/fallback pattern as Gemini/Groq;
+  keep **Tavily** as the automatic fallback. Normalize both providers to one result shape; fail
+  over on error/empty.
 - [x] Audit search calls per roadmap generation — confirm it's a small fixed number (one call for
   the goal), not one-per-step. (Result: it's 1 call per proposal; resource discovery reuses that
   single result set — no per-step fan-out.)
