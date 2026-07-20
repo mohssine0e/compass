@@ -1,28 +1,4 @@
-.verify-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 60px 20px;
-  overflow-y: auto;
-  z-index: 50;
-}
-
-.verify-panel {
-  position: relative;
-  width: 100%;
-  max-width: 520px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 28px 28px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
+/* Overlay/panel/close now come from the shared <Modal>; only content styles remain here. */
 .verify-context {
   margin: 0;
   color: var(--faint);
@@ -65,7 +41,7 @@
 .verify-gap {
   margin: 0;
   padding: 10px 14px;
-  border-left: 2px solid #d98a7a;
+  border-left: 2px solid var(--danger);
   color: var(--text);
   font-size: 1rem;
   line-height: 1.5;
@@ -73,7 +49,7 @@
 
 .verify-error {
   margin: 0;
-  color: #d98a7a;
+  color: var(--danger);
   font-size: 0.9rem;
 }
 

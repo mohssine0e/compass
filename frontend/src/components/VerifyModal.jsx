@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { getStepCheck, verifyStep } from '../api'
+import { Button, Modal, TextArea } from './ui'
 import './VerifyModal.css'
 
 // The check gate before a step counts as done (Phase 8). Fetches a fair question, takes the
@@ -46,43 +47,36 @@ export default function VerifyModal({ step, onClose, onPassed, onOverride }) {
   }
 
   return (
-    <div className="verify-overlay" onClick={onClose}>
-      <div className="verify-panel" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        <button className="deep-close" onClick={onClose} aria-label="Close">
-          ×
-        </button>
-        <p className="verify-context">Before this counts as done:</p>
+    <Modal onClose={onClose} size="md">
+      <p className="verify-context">Before this counts as done:</p>
 
-        {loading ? (
-          <p className="verify-faint">Writing a check…</p>
-        ) : question ? (
-          <>
-            <h2 className="verify-question">{question}</h2>
-            <textarea
-              className="verify-answer"
-              value={answer}
-              onChange={(e) => setAnswer(e.target.value)}
-              placeholder="Answer in your own words…"
-              rows={4}
-              autoFocus
-            />
-            {gap && (
-              <p className="verify-gap">{gap}</p>
-            )}
-            {error && <p className="verify-error">{error}</p>}
-            <div className="verify-actions">
-              <button className="step-undo-btn verify-override" onClick={onOverride} disabled={busy}>
-                Mark done anyway
-              </button>
-              <button className="btn-primary" onClick={submit} disabled={busy || !answer.trim()}>
-                {busy ? 'Checking…' : gap ? 'Try again' : 'Check my answer'}
-              </button>
-            </div>
-          </>
-        ) : (
-          <p className="verify-error">{error || 'Could not write a check.'}</p>
-        )}
-      </div>
-    </div>
+      {loading ? (
+        <p className="verify-faint">Writing a check…</p>
+      ) : question ? (
+        <>
+          <h2 className="verify-question">{question}</h2>
+          <TextArea
+            className="verify-answer"
+            value={answer}
+            onChange={(e) => setAnswer(e.target.value)}
+            placeholder="Answer in your own words…"
+            rows={4}
+            autoFocus
+          />
+          {gap && <p className="verify-gap">{gap}</p>}
+          {error && <p className="verify-error">{error}</p>}
+          <div className="verify-actions">
+            <Button variant="danger" className="verify-override" onClick={onOverride} disabled={busy}>
+              Mark done anyway
+            </Button>
+            <Button variant="primary" onClick={submit} disabled={busy || !answer.trim()}>
+              {busy ? 'Checking…' : gap ? 'Try again' : 'Check my answer'}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <p className="verify-error">{error || 'Could not write a check.'}</p>
+      )}
+    </Modal>
   )
 }
