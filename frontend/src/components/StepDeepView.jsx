@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { endSession, explainText, getStepCovers, patchEntry, startSession } from '../api'
 import ReformulatePanel from './ReformulatePanel'
+import { Badge, Button } from './ui'
 import './StepDeepView.css'
 
 // Select-text help actions (Phase 8.5). Labels stay plain, never teacher-y.
@@ -203,9 +204,11 @@ export default function StepDeepView({ step, onClose, onChanged }) {
           </div>
         )}
         <div className="deep-meta">
-          {content.kind && <span className={`gen-badge kind-${content.kind}`}>{content.kind}</span>}
+          {content.kind && (
+            <Badge tone={content.kind === 'project' ? 'brass' : 'default'}>{content.kind}</Badge>
+          )}
           {content.weight && (
-            <span className="gen-badge">{WEIGHT_LABEL[content.weight] || content.weight} effort</span>
+            <Badge>{WEIGHT_LABEL[content.weight] || content.weight} effort</Badge>
           )}
           {totalMinutes > 0 && <span className="deep-time">{totalMinutes} min invested</span>}
         </div>
@@ -239,7 +242,7 @@ export default function StepDeepView({ step, onClose, onChanged }) {
                     {r.title}
                   </a>
                   <span className="deep-resource-meta">
-                    {r.format && <span className="gen-badge">{r.format}</span>}
+                    {r.format && <Badge>{r.format}</Badge>}
                     {r.estimatedTime && <span className="deep-faint">{r.estimatedTime}</span>}
                   </span>
                 </li>
@@ -268,12 +271,12 @@ export default function StepDeepView({ step, onClose, onChanged }) {
           <div className="session-post">
             <p className="session-post-line">{post}</p>
             <div className="session-post-actions">
-              <button className="btn-ghost" onClick={onClose}>
+              <Button variant="ghost" onClick={onClose}>
                 Done
-              </button>
-              <button className="btn-ghost" onClick={() => setReformulating(true)}>
+              </Button>
+              <Button variant="ghost" onClick={() => setReformulating(true)}>
                 Reformulate this
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -282,15 +285,15 @@ export default function StepDeepView({ step, onClose, onChanged }) {
           <div className="session-feedback">
             <p className="session-feedback-q">How was it?</p>
             <div className="session-feedback-opts">
-              <button className="btn-ghost" onClick={() => finishSession('helpful', true)} disabled={busy}>
+              <Button variant="ghost" onClick={() => finishSession('helpful', true)} disabled={busy}>
                 Helpful — done
-              </button>
-              <button className="btn-ghost" onClick={() => finishSession('helpful', false)} disabled={busy}>
+              </Button>
+              <Button variant="ghost" onClick={() => finishSession('helpful', false)} disabled={busy}>
                 Helpful — more to do
-              </button>
-              <button className="btn-ghost" onClick={() => finishSession('too_hard', false)} disabled={busy}>
+              </Button>
+              <Button variant="ghost" onClick={() => finishSession('too_hard', false)} disabled={busy}>
                 Too hard
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
@@ -301,17 +304,17 @@ export default function StepDeepView({ step, onClose, onChanged }) {
             {sessionOpen ? (
               <span className="session-live">
                 <span className="session-timer">{formatElapsed(elapsed)}</span>
-                <button className="btn-ghost" onClick={() => setReformulating(true)} disabled={busy}>
+                <Button variant="ghost" onClick={() => setReformulating(true)} disabled={busy}>
                   Need help
-                </button>
-                <button className="btn-primary is-active-session" onClick={() => setEnding(true)} disabled={busy}>
+                </Button>
+                <Button variant="primary" className="is-active-session" onClick={() => setEnding(true)} disabled={busy}>
                   Done for now
-                </button>
+                </Button>
               </span>
             ) : (
-              <button className="btn-primary" onClick={beginSession} disabled={busy}>
+              <Button variant="primary" onClick={beginSession} disabled={busy}>
                 {busy ? '…' : 'Start session'}
-              </button>
+              </Button>
             )}
           </div>
         )}

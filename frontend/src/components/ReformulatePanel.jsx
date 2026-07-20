@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { applyReformulate, proposeReformulate } from '../api'
+import { Badge, Button, Modal } from './ui'
 import './ReformulatePanel.css'
 
 // "This is too much" — user-initiated reformulation of a step (Phase 8.5). Offers three
@@ -51,13 +52,9 @@ export default function ReformulatePanel({ step, onClose, onApplied }) {
   }
 
   return (
-    <div className="reformulate-overlay" onClick={onClose}>
-      <div className="reformulate-panel" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        <button className="deep-close" onClick={onClose} aria-label="Close">
-          ×
-        </button>
-        <p className="reformulate-context">Too much as it stands?</p>
-        <p className="reformulate-step">{step.content.text}</p>
+    <Modal onClose={onClose} size="md">
+      <p className="reformulate-context">Too much as it stands?</p>
+      <p className="reformulate-step">{step.content.text}</p>
 
         {!proposal && (
           <div className="reformulate-options">
@@ -119,7 +116,7 @@ export default function ReformulatePanel({ step, onClose, onApplied }) {
                       <a href={r.url} target="_blank" rel="noreferrer" className="gen-resource-title">
                         {r.title}
                       </a>
-                      {r.format && <span className="gen-badge">{r.format}</span>}
+                      {r.format && <Badge>{r.format}</Badge>}
                       <button
                         className="step-remove"
                         onClick={() => setResources((prev) => prev.filter((_, j) => j !== i))}
@@ -135,18 +132,17 @@ export default function ReformulatePanel({ step, onClose, onApplied }) {
 
             {error && <p className="deep-error">{error}</p>}
             <div className="reformulate-actions">
-              <button className="btn-ghost" onClick={() => setProposal(null)} disabled={busy}>
+              <Button variant="ghost" onClick={() => setProposal(null)} disabled={busy}>
                 Back
-              </button>
-              <button className="btn-primary" onClick={apply} disabled={busy}>
+              </Button>
+              <Button variant="primary" onClick={apply} disabled={busy}>
                 {busy ? 'Applying…' : 'Apply'}
-              </button>
+              </Button>
             </div>
           </div>
         )}
 
         {!proposal && error && <p className="deep-error">{error}</p>}
-      </div>
-    </div>
+    </Modal>
   )
 }

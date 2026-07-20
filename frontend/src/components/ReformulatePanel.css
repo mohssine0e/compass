@@ -1,28 +1,4 @@
-.reformulate-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 56px 20px;
-  overflow-y: auto;
-  z-index: 60;
-}
-
-.reformulate-panel {
-  position: relative;
-  width: 100%;
-  max-width: 520px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 26px 26px 22px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
+/* Overlay/panel/close now come from the shared <Modal>; only content styles remain here. */
 .reformulate-context {
   margin: 0;
   color: var(--faint);

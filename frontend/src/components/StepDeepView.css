@@ -154,7 +154,7 @@
 
 .deep-error {
   margin: 0;
-  color: #d98a7a;
+  color: var(--danger);
   font-size: 0.9rem;
 }
 
@@ -181,9 +181,9 @@
   border-color: var(--brass);
 }
 
-.btn-primary.is-active-session {
-  color: #d98a7a;
-  border-color: #d98a7a;
+.ui-btn--primary.is-active-session {
+  color: var(--danger);
+  border-color: var(--danger);
   background: rgba(217, 138, 122, 0.12);
 }
 
