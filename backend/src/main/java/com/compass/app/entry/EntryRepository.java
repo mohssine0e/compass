@@ -32,7 +32,8 @@ public interface EntryRepository extends JpaRepository<Entry, Long> {
     @Query(value = """
             SELECT * FROM entries e
             WHERE e.status NOT IN ('done', 'dropped', 'archived')
-              AND ( (e.type = 'idea' AND e.significance = 'big') OR e.type = 'roadmap' )
+              AND ( (e.type = 'idea' AND e.significance = 'big')
+                    OR (e.type = 'roadmap' AND e.parent_id IS NULL) )
               AND e.updated_at < :staleBefore
               AND (e.last_resurfaced_at IS NULL OR e.last_resurfaced_at < :resurfacedBefore)
             ORDER BY (e.last_resurfaced_at IS NULL) DESC, e.updated_at ASC

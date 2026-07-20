@@ -84,7 +84,7 @@ export default function RoadmapsScreen({ onNew, onDraft, onOpen }) {
       {list && list.length > 0 && (
         <ul className="roadmap-cards">
           {list.map((r) => {
-            const current = r.steps.find((s) => s.orderIndex === r.progress.currentOrderIndex)
+            const complete = r.progress.currentStepId === null
             return (
               <li key={r.id} className="roadmap-card-row">
                 <button className="roadmap-card" onClick={() => onOpen(r.id)}>
@@ -96,17 +96,15 @@ export default function RoadmapsScreen({ onNew, onDraft, onOpen }) {
                   </div>
                   <ProgressBar done={r.progress.done} total={r.progress.total} />
                   <span className="roadmap-card-current">
-                    {r.progress.currentOrderIndex === null
+                    {complete
                       ? 'All steps done.'
-                      : current
-                        ? `Now: ${current.content.text}`
+                      : r.progress.currentStepText
+                        ? `Now: ${r.progress.currentStepText}`
                         : ''}
                   </span>
-                  {!showArchived &&
-                    r.progress.currentOrderIndex !== null &&
-                    staleness(r.updatedAt) && (
-                      <span className="roadmap-card-stale">{staleness(r.updatedAt)}</span>
-                    )}
+                  {!showArchived && !complete && staleness(r.updatedAt) && (
+                    <span className="roadmap-card-stale">{staleness(r.updatedAt)}</span>
+                  )}
                 </button>
                 {showArchived && (
                   <Button variant="ghost" onClick={() => unarchive(r.id)}>

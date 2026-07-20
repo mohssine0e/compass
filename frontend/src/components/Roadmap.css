@@ -344,6 +344,32 @@
   color: var(--muted);
 }
 
+/* A module / step-with-substeps header (Phase 13) — collapsible, with rolled-up progress. */
+.node-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.node-group-caret {
+  width: 14px;
+  color: var(--faint);
+  font-size: 0.8rem;
+}
+
+.node-group-title {
+  flex: 1;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.node-group:hover .node-group-title {
+  color: var(--brass);
+}
+
 .step-item.is-done .step-marker {
   color: var(--brass);
 }

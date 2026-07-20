@@ -35,7 +35,7 @@ public class RoadmapController {
     @PostMapping
     public ResponseEntity<RoadmapResponse> create(@RequestBody CreateRoadmapRequest request) {
         Entry roadmap = service.create(request);
-        RoadmapResponse body = RoadmapResponse.of(roadmap, service.stepsOf(roadmap.getId()));
+        RoadmapResponse body = RoadmapResponse.of(roadmap, service::stepsOf);
         return ResponseEntity.status(HttpStatus.CREATED).body(body);
     }
 
@@ -52,8 +52,8 @@ public class RoadmapController {
     /** Active roadmaps with their steps and progress, newest first (archived excluded). */
     @GetMapping
     public List<RoadmapResponse> list() {
-        return service.listRoadmapsWithSteps().stream()
-                .map(r -> RoadmapResponse.of(r.roadmap(), r.steps()))
+        return service.listRoadmaps().stream()
+                .map(r -> RoadmapResponse.of(r, service::stepsOf))
                 .toList();
     }
 
@@ -61,15 +61,15 @@ public class RoadmapController {
     @GetMapping("/archived")
     public List<RoadmapResponse> listArchived() {
         return service.listArchivedRoadmaps().stream()
-                .map(r -> RoadmapResponse.of(r, service.stepsOf(r.getId())))
+                .map(r -> RoadmapResponse.of(r, service::stepsOf))
                 .toList();
     }
 
-    /** One roadmap with its ordered steps and where-am-I progress. */
+    /** One roadmap with its tree of nodes and where-am-I progress. */
     @GetMapping("/{id}")
     public RoadmapResponse get(@PathVariable Long id) {
         Entry roadmap = service.getRoadmap(id);
-        return RoadmapResponse.of(roadmap, service.stepsOf(id));
+        return RoadmapResponse.of(roadmap, service::stepsOf);
     }
 
     /** Insert a new step. Body is {text, position?} — appended when position is omitted. */
@@ -78,7 +78,7 @@ public class RoadmapController {
                                                         @RequestBody InsertStepRequest request) {
         service.insertStep(id, request.text(), request.position());
         Entry roadmap = service.getRoadmap(id);
-        RoadmapResponse body = RoadmapResponse.of(roadmap, service.stepsOf(id));
+        RoadmapResponse body = RoadmapResponse.of(roadmap, service::stepsOf);
         return ResponseEntity.status(HttpStatus.CREATED).body(body);
     }
 
@@ -88,7 +88,7 @@ public class RoadmapController {
                                          @RequestBody ReorderStepsRequest request) {
         service.reorderSteps(id, request.stepIds());
         Entry roadmap = service.getRoadmap(id);
-        return RoadmapResponse.of(roadmap, service.stepsOf(id));
+        return RoadmapResponse.of(roadmap, service::stepsOf);
     }
 
     /** Delete a step from a roadmap. */
@@ -96,14 +96,14 @@ public class RoadmapController {
     public RoadmapResponse deleteStep(@PathVariable Long id, @PathVariable Long stepId) {
         service.deleteStep(id, stepId);
         Entry roadmap = service.getRoadmap(id);
-        return RoadmapResponse.of(roadmap, service.stepsOf(id));
+        return RoadmapResponse.of(roadmap, service::stepsOf);
     }
 
     /** Archive or unarchive a whole roadmap. Body is {archived}. */
     @PutMapping("/{id}/archive")
     public RoadmapResponse archive(@PathVariable Long id, @RequestBody ArchiveRoadmapRequest request) {
         Entry roadmap = service.setArchived(id, request.archived());
-        return RoadmapResponse.of(roadmap, service.stepsOf(id));
+        return RoadmapResponse.of(roadmap, service::stepsOf);
     }
 
     /** Delete a whole roadmap and its steps. */

@@ -14,6 +14,35 @@ import VerifyModal from './VerifyModal'
 import { Badge, Button, Menu } from './ui'
 import './Roadmap.css'
 
+// A roadmap is a tree (Phase 13): a flat roadmap is one level of leaf steps and reads as a plain
+// list; a big one nests modules (child roadmaps) and substeps. Progress and "current step" come
+// from the backend, rolled up over leaf steps wherever they sit, so this view just renders.
+const nodeText = (node) =>
+  node.type === 'roadmap' ? node.content?.title : node.content?.text
+
+// Container node ids that are fully complete — collapsed by default so a big roadmap opens
+// anchored on the modules still in play.
+function fullyDoneGroups(nodes, out = []) {
+  for (const n of nodes) {
+    if (n.children && n.children.length > 0) {
+      if (n.progress && n.progress.total > 0 && n.progress.done === n.progress.total) {
+        out.push(n.id)
+      }
+      fullyDoneGroups(n.children, out)
+    }
+  }
+  return out
+}
+
+// Flatten every node's text by id, for the "needs: <step>" prerequisite label across the tree.
+function textByIdOf(nodes, map = new Map()) {
+  for (const n of nodes) {
+    map.set(n.id, nodeText(n))
+    if (n.children) textByIdOf(n.children, map)
+  }
+  return map
+}
+
 export default function RoadmapDetail({ id, onBack, onGone }) {
   const [roadmap, setRoadmap] = useState(null)
   const [error, setError] = useState(null)
@@ -27,19 +56,21 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   const [savingInsert, setSavingInsert] = useState(false)
   const [deepStepId, setDeepStepId] = useState(null)
   const [verifyStepId, setVerifyStepId] = useState(null)
-  // Reorder mode (Phase 12): a dedicated drag-to-reorder mode, saved explicitly — no
-  // per-step ↑/↓ buttons, no save-on-every-nudge.
+  // Reorder mode (Phase 12): drag-to-reorder the top-level nodes, saved explicitly.
   const [reorderMode, setReorderMode] = useState(false)
   const [draftOrder, setDraftOrder] = useState([])
   const [savingOrder, setSavingOrder] = useState(false)
   const [dragIndex, setDragIndex] = useState(null)
-  // Long-list anchoring (Phase 12): completed steps above the current one collapse so the
-  // step you're on stays at the top whether the roadmap has 5 steps or 50.
+  // Which container nodes are collapsed (Phase 13). Seeded from fully-done groups on first load.
+  const [collapsed, setCollapsed] = useState(null)
+  // For a flat roadmap: collapse the run of completed steps above the current one (Phase 12).
   const [showCompleted, setShowCompleted] = useState(false)
 
   const load = useCallback(async () => {
     try {
-      setRoadmap(await getRoadmap(id))
+      const data = await getRoadmap(id)
+      setRoadmap(data)
+      setCollapsed((prev) => (prev === null ? new Set(fullyDoneGroups(data.children || [])) : prev))
     } catch (err) {
       setError(err.message)
     }
@@ -65,12 +96,12 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
 
   // When the step (or its roadmap) is set to be verified, "mark done" goes through the check
   // gate instead of self-reporting (Phase 8).
-  function requestMarkDone(step) {
-    const mode = (step.content && step.content.verify) || (roadmap && roadmap.verify)
+  function requestMarkDone(node) {
+    const mode = (node.content && node.content.verify) || (roadmap && roadmap.verify)
     if (mode === 'light' || mode === 'full') {
-      setVerifyStepId(step.id)
+      setVerifyStepId(node.id)
     } else {
-      markDone(step.id)
+      markDone(node.id)
     }
   }
 
@@ -127,7 +158,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   }
 
   function enterReorder() {
-    setDraftOrder(roadmap.steps)
+    setDraftOrder(roadmap.children)
     setReorderMode(true)
     setEditingStepId(null)
     setInsertAtIndex(null)
@@ -140,7 +171,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     setDragIndex(null)
   }
 
-  // Local-only drag reordering; nothing is saved until "Save order" (Phase 12).
+  // Local-only drag reordering of the top-level nodes; nothing is saved until "Save order".
   function onDragEnter(overIndex) {
     if (dragIndex === null || dragIndex === overIndex) return
     setDraftOrder((prev) => {
@@ -190,12 +221,12 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     }
   }
 
-  async function deleteStep(step) {
-    if (!window.confirm(`Delete "${step.content.text}"? This can't be undone.`)) return
-    setBusyStepId(step.id)
+  async function deleteStep(node) {
+    if (!window.confirm(`Delete "${nodeText(node)}"? This can't be undone.`)) return
+    setBusyStepId(node.id)
     setError(null)
     try {
-      await deleteRoadmapStep(roadmap.id, step.id)
+      await deleteRoadmapStep(roadmap.id, node.id)
       await load()
     } catch (err) {
       setError(err.message)
@@ -204,9 +235,9 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     }
   }
 
-  function startEdit(step) {
-    setEditingStepId(step.id)
-    setEditText(step.content.text || '')
+  function startEdit(node) {
+    setEditingStepId(node.id)
+    setEditText(nodeText(node) || '')
     setError(null)
   }
 
@@ -231,6 +262,15 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     }
   }
 
+  function toggleCollapsed(nodeId) {
+    setCollapsed((prev) => {
+      const next = new Set(prev)
+      if (next.has(nodeId)) next.delete(nodeId)
+      else next.add(nodeId)
+      return next
+    })
+  }
+
   if (error) {
     return (
       <div className="roadmap-detail">
@@ -248,7 +288,17 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     )
   }
 
-  // The active inline "insert step" input, shown at one position at a time.
+  const { title, notes, progress } = roadmap
+  const children = roadmap.children || []
+  const textById = textByIdOf(children)
+  const currentId = progress.currentStepId
+  // Long-list anchoring only applies to a flat roadmap (nested ones chunk via modules).
+  const isFlat = children.every((c) => !(c.children && c.children.length > 0))
+  const currentIdx = children.findIndex((c) => c.id === currentId)
+  const completedAbove = isFlat && currentIdx > 0 ? currentIdx : 0
+  const collapseCompleted = isFlat && !reorderMode && !showCompleted && completedAbove > 4
+
+  // The active inline "insert step" input, shown at one top-level position at a time.
   function renderInsertInput(atIndex) {
     if (insertAtIndex !== atIndex) return null
     return (
@@ -276,14 +326,105 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     )
   }
 
-  const { title, notes, progress, steps } = roadmap
-  // For showing "needs: <step>" on steps that carry a real prerequisite (Phase 7).
-  const textById = new Map(steps.map((s) => [s.id, s.content.text]))
-  // How many finished steps sit above the current one — collapse them past a small threshold
-  // so a long roadmap opens anchored on where you actually are.
-  const currentIdx = steps.findIndex((s) => s.orderIndex === progress.currentOrderIndex)
-  const completedAbove = currentIdx > 0 ? currentIdx : 0
-  const collapseCompleted = !reorderMode && !showCompleted && completedAbove > 4
+  // A leaf step row.
+  function StepRow({ node, depth }) {
+    const isCurrent = node.id === currentId
+    const isDone = node.status === 'done'
+    const isDropped = node.status === 'dropped'
+    const state = isDone ? 'is-done' : isDropped ? 'is-dropped' : isCurrent ? 'is-current' : 'is-upcoming'
+    const isEditing = editingStepId === node.id
+    const menuItems = [
+      { label: 'Edit', onClick: () => startEdit(node) },
+      ...(depth === 0 ? [{ label: 'Insert step above', onClick: () => startInsert(node.orderIndex) }] : []),
+      ...(isDone ? [{ label: 'Undo', onClick: () => undoStep(node.id) }] : []),
+      { label: 'Delete', onClick: () => deleteStep(node), danger: true },
+    ]
+    return (
+      <li className={`step-item ${state}`} style={depth ? { marginLeft: depth * 22 } : undefined}>
+        <span className="step-marker" aria-hidden="true">
+          {isDone ? '✓' : isDropped ? '–' : isCurrent ? '●' : '○'}
+        </span>
+        {isEditing ? (
+          <input
+            className="step-edit-input"
+            value={editText}
+            onChange={(e) => setEditText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') saveEdit(node.id)
+              if (e.key === 'Escape') cancelEdit()
+            }}
+            autoFocus
+          />
+        ) : (
+          <span
+            className="step-text step-text-openable"
+            onDoubleClick={() => setDeepStepId(node.id)}
+            title="Double-click for details"
+          >
+            {node.content?.text}
+            {(node.content?.kind === 'project' ||
+              node.content?.weight ||
+              (node.dependsOn && textById.get(node.dependsOn))) && (
+              <span className="step-tags">
+                {node.content?.kind === 'project' && <Badge tone="brass">project</Badge>}
+                {node.content?.weight && node.content.weight !== 'medium' && (
+                  <Badge>{node.content.weight}</Badge>
+                )}
+                {node.dependsOn && textById.get(node.dependsOn) && (
+                  <span className="step-needs">needs: {textById.get(node.dependsOn)}</span>
+                )}
+              </span>
+            )}
+          </span>
+        )}
+        {isEditing ? (
+          <span className="step-edit-actions">
+            <Button variant="ghost" onClick={() => saveEdit(node.id)} disabled={savingEdit || !editText.trim()}>
+              {savingEdit ? 'Saving…' : 'Save'}
+            </Button>
+            <Button variant="ghost" onClick={cancelEdit} disabled={savingEdit}>
+              Cancel
+            </Button>
+          </span>
+        ) : (
+          <span className="step-actions">
+            {isCurrent && (
+              <Button variant="primary" onClick={() => requestMarkDone(node)} disabled={busyStepId === node.id}>
+                {busyStepId === node.id ? 'Marking…' : 'Mark done'}
+              </Button>
+            )}
+            <Menu items={menuItems} label={`Actions for ${nodeText(node)}`} />
+          </span>
+        )}
+      </li>
+    )
+  }
+
+  // A container node — a module (child roadmap) or a step with substeps. Collapsible, with its
+  // own rolled-up progress.
+  function GroupNode({ node, depth }) {
+    const open = !collapsed.has(node.id)
+    const p = node.progress || { done: 0, total: 0 }
+    return (
+      <>
+        <li
+          className="node-group"
+          style={depth ? { marginLeft: depth * 22 } : undefined}
+          onClick={() => toggleCollapsed(node.id)}
+        >
+          <span className="node-group-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+          <span className="node-group-title">{nodeText(node)}</span>
+          <Badge>{p.done}/{p.total}</Badge>
+        </li>
+        {open && node.children.map((child) => <NodeRenderer key={child.id} node={child} depth={depth + 1} />)}
+      </>
+    )
+  }
+
+  function NodeRenderer({ node, depth }) {
+    if (node.children && node.children.length > 0) return <GroupNode node={node} depth={depth} />
+    return <StepRow node={node} depth={depth} />
+  }
 
   return (
     <div className="roadmap-detail">
@@ -295,7 +436,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
       <div className="roadmap-detail-progress">
         <ProgressBar done={progress.done} total={progress.total} />
         <span className="roadmap-detail-count">
-          {progress.currentOrderIndex === null
+          {progress.currentStepId === null
             ? `All ${progress.total} done.`
             : `${progress.done} of ${progress.total} done`}
         </span>
@@ -324,7 +465,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           </>
         ) : (
           <>
-            {steps.length > 1 && (
+            {children.length > 1 && (
               <Button variant="ghost" onClick={enterReorder}>
                 Reorder
               </Button>
@@ -344,9 +485,9 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
 
       {reorderMode ? (
         <ol className="step-list is-reordering">
-          {draftOrder.map((step, index) => (
+          {draftOrder.map((node, index) => (
             <li
-              key={step.id}
+              key={node.id}
               className={'step-item step-reorder-row' + (dragIndex === index ? ' is-dragging' : '')}
               draggable
               onDragStart={() => setDragIndex(index)}
@@ -355,7 +496,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
               onDragEnd={() => setDragIndex(null)}
             >
               <span className="step-drag-handle" aria-hidden="true">⠿</span>
-              <span className="step-text">{step.content.text}</span>
+              <span className="step-text">{nodeText(node)}</span>
             </li>
           ))}
         </ol>
@@ -368,123 +509,42 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
               </button>
             </li>
           )}
-          {showCompleted && completedAbove > 4 && (
+          {isFlat && showCompleted && completedAbove > 4 && (
             <li className="step-collapsed-row">
               <button className="step-collapsed-btn" onClick={() => setShowCompleted(false)}>
                 Hide completed steps
               </button>
             </li>
           )}
-          {steps.map((step, index) => {
+          {children.map((node, index) => {
             if (collapseCompleted && index < currentIdx) return null
-            const isCurrent = step.orderIndex === progress.currentOrderIndex
-            const isDone = step.status === 'done'
-            const isDropped = step.status === 'dropped'
-            const state = isDone
-              ? 'is-done'
-              : isDropped
-                ? 'is-dropped'
-                : isCurrent
-                  ? 'is-current'
-                  : 'is-upcoming'
-            const isEditing = editingStepId === step.id
-            const menuItems = [
-              { label: 'Edit', onClick: () => startEdit(step) },
-              { label: 'Insert step above', onClick: () => startInsert(index) },
-              ...(isDone ? [{ label: 'Undo', onClick: () => undoStep(step.id) }] : []),
-              { label: 'Delete', onClick: () => deleteStep(step), danger: true },
-            ]
             return (
-              <Fragment key={step.id}>
-                {renderInsertInput(index)}
-                <li className={`step-item ${state}`}>
-                  <span className="step-marker" aria-hidden="true">
-                    {isDone ? '✓' : isDropped ? '–' : isCurrent ? '●' : '○'}
-                  </span>
-                  {isEditing ? (
-                    <input
-                      className="step-edit-input"
-                      value={editText}
-                      onChange={(e) => setEditText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') saveEdit(step.id)
-                        if (e.key === 'Escape') cancelEdit()
-                      }}
-                      autoFocus
-                    />
-                  ) : (
-                    <span
-                      className="step-text step-text-openable"
-                      onDoubleClick={() => setDeepStepId(step.id)}
-                      title="Double-click for details"
-                    >
-                      {step.content.text}
-                      {(step.content.kind === 'project' ||
-                        step.content.weight ||
-                        (step.dependsOn && textById.get(step.dependsOn))) && (
-                        <span className="step-tags">
-                          {step.content.kind === 'project' && <Badge tone="brass">project</Badge>}
-                          {step.content.weight && step.content.weight !== 'medium' && (
-                            <Badge>{step.content.weight}</Badge>
-                          )}
-                          {step.dependsOn && textById.get(step.dependsOn) && (
-                            <span className="step-needs">needs: {textById.get(step.dependsOn)}</span>
-                          )}
-                        </span>
-                      )}
-                    </span>
-                  )}
-                  {isEditing ? (
-                    <span className="step-edit-actions">
-                      <Button
-                        variant="ghost"
-                        onClick={() => saveEdit(step.id)}
-                        disabled={savingEdit || !editText.trim()}
-                      >
-                        {savingEdit ? 'Saving…' : 'Save'}
-                      </Button>
-                      <Button variant="ghost" onClick={cancelEdit} disabled={savingEdit}>
-                        Cancel
-                      </Button>
-                    </span>
-                  ) : (
-                    <span className="step-actions">
-                      {isCurrent && (
-                        <Button
-                          variant="primary"
-                          onClick={() => requestMarkDone(step)}
-                          disabled={busyStepId === step.id}
-                        >
-                          {busyStepId === step.id ? 'Marking…' : 'Mark done'}
-                        </Button>
-                      )}
-                      <Menu items={menuItems} label={`Actions for step ${index + 1}`} />
-                    </span>
-                  )}
-                </li>
+              <Fragment key={node.id}>
+                {renderInsertInput(node.orderIndex)}
+                <NodeRenderer node={node} depth={0} />
               </Fragment>
             )
           })}
-          {renderInsertInput(steps.length)}
+          {renderInsertInput(children.length)}
           <li className="step-insert-row">
-            <button className="step-insert-btn" onClick={() => startInsert(steps.length)}>
+            <button className="step-insert-btn" onClick={() => startInsert(children.length)}>
               + Add step
             </button>
           </li>
         </ol>
       )}
 
-      {deepStepId && steps.find((s) => s.id === deepStepId) && (
+      {deepStepId && findNode(children, deepStepId) && (
         <StepDeepView
-          step={steps.find((s) => s.id === deepStepId)}
+          step={toStepShape(findNode(children, deepStepId))}
           onClose={() => setDeepStepId(null)}
           onChanged={load}
         />
       )}
 
-      {verifyStepId && steps.find((s) => s.id === verifyStepId) && (
+      {verifyStepId && findNode(children, verifyStepId) && (
         <VerifyModal
-          step={steps.find((s) => s.id === verifyStepId)}
+          step={toStepShape(findNode(children, verifyStepId))}
           onClose={() => setVerifyStepId(null)}
           onPassed={async () => {
             setVerifyStepId(null)
@@ -492,14 +552,31 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
             await load()
           }}
           onOverride={async () => {
-            const id = verifyStepId
+            const target = verifyStepId
             setVerifyStepId(null)
-            await markDone(id)
+            await markDone(target)
           }}
         />
       )}
     </div>
   )
+}
+
+// StepDeepView / VerifyModal were written against a flat entry ({ id, content, status }); a tree
+// node carries the same fields, so pass it through directly.
+function toStepShape(node) {
+  return node
+}
+
+function findNode(nodes, targetId) {
+  for (const n of nodes) {
+    if (n.id === targetId) return n
+    if (n.children) {
+      const found = findNode(n.children, targetId)
+      if (found) return found
+    }
+  }
+  return null
 }
 
 function BackLink({ onBack }) {

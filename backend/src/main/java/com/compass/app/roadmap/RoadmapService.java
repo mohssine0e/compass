@@ -260,18 +260,23 @@ public class RoadmapService {
         return repository.findByParentIdOrderByOrderIndexAsc(roadmapId);
     }
 
-    /** Active roadmaps (archived ones excluded), newest first. */
+    /**
+     * Active top-level roadmaps (archived excluded), newest first. Child roadmaps (modules,
+     * Phase 13) have a parent and are shown inside their root, never as their own list entry.
+     */
     @Transactional(readOnly = true)
     public List<Entry> listRoadmaps() {
         return repository.findByTypeOrderByCreatedAtDesc(EntryType.ROADMAP).stream()
+                .filter(r -> r.getParentId() == null)
                 .filter(r -> r.getStatus() != EntryStatus.ARCHIVED)
                 .toList();
     }
 
-    /** Archived roadmaps only, newest first (the Archive view). */
+    /** Archived top-level roadmaps only, newest first (the Archive view). */
     @Transactional(readOnly = true)
     public List<Entry> listArchivedRoadmaps() {
         return repository.findByTypeOrderByCreatedAtDesc(EntryType.ROADMAP).stream()
+                .filter(r -> r.getParentId() == null)
                 .filter(r -> r.getStatus() == EntryStatus.ARCHIVED)
                 .toList();
     }
@@ -482,19 +487,21 @@ public class RoadmapService {
         throw new java.util.NoSuchElementException("No step " + stepId + " on roadmap " + roadmapId);
     }
 
-    /** Delete a step and close the order_index gap it leaves behind. */
+    /**
+     * Delete a step anywhere in the roadmap's tree and close the order_index gap under its
+     * parent (Phase 13). Any substeps under it go too, via the parent FK's ON DELETE CASCADE.
+     */
     @Transactional
     public void deleteStep(Long roadmapId, Long stepId) {
-        List<Entry> steps = stepsOf(roadmapId);
-        Entry toDelete = steps.stream()
-                .filter(s -> s.getId().equals(stepId))
-                .findFirst()
+        Entry toDelete = repository.findById(stepId)
+                .filter(s -> s.getType() == EntryType.ROADMAP_STEP)
                 .orElseThrow(() -> new java.util.NoSuchElementException(
                         "No step " + stepId + " on roadmap " + roadmapId));
+        Long parentId = toDelete.getParentId();
 
-        steps.remove(toDelete);
         repository.delete(toDelete);
-        reindexAndSave(steps);
+        List<Entry> siblings = repository.findByParentIdOrderByOrderIndexAsc(parentId);
+        reindexAndSave(siblings);
         repository.touchUpdatedAt(roadmapId, Instant.now());
     }
 

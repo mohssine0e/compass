@@ -259,7 +259,7 @@ public class ResurfacingService {
         roadmap.setLastResurfacedAt(Instant.now());
         repository.save(roadmap);
 
-        return com.compass.app.roadmap.dto.RoadmapResponse.of(roadmap, roadmapService.stepsOf(id));
+        return com.compass.app.roadmap.dto.RoadmapResponse.of(roadmap, roadmapService::stepsOf);
     }
 
     private Entry requireRoadmap(Long id) {
