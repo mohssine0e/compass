@@ -368,6 +368,129 @@ Goal: the system starts noticing patterns across sessions, not just within one t
 
 ---
 
+## v2 — reshaping from real use
+
+Phases 11–15 come from actually using the app. Guiding decisions:
+- **Stay on PostgreSQL.** Nesting (roadmaps-in-roadmaps, steps-with-substeps) is a tree, and
+  `entries.parent_id` is already a self-reference (CLAUDE.md §4) — it's a service/UI change, not
+  a database swap. MongoDB would rewrite every entity/repository/query (resurfacing, verification,
+  sessions all act on individual nodes) for a capability we already have.
+- **Hierarchy is not branching.** Each level stays ordered/linear; we add depth, not parallel
+  tracks (those stay out — see below).
+- **Reuse, don't rebuild.** v2 features are built on a shared, documented component library
+  (Phase 11) rather than re-implementing modals/chips/cards per screen.
+
+---
+
+## Phase 11 — Frontend foundation & design system
+
+Goal: a small, documented, reusable component library and a coherent visual language, so every
+later v2 feature is built by reuse — not rebuilt from scratch. Directly addresses maintainability
+and the "make the UI/UX better" feedback. No behaviour change in this phase — it's groundwork.
+
+- [ ] Extract shared components from the patterns already scattered across screens: `Button`
+  (primary/ghost/danger), `Modal`/overlay, `Card`, `Badge`/`Chip`, `EditableList`
+  (add/remove/reorder), `Menu` (kebab), `Section`, `Field`/input. One place, one style.
+- [ ] Document every component — a concise one-line summary plus a detailed block (props, when to
+  use, examples). Add a short `frontend/README` on the component conventions and how to add a screen.
+- [ ] Refactor existing screens onto the shared components with **no behaviour change** — the deep
+  view, verify, reformulate, and restructure modals; trait/format/skill chips; kind/weight badges.
+- [ ] Design pass: consistent spacing + typography scale + color usage, tasteful iconography where
+  it earns its place, audited against the self-talk / low-friction philosophy (no clutter, no
+  dashboard-ness). Keep it theme-aware.
+- [ ] **Push + tag `phase-11-complete`. Stop. Let the founder use this for real before continuing.**
+
+---
+
+## Phase 12 — Roadmap UX
+
+Goal: the roadmap views become clean and pleasant. Declutter, reorder by drag, and manage whole
+roadmaps. Built on the Phase 11 components, still on the current flat model (hierarchy is Phase 13).
+
+- [ ] Declutter the step row: keep the primary action (mark done) inline; move Edit/Delete behind a
+  hover/kebab `Menu`. Remove the per-step ↑/↓ reorder buttons entirely.
+- [ ] Reorder mode: one "Reorder" toggle at the top of a roadmap enables drag-and-drop; the new
+  order is saved explicitly (reuses the existing reorder endpoint), not on every nudge.
+- [ ] Delete a whole roadmap: endpoint + UI with a clear confirm (cascades to its steps).
+- [ ] Archive a roadmap: an `archived` state that drops it out of the main list into an Archive
+  view; unarchive to bring it back. Keeps the list focused without losing history.
+- [ ] Handle arbitrarily long step lists gracefully (anchor on the current step; the list stays
+  usable at 5 steps or 50).
+- [ ] **Push + tag `phase-12-complete`. Stop. Let the founder use this for real before continuing.**
+
+---
+
+## Phase 13 — Hierarchical roadmaps & smarter generation
+
+Goal: roadmaps can nest for genuinely big goals ("become an engineer" → modules → steps →
+substeps), generation stops dumping one flat list, and resources stop duplicating. This is the
+core product gap from real use — highest value, highest risk. Design and get sign-off before coding.
+
+**Search grounding infrastructure (independent of the hierarchy design — safe to do first)**
+- [x] Add Brave Search as the **primary** grounding provider (`BRAVE_API_KEY`, 2,000 free
+  queries/month) using the same primary/fallback pattern as Gemini/Groq; keep **Tavily** as the
+  automatic fallback. Normalize both providers to one result shape; fail over on error/empty.
+- [x] Audit search calls per roadmap generation — confirm it's a small fixed number (one call for
+  the goal), not one-per-step. (Result: it's 1 call per proposal; resource discovery reuses that
+  single result set — no per-step fan-out.)
+- [x] Basic in-memory cache for repeated/identical search queries (a dev quota saver), TTL-bounded,
+  so re-running generation on the same goal doesn't burn fresh queries.
+
+**Nesting (via the existing `parent_id` tree — no engine change)**
+- [ ] Generalize roadmaps from flat to tree: a roadmap can contain child roadmaps (modules) and a
+  step can contain substeps. Ordering is per-parent (`order_index` already handles siblings).
+- [ ] Progress rolls **up**: a parent's progress aggregates over its leaf descendants; "current
+  step" is a leaf-first traversal. Resurfacing, verification, and sessions keep operating on leaves.
+- [ ] Roadmap tree view: render nesting with collapsible modules/substeps; a simple roadmap still
+  reads as a plain linear list.
+
+**Outline-then-expand generation (replaces one-shot flat generation)**
+- [ ] Goal → clarifying questions → a top-level **module outline** (4–8 modules, each a one-line
+  scope), editable, then accepted — instead of one giant step list up front.
+- [ ] Expand on demand: "expand this module" generates its steps (grounded for that module's
+  topic); "break this step down" generates substeps (reuse the Phase 4 break-down). Depth grows
+  only where the founder wants it.
+
+**Resource discovery, de-duplicated**
+- [ ] Search per module (scoped, more relevant) instead of one goal-wide pool; keep a roadmap-wide
+  set of used URLs/domains and cap one resource per topic+format, with a dedup pass before showing
+  — so the same video never appears on two steps.
+- [ ] A "learning path" view: an explicit ordered traversal (current leaf + the next few + their
+  resources + estimated time), distinct from the structural tree — ties into Focus / guided sessions.
+- [ ] **Push + tag `phase-13-complete`. Stop. Let the founder use this for real before continuing.**
+
+---
+
+## Phase 14 — Captures & organization
+
+Goal: captured ideas and things become pleasant to view and actually get organized — not one long
+scroll. Reuses the Phase 10 cross-thread engine to group, not just read.
+
+- [ ] Redesign the ideas / "Everything" view: group and collapse (by AI theme, or by
+  status/significance) so it stops forcing a scroll; tasks nest tidily under their parent with
+  done ones collapsible.
+- [ ] Auto-cluster captures into themes (reuse the Phase 10 threading), shown for the founder to
+  rename/confirm; a confirmed group can seed a roadmap.
+- [ ] Better idea detail: status, linked next-step tasks, resurface history, and the AI's
+  interpretation — shown clearly, editable/confirmable (same propose→approve pattern).
+- [ ] **Push + tag `phase-14-complete`. Stop. Let the founder use this for real before continuing.**
+
+---
+
+## Phase 15 — Profile & learning-style depth
+
+Goal: the profile captures *how* you learn with more than free text, and that richer picture feeds
+generation and sessions.
+
+- [ ] Structured learning-preference options (selectable, not just prose): pace, theory-vs-practice
+  balance, preferred session length, depth, example-first vs. principle-first.
+- [ ] Tighten the profile layout on the Phase 11 components; make the confirm/overview cleaner.
+- [ ] Feed the richer preferences into generation (step sizing, resource choice) and the
+  guided-session next-action suggestions.
+- [ ] **Push + tag `phase-15-complete`. Stop. Let the founder use this for real before continuing.**
+
+---
+
 ## Explicitly not planned
 
 Do not add these unless the founder asks directly — they were considered and cut during
@@ -379,9 +502,10 @@ design (see CLAUDE.md Section 7):
   than real progress, and tends to produce guilt-driven engagement, which conflicts with
   the self-talk-voice honesty principle. If any consistency signal is added later, frame
   it as total sessions/time invested, not an unbroken streak.
-- Branching/non-linear roadmap diagrams — current data model is intentionally linear
-  (`order_index` + optional `depends_on` from Phase 4). Revisit only if a real roadmap
-  needs actual branching or parallel tracks, not just for visual polish.
+- Branching / parallel tracks — non-linear roadmaps where steps fork into concurrent paths.
+  Nesting/hierarchy (modules, substeps) is now planned (Phase 13) and is different: each level
+  stays ordered/linear, we just add depth. True branching or parallel tracks stay out unless a
+  real roadmap needs them, not just for visual polish.
 
 ---
 

@@ -15,89 +15,188 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Grounds roadmap generation in real search results (Phase 7). A generic chat model has no live
  * web access, so before drafting a roadmap we fetch a few results about the goal (official docs,
- * established curricula) and feed them in as context — and surface the sources so the founder can
+ * established curricula), feed them in as context, and surface the sources so the founder can
  * sanity-check the draft, not just trust it.
  *
- * <p>Uses a dedicated search API (Tavily by default), separate from the Gemini/Groq chat models,
- * configured with its own {@code SEARCH_API_KEY}. Entirely optional and best-effort: when no key
- * is set or the call fails, {@link #ground} returns {@code null} and generation proceeds
- * ungrounded rather than failing.
+ * <p>Two providers with automatic failover, same primary/fallback pattern as the chat models:
+ * <b>Brave Search</b> primary ({@code BRAVE_API_KEY}, 2,000 free queries/month), <b>Tavily</b>
+ * fallback ({@code SEARCH_API_KEY}). Both normalize to the same {@link Result} shape. A small
+ * in-memory TTL cache keyed on the query avoids re-spending quota when the same goal is searched
+ * again (mainly a dev saver). Entirely optional and best-effort: with no key configured or on
+ * failure, {@link #ground} returns {@code null} and generation proceeds ungrounded.
+ *
+ * <p>Call budget: one {@code ground} call per roadmap proposal (on the goal) — resource discovery
+ * reuses that single result set rather than searching per step.
  */
 @Service
 public class SearchGroundingService {
 
     private static final Logger log = LoggerFactory.getLogger(SearchGroundingService.class);
+    private static final int MAX_CACHE_ENTRIES = 256;
 
-    private final String baseUrl;
-    private final String apiKey;
+    private final String braveBaseUrl;
+    private final String braveApiKey;
+    private final String tavilyBaseUrl;
+    private final String tavilyApiKey;
     private final int maxResults;
     private final int timeoutSeconds;
+    private final long cacheTtlMillis;
     private final EventService events;
 
+    // Query (normalized) → grounding, with an expiry. Bounded and TTL'd; fine for a single user.
+    private final Map<String, Cached> cache = new ConcurrentHashMap<>();
+
     public SearchGroundingService(
-            @Value("${compass.search.base-url:https://api.tavily.com}") String baseUrl,
-            @Value("${compass.search.api-key:}") String apiKey,
-            @Value("${compass.search.max-results:5}") int maxResults,
+            @Value("${compass.search.brave.base-url:https://api.search.brave.com}") String braveBaseUrl,
+            @Value("${compass.search.brave.api-key:}") String braveApiKey,
+            @Value("${compass.search.tavily.base-url:https://api.tavily.com}") String tavilyBaseUrl,
+            @Value("${compass.search.tavily.api-key:}") String tavilyApiKey,
+            @Value("${compass.search.max-results:8}") int maxResults,
             @Value("${compass.search.timeout-seconds:8}") int timeoutSeconds,
+            @Value("${compass.search.cache-ttl-seconds:3600}") long cacheTtlSeconds,
             EventService events) {
-        this.baseUrl = baseUrl;
-        this.apiKey = apiKey;
+        this.braveBaseUrl = braveBaseUrl;
+        this.braveApiKey = braveApiKey;
+        this.tavilyBaseUrl = tavilyBaseUrl;
+        this.tavilyApiKey = tavilyApiKey;
         this.maxResults = maxResults;
         this.timeoutSeconds = timeoutSeconds;
+        this.cacheTtlMillis = cacheTtlSeconds * 1000L;
         this.events = events;
     }
 
-    /** True when a search key is configured — otherwise grounding is skipped entirely. */
+    private boolean braveConfigured() {
+        return braveApiKey != null && !braveApiKey.isBlank();
+    }
+
+    private boolean tavilyConfigured() {
+        return tavilyApiKey != null && !tavilyApiKey.isBlank();
+    }
+
+    /** True when at least one provider is configured — otherwise grounding is skipped entirely. */
     public boolean isEnabled() {
-        return apiKey != null && !apiKey.isBlank();
+        return braveConfigured() || tavilyConfigured();
     }
 
     /**
      * Search results about {@code query} as grounding, or {@code null} when disabled or on any
-     * failure (generation then proceeds ungrounded). Never throws into the caller.
+     * failure (generation then proceeds ungrounded). Tries Brave, then Tavily; caches a hit.
+     * Never throws into the caller.
      */
     public Grounding ground(String query) {
         if (!isEnabled() || query == null || query.isBlank()) {
             return null;
         }
+        String key = query.trim().toLowerCase();
+
+        Cached hit = cache.get(key);
+        long now = System.currentTimeMillis();
+        if (hit != null && hit.expiresAt() > now) {
+            return hit.grounding();
+        }
+
+        List<Result> results = fetch(query.trim());
+        if (results == null || results.isEmpty()) {
+            return null;
+        }
+        Grounding grounding = toGrounding(results);
+        if (grounding != null && cacheTtlMillis > 0) {
+            if (cache.size() >= MAX_CACHE_ENTRIES) {
+                cache.clear();
+            }
+            cache.put(key, new Cached(grounding, now + cacheTtlMillis));
+        }
+        return grounding;
+    }
+
+    /** Brave first, Tavily on failure/empty. Each returns null on its own failure (logged). */
+    private List<Result> fetch(String query) {
+        List<Result> results = braveConfigured() ? brave(query) : null;
+        if ((results == null || results.isEmpty()) && tavilyConfigured()) {
+            results = tavily(query);
+        }
+        return results;
+    }
+
+    private List<Result> brave(String query) {
         try {
             RestClient client = RestClient.builder()
-                    .baseUrl(baseUrl)
+                    .baseUrl(braveBaseUrl)
                     .requestFactory(timeoutFactory(timeoutSeconds))
                     .build();
+            BraveResponse response = client.get()
+                    .uri(b -> b.path("/res/v1/web/search")
+                            .queryParam("q", query)
+                            .queryParam("count", maxResults)
+                            .build())
+                    .header("X-Subscription-Token", braveApiKey)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .body(BraveResponse.class);
+            if (response == null || response.web() == null || response.web().results() == null) {
+                return null;
+            }
+            List<Result> results = new ArrayList<>();
+            for (BraveResponse.WebResult r : response.web().results()) {
+                if (r.title() != null && !r.title().isBlank()) {
+                    results.add(new Result(r.title().strip(), r.url() == null ? "" : r.url().strip(),
+                            r.description() == null ? "" : r.description().strip()));
+                }
+            }
+            return results;
+        } catch (RuntimeException ex) {
+            log.warn("Brave search failed: {}", ex.getMessage());
+            events.aiWarning("search_error", "Brave search failed, trying fallback: "
+                    + AiFailures.reason(ex), null);
+            return null;
+        }
+    }
 
+    private List<Result> tavily(String query) {
+        try {
+            RestClient client = RestClient.builder()
+                    .baseUrl(tavilyBaseUrl)
+                    .requestFactory(timeoutFactory(timeoutSeconds))
+                    .build();
             TavilyResponse response = client.post()
-                    .uri(URI.create(baseUrl + "/search"))
+                    .uri(URI.create(tavilyBaseUrl + "/search"))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(Map.of(
-                            "api_key", apiKey,
-                            "query", query.trim(),
+                            "api_key", tavilyApiKey,
+                            "query", query,
                             "max_results", maxResults,
                             "search_depth", "basic"))
                     .retrieve()
                     .body(TavilyResponse.class);
-
-            if (response == null || response.results() == null || response.results().isEmpty()) {
+            if (response == null || response.results() == null) {
                 return null;
             }
-            return toGrounding(response.results());
+            List<Result> results = new ArrayList<>();
+            for (TavilyResponse.TavilyResult r : response.results()) {
+                if (r.title() != null && !r.title().isBlank()) {
+                    results.add(new Result(r.title().strip(), r.url() == null ? "" : r.url().strip(),
+                            r.content() == null ? "" : r.content().strip()));
+                }
+            }
+            return results;
         } catch (RuntimeException ex) {
-            log.warn("Search grounding failed: {}", ex.getMessage());
+            log.warn("Tavily search failed: {}", ex.getMessage());
             events.aiWarning("search_error", "Search grounding failed; drafted ungrounded: "
                     + AiFailures.reason(ex), null);
             return null;
         }
     }
 
-    private static Grounding toGrounding(List<TavilyResponse.Result> raw) {
+    private static Grounding toGrounding(List<Result> raw) {
         StringBuilder context = new StringBuilder();
         List<String> sources = new ArrayList<>();
         List<Result> results = new ArrayList<>();
-        for (TavilyResponse.Result r : raw) {
+        for (Result r : raw) {
             if (r.title() == null || r.title().isBlank()) {
                 continue;
             }
@@ -137,6 +236,9 @@ public class SearchGroundingService {
         return factory;
     }
 
+    private record Cached(Grounding grounding, long expiresAt) {
+    }
+
     /**
      * Grounding for a generation: snippet {@code context} for the prompt, {@code sources} to
      * show, and the raw {@code results} (with real URLs) that resource discovery draws from.
@@ -149,9 +251,20 @@ public class SearchGroundingService {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record TavilyResponse(List<Result> results) {
+    record BraveResponse(Web web) {
         @JsonIgnoreProperties(ignoreUnknown = true)
-        record Result(String title, String url, String content) {
+        record Web(List<WebResult> results) {
+        }
+
+        @JsonIgnoreProperties(ignoreUnknown = true)
+        record WebResult(String title, String url, String description) {
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record TavilyResponse(List<TavilyResult> results) {
+        @JsonIgnoreProperties(ignoreUnknown = true)
+        record TavilyResult(String title, String url, String content) {
         }
     }
 }
