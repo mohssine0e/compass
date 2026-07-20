@@ -9,7 +9,27 @@
   --brass: #cf9d5b;
   --brass-dim: rgba(207, 157, 91, 0.32);
   --danger: #d98a7a;
+  --danger-dim: rgba(217, 138, 122, 0.1);
   --radius: 8px;
+
+  /* Spacing scale — use these for gap/margin/padding so rhythm stays consistent. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-8: 48px;
+
+  /* Type scale (root is 17px). --text-* for size, paired weights below. */
+  --text-xs: 0.78rem;
+  --text-sm: 0.9rem;
+  --text-base: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.6rem;
+  --text-2xl: 2rem;
+  --weight-normal: 400;
+  --weight-medium: 500;
 
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
     Arial, sans-serif;

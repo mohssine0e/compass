@@ -8,8 +8,17 @@ import { Button, Card, Badge, Chip, Section, Modal, Menu, TextInput, TextArea } 
 ```
 
 Importing from `./ui` also loads `ui.css` once. All styling uses the design tokens in
-`src/index.css` (`--bg`, `--surface`, `--line`, `--text`, `--muted`, `--faint`, `--brass`,
-`--brass-dim`, `--danger`, `--radius`) — no hard-coded colors in components.
+`src/index.css` — no hard-coded colors or magic numbers in components:
+
+- **Color:** `--bg`, `--surface`, `--surface-2`, `--line`, `--text`, `--muted`, `--faint`,
+  `--brass`, `--brass-dim`, `--danger`, `--danger-dim`, `--radius`.
+- **Spacing:** `--space-1`…`--space-8` (4 · 8 · 12 · 16 · 24 · 32 · 48px). Use for
+  gap/margin/padding so vertical rhythm stays consistent.
+- **Type:** `--text-xs`…`--text-2xl` (0.78 → 2rem, root 17px) with `--weight-normal` /
+  `--weight-medium`. Reach for a scale step rather than a one-off `rem`.
+
+New screens should compose from these tokens and the components below — that's what keeps the
+look coherent without a per-screen redesign.
 
 ## Components
 

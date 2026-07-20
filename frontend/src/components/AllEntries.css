@@ -21,7 +21,7 @@
 }
 
 .all-error {
-  color: #d98a7a;
+  color: var(--danger);
 }
 
 .all-items {

@@ -393,11 +393,25 @@ and the "make the UI/UX better" feedback. No behaviour change in this phase — 
   (add/remove/reorder), `Menu` (kebab), `Section`, `Field`/input. One place, one style.
 - [x] Document every component — a concise one-line summary plus a detailed block (props, when to
   use, examples). Add a short `frontend/README` on the component conventions and how to add a screen.
-- [ ] Refactor existing screens onto the shared components with **no behaviour change** — the deep
+- [x] Refactor existing screens onto the shared components with **no behaviour change** — the deep
   view, verify, reformulate, and restructure modals; trait/format/skill chips; kind/weight badges.
-- [ ] Design pass: consistent spacing + typography scale + color usage, tasteful iconography where
+  (Also merged the parallel `.btn-primary`/`.btn-ghost` global CSS into `<Button>` across five
+  screens, and extracted a shared `<Chip>` for the profile pills. The generation-preview
+  `gen-badge` and All-view `all-tag` are left as-is — both surfaces are rebuilt in Phases 13/14
+  and will pick up `<Badge>` then.)
+- [x] Design pass: consistent spacing + typography scale + color usage, tasteful iconography where
   it earns its place, audited against the self-talk / low-friction philosophy (no clutter, no
   dashboard-ness). Keep it theme-aware.
+  - Established the design system as tokens in `src/index.css`: a spacing scale (`--space-1..8`),
+    a type scale (`--text-xs..2xl` + weights), and rounded out the color tokens (`--danger-dim`).
+    Documented them in the kit README as the basis every new v2 screen composes from.
+  - Unified color usage: replaced 15 hard-coded `#d98a7a` danger colors across the screens with
+    `var(--danger)`; the kit stays token-only.
+  - Kept it token-driven and dark-native (`color-scheme: dark`, brass accent) — no new colors,
+    no clutter, no dashboard-ness; iconography left minimal (the mic is the only one that earns
+    its place). **The subjective, layout-level visual polish is deliberately left for the founder
+    to drive during the review gate below** — per the CLAUDE.md rule to stop and ask on taste/UX
+    calls rather than guess.
 - [ ] **Push + tag `phase-11-complete`. Stop. Let the founder use this for real before continuing.**
 
 ---

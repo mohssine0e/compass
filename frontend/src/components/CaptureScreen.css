@@ -75,7 +75,7 @@
 }
 
 .capture-status.is-error {
-  color: #d98a7a;
+  color: var(--danger);
 }
 
 .capture-mic {

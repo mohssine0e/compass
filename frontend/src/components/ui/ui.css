@@ -267,7 +267,7 @@
 .ui-chip--toggle.is-on.ui-chip--on-danger {
   color: var(--danger);
   border-color: var(--danger);
-  background: rgba(217, 138, 122, 0.1);
+  background: var(--danger-dim);
 }
 .ui-chip--toggle.is-on.ui-chip--on-brass {
   color: var(--brass);

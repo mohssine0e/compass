@@ -90,7 +90,7 @@
 }
 
 .step-remove:hover:not(:disabled) {
-  color: #d98a7a;
+  color: var(--danger);
 }
 
 .step-remove:disabled {
@@ -113,7 +113,7 @@
 
 .roadmap-error {
   margin-right: auto;
-  color: #d98a7a;
+  color: var(--danger);
   font-size: 0.95rem;
 }
 

@@ -335,7 +335,7 @@
 }
 
 .step-delete-btn:hover:not(:disabled) {
-  color: #d98a7a;
+  color: var(--danger);
 }
 
 .step-insert-row {

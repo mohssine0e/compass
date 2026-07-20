@@ -44,7 +44,7 @@
 }
 
 .events-error {
-  color: #d98a7a;
+  color: var(--danger);
 }
 
 .events-list {
@@ -73,7 +73,7 @@
 }
 
 .event-row.sev-error {
-  border-left-color: #d98a7a;
+  border-left-color: var(--danger);
 }
 
 .event-when {
@@ -104,7 +104,7 @@
 }
 
 .event-sev.sev-error {
-  color: #d98a7a;
+  color: var(--danger);
 }
 
 .event-source,
