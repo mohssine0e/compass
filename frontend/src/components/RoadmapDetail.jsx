@@ -33,6 +33,9 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   const [draftOrder, setDraftOrder] = useState([])
   const [savingOrder, setSavingOrder] = useState(false)
   const [dragIndex, setDragIndex] = useState(null)
+  // Long-list anchoring (Phase 12): completed steps above the current one collapse so the
+  // step you're on stays at the top whether the roadmap has 5 steps or 50.
+  const [showCompleted, setShowCompleted] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -276,6 +279,11 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   const { title, notes, progress, steps } = roadmap
   // For showing "needs: <step>" on steps that carry a real prerequisite (Phase 7).
   const textById = new Map(steps.map((s) => [s.id, s.content.text]))
+  // How many finished steps sit above the current one — collapse them past a small threshold
+  // so a long roadmap opens anchored on where you actually are.
+  const currentIdx = steps.findIndex((s) => s.orderIndex === progress.currentOrderIndex)
+  const completedAbove = currentIdx > 0 ? currentIdx : 0
+  const collapseCompleted = !reorderMode && !showCompleted && completedAbove > 4
 
   return (
     <div className="roadmap-detail">
@@ -353,7 +361,22 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
         </ol>
       ) : (
         <ol className="step-list">
+          {collapseCompleted && (
+            <li className="step-collapsed-row">
+              <button className="step-collapsed-btn" onClick={() => setShowCompleted(true)}>
+                ↑ Show {completedAbove} completed step{completedAbove === 1 ? '' : 's'}
+              </button>
+            </li>
+          )}
+          {showCompleted && completedAbove > 4 && (
+            <li className="step-collapsed-row">
+              <button className="step-collapsed-btn" onClick={() => setShowCompleted(false)}>
+                Hide completed steps
+              </button>
+            </li>
+          )}
           {steps.map((step, index) => {
+            if (collapseCompleted && index < currentIdx) return null
             const isCurrent = step.orderIndex === progress.currentOrderIndex
             const isDone = step.status === 'done'
             const isDropped = step.status === 'dropped'

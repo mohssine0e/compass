@@ -326,6 +326,24 @@
   color: var(--muted);
 }
 
+.step-collapsed-row {
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.step-collapsed-btn {
+  background: transparent;
+  color: var(--faint);
+  border: none;
+  padding: 2px 0;
+  font-size: 0.85rem;
+  transition: color 0.15s ease;
+}
+
+.step-collapsed-btn:hover {
+  color: var(--muted);
+}
+
 .step-item.is-done .step-marker {
   color: var(--brass);
 }

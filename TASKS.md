@@ -421,16 +421,18 @@ and the "make the UI/UX better" feedback. No behaviour change in this phase — 
 Goal: the roadmap views become clean and pleasant. Declutter, reorder by drag, and manage whole
 roadmaps. Built on the Phase 11 components, still on the current flat model (hierarchy is Phase 13).
 
-- [ ] Declutter the step row: keep the primary action (mark done) inline; move Edit/Delete behind a
-  hover/kebab `Menu`. Remove the per-step ↑/↓ reorder buttons entirely.
-- [ ] Reorder mode: one "Reorder" toggle at the top of a roadmap enables drag-and-drop; the new
+- [x] Declutter the step row: keep the primary action (mark done) inline; move Edit/Delete behind a
+  hover/kebab `Menu`. Remove the per-step ↑/↓ reorder buttons entirely. (Insert-above and Undo
+  moved into the same kebab; one "+ Add step" at the end.)
+- [x] Reorder mode: one "Reorder" toggle at the top of a roadmap enables drag-and-drop; the new
   order is saved explicitly (reuses the existing reorder endpoint), not on every nudge.
-- [ ] Delete a whole roadmap: endpoint + UI with a clear confirm (cascades to its steps).
-- [ ] Archive a roadmap: an `archived` state that drops it out of the main list into an Archive
+- [x] Delete a whole roadmap: endpoint + UI with a clear confirm (cascades to its steps).
+- [x] Archive a roadmap: an `archived` state that drops it out of the main list into an Archive
   view; unarchive to bring it back. Keeps the list focused without losing history.
-- [ ] Handle arbitrarily long step lists gracefully (anchor on the current step; the list stays
-  usable at 5 steps or 50).
-- [ ] **Push + tag `phase-12-complete`. Stop. Let the founder use this for real before continuing.**
+- [x] Handle arbitrarily long step lists gracefully (anchor on the current step; the list stays
+  usable at 5 steps or 50). (Completed steps above the current one collapse behind a
+  "Show N completed steps" toggle so the roadmap opens on where you are.)
+- [x] **Push + tag `phase-12-complete`. Stop. Let the founder use this for real before continuing.**
 
 ---
 
