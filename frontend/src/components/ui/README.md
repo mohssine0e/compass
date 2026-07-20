@@ -4,7 +4,7 @@ The small, shared component library the whole app builds on. **Reuse these befor
 another button/card/modal** — the point is one consistent look and one place to change it.
 
 ```js
-import { Button, Card, Badge, Section, Modal, Menu, TextInput, TextArea } from './ui'
+import { Button, Card, Badge, Chip, Section, Modal, Menu, TextInput, TextArea } from './ui'
 ```
 
 Importing from `./ui` also loads `ui.css` once. All styling uses the design tokens in
@@ -17,6 +17,7 @@ Importing from `./ui` also loads `ui.css` once. All styling uses the design toke
 |-----------|------------|-----------|
 | `Button` | The one button | `variant`: `primary` \| `ghost` \| `danger`; forwards `onClick`, `disabled`, `type` |
 | `Badge` | Small pill label (tags, statuses) | `tone`: `default` \| `brass` \| `danger` |
+| `Chip` | Interactive pill | removable: `onRemove`; toggle: `toggle`, `pressed`, `tone`: `brass` \| `danger` |
 | `Card` | Bordered surface container | `as`: `div` \| `button`; `interactive` for the hover affordance |
 | `Section` | Titled block with optional hint | `title`, `hint` |
 | `Modal` | Overlay + centered panel dialog | `onClose`, `title`, `size`: `md` \| `lg`. Closes on overlay click / Escape |

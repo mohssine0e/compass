@@ -228,3 +228,49 @@
 .ui-menu__item--danger {
   color: var(--danger);
 }
+
+/* Chip — interactive pill (see Chip.jsx). Removable = solid tag with ×; toggle = button. */
+.ui-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.92rem;
+}
+.ui-chip--removable {
+  background: var(--surface);
+  color: var(--text);
+  padding: 6px 8px 6px 14px;
+}
+.ui-chip__remove {
+  background: transparent;
+  border: none;
+  color: var(--faint);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 2px;
+}
+.ui-chip__remove:hover {
+  color: var(--danger);
+}
+.ui-chip--toggle {
+  background: transparent;
+  color: var(--muted);
+  padding: 7px 16px;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.ui-chip--toggle:hover {
+  border-color: var(--faint);
+  color: var(--text);
+}
+.ui-chip--toggle.is-on.ui-chip--on-danger {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: rgba(217, 138, 122, 0.1);
+}
+.ui-chip--toggle.is-on.ui-chip--on-brass {
+  color: var(--brass);
+  border-color: var(--brass);
+  background: var(--brass-dim);
+}

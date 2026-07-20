@@ -6,7 +6,7 @@ import {
   interpretSelfDescription,
   saveProfile,
 } from '../api'
-import { Button } from './ui'
+import { Button, Chip } from './ui'
 import './ProfileScreen.css'
 
 // The learner profile (Phase 6): what you already know, so generation later doesn't re-teach
@@ -332,11 +332,8 @@ export default function ProfileScreen() {
         {descTraits.length > 0 && (
           <ul className="trait-list">
             {descTraits.map((t) => (
-              <li className="trait-chip" key={t}>
-                <span>{t}</span>
-                <button className="trait-remove" onClick={() => removeTrait(t)} aria-label={`Remove ${t}`}>
-                  ×
-                </button>
+              <li key={t}>
+                <Chip onRemove={() => removeTrait(t)}>{t}</Chip>
               </li>
             ))}
           </ul>
@@ -350,16 +347,16 @@ export default function ProfileScreen() {
         </p>
         <div className="format-options">
           {FORMATS.map((f) => (
-            <button
+            <Chip
               key={f.value}
-              type="button"
-              className={'format-chip' + (avoidFormats.includes(f.value) ? ' is-avoided' : '')}
+              toggle
+              tone="danger"
+              pressed={avoidFormats.includes(f.value)}
               onClick={() => toggleAvoidFormat(f.value)}
-              aria-pressed={avoidFormats.includes(f.value)}
             >
               {avoidFormats.includes(f.value) ? 'avoid: ' : ''}
               {f.label}
-            </button>
+            </Chip>
           ))}
         </div>
       </section>
@@ -397,11 +394,8 @@ export default function ProfileScreen() {
         {inferred.length > 0 && (
           <ul className="trait-list">
             {inferred.map((t) => (
-              <li className="trait-chip" key={t}>
-                <span>{t}</span>
-                <button className="trait-remove" onClick={() => removeInferred(t)} aria-label={`Remove`}>
-                  ×
-                </button>
+              <li key={t}>
+                <Chip onRemove={() => removeInferred(t)}>{t}</Chip>
               </li>
             ))}
           </ul>
