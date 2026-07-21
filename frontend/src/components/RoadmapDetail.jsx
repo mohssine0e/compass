@@ -1,5 +1,6 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import {
+  applyReplan,
   deleteRoadmap,
   deleteRoadmapStep,
   getRoadmap,
@@ -8,6 +9,7 @@ import {
   patchEntry,
   proposeNewModule,
   regenerateModuleScope,
+  replanModules,
   reorderRoadmapSteps,
   setRoadmapArchived,
   updateModule,
@@ -16,6 +18,7 @@ import ExpandModuleModal from './ExpandModuleModal'
 import LearningPathView from './LearningPathView'
 import ModuleProposalModal from './ModuleProposalModal'
 import ProgressBar from './ProgressBar'
+import ReplanModulesModal from './ReplanModulesModal'
 import StepDeepView from './StepDeepView'
 import VerifyModal from './VerifyModal'
 import { Badge, Button, Menu } from './ui'
@@ -88,6 +91,8 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   const [regeneratingModuleId, setRegeneratingModuleId] = useState(null)
   // Whether a new module is being drafted to insert (Phase 18), or null.
   const [insertingModule, setInsertingModule] = useState(false)
+  // Whether the remaining unexpanded modules are being replanned (Phase 18), or null.
+  const [replanning, setReplanning] = useState(false)
   // Structural tree vs. the ordered "what's next" learning path (Phase 13).
   const [view, setView] = useState('tree')
 
@@ -322,6 +327,9 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   // Whether this roadmap's top level is modules rather than plain steps (Phase 18: gates the
   // "insert a module" affordance, distinct from "+ Add step").
   const hasModules = children.some((c) => c.type === 'roadmap')
+  // At least one module isn't expanded yet (Phase 18: gates "Replan remaining modules" — there's
+  // nothing to redraft once every module already has steps).
+  const hasRemainingModules = children.some((c) => c.type === 'roadmap' && c.children.length === 0)
   const currentIdx = children.findIndex((c) => c.id === currentId)
   const completedAbove = isFlat && currentIdx > 0 ? currentIdx : 0
   const collapseCompleted = isFlat && !reorderMode && !showCompleted && completedAbove > 4
@@ -590,9 +598,16 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           {renderInsertInput(children.length)}
           <li className="step-insert-row">
             {hasModules ? (
-              <button className="step-insert-btn" onClick={() => setInsertingModule(true)}>
-                + Insert a module
-              </button>
+              <>
+                <button className="step-insert-btn" onClick={() => setInsertingModule(true)}>
+                  + Insert a module
+                </button>
+                {hasRemainingModules && (
+                  <button className="step-insert-btn" onClick={() => setReplanning(true)}>
+                    Replan remaining modules
+                  </button>
+                )}
+              </>
             ) : (
               <button className="step-insert-btn" onClick={() => startInsert(children.length)}>
                 + Add step
@@ -662,6 +677,19 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           onClose={() => setInsertingModule(false)}
           onApplied={async () => {
             setInsertingModule(false)
+            await load()
+          }}
+        />
+      )}
+
+      {replanning && (
+        <ReplanModulesModal
+          roadmapId={id}
+          draft={replanModules}
+          accept={applyReplan}
+          onClose={() => setReplanning(false)}
+          onApplied={async () => {
+            setReplanning(false)
             await load()
           }}
         />

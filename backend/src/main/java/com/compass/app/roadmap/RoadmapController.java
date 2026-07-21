@@ -10,6 +10,8 @@ import com.compass.app.roadmap.dto.GenerationJobResponse;
 import com.compass.app.roadmap.dto.InsertModuleRequest;
 import com.compass.app.roadmap.dto.InsertStepRequest;
 import com.compass.app.roadmap.dto.ReorderStepsRequest;
+import com.compass.app.roadmap.dto.ReplanModuleItem;
+import com.compass.app.roadmap.dto.ReplanModulesRequest;
 import com.compass.app.roadmap.dto.RoadmapResponse;
 import com.compass.app.roadmap.dto.UpdateModuleRequest;
 import org.springframework.http.HttpStatus;
@@ -195,6 +197,23 @@ public class RoadmapController {
         Entry roadmap = service.getRoadmap(id);
         RoadmapResponse body = RoadmapResponse.of(roadmap, service::stepsOf);
         return ResponseEntity.status(HttpStatus.CREATED).body(body);
+    }
+
+    /**
+     * Redraft every not-yet-expanded module given real progress so far (Phase 18) —
+     * "replan remaining modules." Nothing changes yet; accept via {@link #applyReplan}.
+     */
+    @PostMapping("/{id}/modules/replan-proposal")
+    public List<ReplanModuleItem> replanProposal(@PathVariable Long id) {
+        return service.replanRemainingModules(id);
+    }
+
+    /** Apply an accepted replan. Body is {modules: [{moduleId, title, scope}]}. */
+    @PutMapping("/{id}/modules/replan")
+    public RoadmapResponse applyReplan(@PathVariable Long id, @RequestBody ReplanModulesRequest request) {
+        service.applyReplan(id, request.modules());
+        Entry roadmap = service.getRoadmap(id);
+        return RoadmapResponse.of(roadmap, service::stepsOf);
     }
 
     /** "What this step covers" bullets for the deep view — generated once, then cached. */

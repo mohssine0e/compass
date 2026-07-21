@@ -11,6 +11,7 @@ import com.compass.app.profile.ProfileService;
 import com.compass.app.roadmap.dto.CreateRoadmapRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapResponse;
+import com.compass.app.roadmap.dto.ReplanModuleItem;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -375,6 +376,87 @@ public class RoadmapService {
             sb.append('\n');
         }
         return sb.length() == 0 ? null : sb.toString();
+    }
+
+    /**
+     * Redraft every not-yet-expanded module given real progress so far (Phase 18) — "replan
+     * remaining modules." Propose half; nothing changes until {@link #applyReplan} is called
+     * with the (possibly edited) result. Each item carries its module's real id so accepting it
+     * doesn't need any index translation.
+     */
+    @Transactional(readOnly = true)
+    public List<ReplanModuleItem> replanRemainingModules(Long roadmapId) {
+        Entry roadmap = getRoadmap(roadmapId);
+        if (!roadmapAi.isAvailable()) {
+            throw new IllegalStateException("Drafting is unavailable right now — edit modules yourself.");
+        }
+
+        List<Entry> expanded = new ArrayList<>();
+        List<Entry> remaining = new ArrayList<>();
+        for (Entry m : repository.findByParentIdOrderByOrderIndexAsc(roadmapId)) {
+            if (m.getType() != EntryType.ROADMAP) {
+                continue;
+            }
+            boolean hasSteps = !repository.findByParentIdOrderByOrderIndexAsc(m.getId()).isEmpty();
+            (hasSteps ? expanded : remaining).add(m);
+        }
+        if (remaining.isEmpty()) {
+            throw new IllegalArgumentException("Every module is already expanded — nothing to replan.");
+        }
+
+        List<RoadmapAiService.OutlineModule> redrafted = roadmapAi.replanModules(
+                stringOf(roadmap, "title"), expandedModulesContext(expanded),
+                remainingModulesContext(remaining), storedAssessmentContext(roadmap), remaining.size());
+        if (redrafted == null) {
+            throw new IllegalStateException(
+                    "Couldn't replan the remaining modules right now — edit them yourself.");
+        }
+
+        List<ReplanModuleItem> result = new ArrayList<>();
+        for (int i = 0; i < remaining.size(); i++) {
+            RoadmapAiService.OutlineModule m = redrafted.get(i);
+            result.add(new ReplanModuleItem(
+                    remaining.get(i).getId(), m.title(), m.scope()));
+        }
+        return result;
+    }
+
+    /** Apply an accepted replan (Phase 18) — the accept half of {@link #replanRemainingModules}. */
+    @Transactional
+    public void applyReplan(Long roadmapId, List<ReplanModuleItem> modules) {
+        for (ReplanModuleItem m : modules) {
+            updateModule(roadmapId, m.moduleId(), m.title(), m.scope());
+        }
+    }
+
+    /** Already-expanded modules with their real done/total counts, for the replan prompt. */
+    private String expandedModulesContext(List<Entry> modules) {
+        StringBuilder sb = new StringBuilder();
+        for (Entry m : modules) {
+            List<Entry> steps = repository.findByParentIdOrderByOrderIndexAsc(m.getId());
+            long done = steps.stream().filter(s -> s.getStatus() == EntryStatus.DONE).count();
+            sb.append("- ").append(stringOf(m, "title"));
+            String scope = stringOf(m, "scope");
+            if (scope != null && !scope.isBlank()) {
+                sb.append(": ").append(scope);
+            }
+            sb.append(" (").append(done).append('/').append(steps.size()).append(" steps done)\n");
+        }
+        return sb.length() == 0 ? null : sb.toString();
+    }
+
+    /** Not-yet-expanded modules in order, for the replan prompt. */
+    private String remainingModulesContext(List<Entry> modules) {
+        StringBuilder sb = new StringBuilder();
+        for (Entry m : modules) {
+            sb.append("- ").append(stringOf(m, "title"));
+            String scope = stringOf(m, "scope");
+            if (scope != null && !scope.isBlank()) {
+                sb.append(": ").append(scope);
+            }
+            sb.append('\n');
+        }
+        return sb.toString();
     }
 
     /** Every resource url already attached anywhere in this roadmap's tree (Phase 13 dedup). */

@@ -199,6 +199,25 @@ public class RoadmapAiService {
         return oneModule(json);
     }
 
+    /**
+     * Redraft every not-yet-expanded module given real progress so far (Phase 18) — "replan
+     * remaining modules." Returns one redraft per remaining module, in order; {@code null} on
+     * failure, or if the model didn't return the same count it was given (a restructure it was
+     * told not to do by default — safer to surface nothing than misalign ids to modules).
+     */
+    public List<OutlineModule> replanModules(String roadmapTitle, String doneModulesContext,
+                                             String remainingModulesContext, String assessmentContext,
+                                             int expectedCount) {
+        JsonNode json = ai.generate("outline replan", PromptTemplates.REPLAN_SYSTEM,
+                PromptTemplates.replanUser(roadmapTitle, doneModulesContext, remainingModulesContext,
+                        assessmentContext));
+        if (json == null) {
+            return null;
+        }
+        List<OutlineModule> modules = parseModules(json.get("modules"));
+        return modules.size() == expectedCount ? modules : null;
+    }
+
     private static OutlineModule oneModule(JsonNode json) {
         if (json == null) {
             return null;

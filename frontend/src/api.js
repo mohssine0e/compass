@@ -129,6 +129,23 @@ export function insertModule(roadmapId, title, scope, position) {
   })
 }
 
+/**
+ * Redraft every not-yet-expanded module given real progress so far (Phase 18). Returns
+ * `[{moduleId, title, scope}]`, one per remaining module. Nothing persisted; accept via
+ * `applyReplan`.
+ */
+export function replanModules(roadmapId) {
+  return request(`/roadmaps/${roadmapId}/modules/replan-proposal`, { method: 'POST' })
+}
+
+/** Apply an accepted replan. `modules` is `[{moduleId, title, scope}]`. */
+export function applyReplan(roadmapId, modules) {
+  return request(`/roadmaps/${roadmapId}/modules/replan`, {
+    method: 'PUT',
+    body: JSON.stringify({ modules }),
+  })
+}
+
 /** Active roadmaps with their steps and progress, newest first (archived excluded). */
 export function listRoadmaps() {
   return request('/roadmaps')

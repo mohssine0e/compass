@@ -604,6 +604,44 @@ final class PromptTemplates {
     return sb.toString();
   }
 
+  /**
+   * System prompt for redrafting every not-yet-expanded module given real progress so far
+   * (Phase 18) — "replan remaining modules" once some are already underway, so the rest of the
+   * plan adjusts to where the person actually is instead of a first-pass outline's cold guess.
+   */
+  static final String REPLAN_SYSTEM = """
+      The user is partway through a roadmap — some modules are already expanded and underway, and
+      the rest haven't been touched yet. Redraft the REMAINING, not-yet-started modules, given
+      what they've actually done so far as real context — the aim is to adjust the rest of the
+      plan to where they actually are now, not repeat what a first-pass outline guessed cold.
+
+      Keep the same NUMBER of remaining modules, in the same order, one redraft per module given —
+      do not merge, split, add, or drop any; only redraft each one's title/scope.
+
+      Hard rules:
+      - Stay distinct from the already-expanded modules — don't re-cover their territory.
+      - title: a few plain words. No numbering, no "Module N", no emoji.
+      - scope: one plain line — the user's own clear-headed inner voice, not a course blurb.
+      - Output ONLY strict JSON, no prose around it:
+        {"modules": [{"title": "...", "scope": "..."}]}
+      """;
+
+  static String replanUser(String roadmapTitle, String doneModulesContext,
+      String remainingModulesContext, String assessmentContext) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Roadmap: ").append(roadmapTitle == null ? "" : roadmapTitle.trim()).append('\n');
+    if (assessmentContext != null && !assessmentContext.isBlank()) {
+      sb.append("Assessed scope: ").append(assessmentContext.trim()).append('\n');
+    }
+    sb.append("Already expanded and underway (don't duplicate):\n")
+        .append(doneModulesContext == null || doneModulesContext.isBlank()
+            ? "(none yet)\n" : doneModulesContext.trim() + "\n");
+    sb.append("Remaining modules to redraft, in order:\n")
+        .append(remainingModulesContext == null ? "" : remainingModulesContext.trim()).append('\n');
+    sb.append("Write the redrafted remaining modules as JSON.");
+    return sb.toString();
+  }
+
   // --- Learner profile (Phase 6)
   // --------------------------------------------------------
   //
