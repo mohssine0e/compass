@@ -1,5 +1,6 @@
 package com.compass.app.verification;
 
+import com.compass.app.ai.RoadmapAiService;
 import com.compass.app.ai.VerificationAiService;
 import com.compass.app.entry.Entry;
 import com.compass.app.entry.EntryRepository;
@@ -31,10 +32,13 @@ public class VerificationService {
 
   private final EntryRepository repository;
   private final VerificationAiService verifyAi;
+  private final RoadmapAiService roadmapAi;
 
-  public VerificationService(EntryRepository repository, VerificationAiService verifyAi) {
+  public VerificationService(EntryRepository repository, VerificationAiService verifyAi,
+                             RoadmapAiService roadmapAi) {
     this.repository = repository;
     this.verifyAi = verifyAi;
+    this.roadmapAi = roadmapAi;
   }
 
   /**
@@ -90,8 +94,41 @@ public class VerificationService {
       step.setStatus(EntryStatus.DONE);
       Entry saved = repository.save(step);
       touchParent(saved);
+      return new VerifyResult(true, null, null, null);
     }
-    return new VerifyResult(eval.passed(), eval.gap());
+    return withSuggestedPrerequisite(step, eval.gap());
+  }
+
+  /**
+   * On a failed check (Phase 20), see whether the named gap plausibly maps to a missing
+   * prerequisite — real evidence from what was actually missed, not a guess from the step's text
+   * alone. Best-effort: a failed/unavailable proposal just means the gap shows with no
+   * suggestion, same as before this existed.
+   */
+  private VerifyResult withSuggestedPrerequisite(Entry step, String gap) {
+    RoadmapAiService.Prerequisite prereq = roadmapAi.isAvailable()
+        ? roadmapAi.proposePrerequisite(parentTitle(step), textOf(step), priorStepsText(step), gap)
+        : null;
+    return new VerifyResult(false, gap,
+        prereq == null ? null : prereq.step(), prereq == null ? null : prereq.why());
+  }
+
+  /** Step texts already before this one under the same parent, earliest first. */
+  private String priorStepsText(Entry step) {
+    if (step.getParentId() == null) {
+      return null;
+    }
+    StringBuilder sb = new StringBuilder();
+    for (Entry s : repository.findByParentIdOrderByOrderIndexAsc(step.getParentId())) {
+      if (s.getId().equals(step.getId())) {
+        break;
+      }
+      String text = stringField(s, "text");
+      if (text != null) {
+        sb.append("- ").append(text).append('\n');
+      }
+    }
+    return sb.toString();
   }
 
   /**
@@ -145,7 +182,8 @@ public class VerificationService {
     step.setContent(content);
     Entry saved = repository.save(step);
     touchParent(saved);
-    return new VerifyResult(eval.passed(), eval.gap());
+    return eval.passed() ? new VerifyResult(true, null, null, null)
+        : withSuggestedPrerequisite(saved, eval.gap());
   }
 
   private static void scheduleRecheck(Map<String, Object> content, int stage) {

@@ -89,7 +89,7 @@ public class ReformulateService {
       }
       case "add_prerequisite" -> {
         RoadmapAiService.Prerequisite p =
-            roadmapAi.proposePrerequisite(roadmapTitle, stepText, priorStepsText(roadmapId, step));
+            roadmapAi.proposePrerequisite(roadmapTitle, stepText, priorStepsText(roadmapId, step), null);
         if (p == null) {
           throw new IllegalStateException("Nothing obvious to revisit first — this may just need doing.");
         }

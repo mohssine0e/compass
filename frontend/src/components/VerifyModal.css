@@ -53,6 +53,39 @@
   font-size: 0.9rem;
 }
 
+/* A verification-triggered prerequisite suggestion (Phase 20) — real evidence from the named
+   gap, still propose→approve→apply, never inserted silently. */
+.verify-prerequisite {
+  padding: 10px 14px;
+  border-left: 2px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.verify-prerequisite-text {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+.verify-prerequisite-why {
+  margin: 0;
+  color: var(--faint);
+  font-size: 0.85rem;
+}
+
+.verify-prerequisite-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.verify-prerequisite-done {
+  margin: 0;
+  color: var(--faint);
+  font-size: 0.85rem;
+}
+
 .verify-actions {
   display: flex;
   align-items: center;

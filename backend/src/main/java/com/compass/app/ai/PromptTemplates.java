@@ -591,6 +591,12 @@ final class PromptTemplates {
       first is missing. Propose ONE concrete prerequisite step to do before it — the missing
       groundwork that would unblock it. If nothing is genuinely missing, say so honestly.
 
+      If a specific named gap is given (e.g. from a failed understanding check), weigh it heavily
+      — it's real evidence of what's actually missing, not a guess. Only propose a prerequisite
+      that would plausibly close that gap; if the gap doesn't look like a missing-prerequisite
+      problem at all (just a shaky answer on something they do have the grounding for), say
+      nothing is missing rather than inventing a prerequisite to have something to propose.
+
       Hard rules:
       - At most one prerequisite step. Only propose it if it's really a prerequisite, not filler.
       - It is one concrete, checkable action. Plain, direct, imperative. No emoji, no encouragement.
@@ -600,13 +606,17 @@ final class PromptTemplates {
         {"prerequisite": "...", "why": "..."}   or, if nothing is missing:   {"prerequisite": null}
       """;
 
-  static String prerequisiteUser(String roadmapTitle, String stepText, String priorSteps) {
+  static String prerequisiteUser(String roadmapTitle, String stepText, String priorSteps, String gapHint) {
     StringBuilder sb = new StringBuilder();
     sb.append("Roadmap: ").append(roadmapTitle == null ? "" : roadmapTitle.trim()).append('\n');
     if (priorSteps != null && !priorSteps.isBlank()) {
       sb.append("Steps already before it:\n").append(priorSteps.trim()).append('\n');
     }
     sb.append("The stalled step: ").append(stepText == null ? "" : stepText.trim()).append('\n');
+    if (gapHint != null && !gapHint.isBlank()) {
+      sb.append("Specific gap just found (from a failed understanding check): ")
+          .append(gapHint.trim()).append('\n');
+    }
     sb.append("Write the prerequisite proposal as JSON.");
     return sb.toString();
   }

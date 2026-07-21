@@ -747,6 +747,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
         <VerifyModal
           step={toStepShape(findNode(children, verifyStepId))}
           onClose={() => setVerifyStepId(null)}
+          onChanged={load}
           onPassed={async () => {
             setVerifyStepId(null)
             setDoneNote(null)

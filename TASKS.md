@@ -1302,12 +1302,33 @@ separate systems.
     severities, a real usable `suggestedFix` only for the one genuine wording issue, and
     `stepIndex: null`/`suggestedFix: null` for the three issues with no single safe step to pin
     or fix.
-- [ ] Add verification-triggered prerequisite suggestions.
+- [x] Add verification-triggered prerequisite suggestions.
   - When a Phase 8 verification (`VerificationService`) comes back with a named gap (`gap` field
     already exists on the verify result per the existing `verify-gap` UI class), check whether that
     gap plausibly maps to a missing prerequisite and, if so, surface a suggested `add_prerequisite`
     reformulation the founder can accept/dismiss (reusing the existing `ReformulatePanel`/propose-
     apply flow) rather than only ever being founder-triggered.
+  - Reused the existing `RoadmapAiService.proposePrerequisite` rather than a new AI call type —
+    added a nullable `gapHint` param, threaded through from `VerificationService.verify`/`recheck`
+    on a failed check. The prompt weighs a given gap heavily as real evidence (not a guess from
+    the step's text alone) and is explicitly told to say nothing's missing if the gap doesn't
+    actually look like a missing-prerequisite problem, rather than inventing one to have
+    something to propose. `VerifyResult` gained nullable `suggestedPrerequisite`/
+    `suggestedPrerequisiteWhy` fields.
+  - Frontend: `VerifyModal` shows the suggestion (when present) right alongside the existing gap
+    text, with Accept (calls the existing `applyReformulate({kind: 'add_prerequisite', ...})` —
+    no new apply path) and Dismiss actions; nothing is ever inserted silently. Accept also
+    triggers the roadmap tree to reload (new `onChanged` callback) so the newly-inserted step
+    shows up without waiting for the modal to close.
+  - Live-verified in parts, not full round-trip: this session's fast-tier quota (Groq, Gemini
+    Flash) — the only tier `verify`'s evaluation call uses, by design, since it has no heavy-tier
+    fallback — was fully exhausted for the day by the time this task was reached, so the actual
+    `verify()` → failed-check → suggestion path couldn't be exercised end-to-end live. Confirmed
+    the new gap-aware piece directly instead: a direct provider call with the extended prompt and
+    a realistic named gap ("could not name any specific automation tool") correctly proposed a
+    genuinely relevant prerequisite addressing that exact gap, with a clear one-line why. Worth a
+    real end-to-end spot-check once fast-tier quota resets, same as Phase 18/19's recheck-list
+    pattern for exactly this kind of same-day quota wall.
 - [ ] Acceptance: break down a step and confirm the resulting substeps carry kind/weight/resources
   (not just plain text); confirm a founder profile's known skills aren't re-taught in a break-down;
   confirm resource suggestions for two different modules never repeat a URL (already true) and now

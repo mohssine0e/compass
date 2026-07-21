@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getStepCheck, verifyStep } from '../api'
+import { applyReformulate, getStepCheck, verifyStep } from '../api'
 import { Button, Modal, TextArea } from './ui'
 import './VerifyModal.css'
 
@@ -7,11 +7,19 @@ import './VerifyModal.css'
 // user's answer, and judges it — on a pass the step is marked done; on a miss it names the
 // specific gap in the self-talk voice and stays open. "Mark done anyway" is an honest escape
 // hatch (self-reported), so the gate never traps you.
-export default function VerifyModal({ step, onClose, onPassed, onOverride }) {
+//
+// A named gap can also carry a suggested prerequisite (Phase 20) — real evidence of what's
+// actually missing, not a guess — that the founder accepts (reusing the existing add_prerequisite
+// propose→approve→apply flow) or dismisses; never inserted silently.
+export default function VerifyModal({ step, onClose, onPassed, onOverride, onChanged }) {
   const [question, setQuestion] = useState(null)
   const [loading, setLoading] = useState(true)
   const [answer, setAnswer] = useState('')
   const [gap, setGap] = useState(null)
+  const [suggestedPrerequisite, setSuggestedPrerequisite] = useState(null)
+  const [prerequisiteWhy, setPrerequisiteWhy] = useState(null)
+  // null | 'accepted' | 'dismissed'
+  const [prerequisiteHandled, setPrerequisiteHandled] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
@@ -32,13 +40,32 @@ export default function VerifyModal({ step, onClose, onPassed, onOverride }) {
     setBusy(true)
     setError(null)
     setGap(null)
+    setSuggestedPrerequisite(null)
+    setPrerequisiteHandled(null)
     try {
       const res = await verifyStep(step.id, answer.trim())
       if (res.passed) {
         onPassed()
       } else {
         setGap(res.gap || 'That answer does not hold up yet.')
+        setSuggestedPrerequisite(res.suggestedPrerequisite || null)
+        setPrerequisiteWhy(res.suggestedPrerequisiteWhy || null)
       }
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function acceptPrerequisite() {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await applyReformulate(step.id, { kind: 'add_prerequisite', prerequisite: suggestedPrerequisite })
+      setPrerequisiteHandled('accepted')
+      onChanged?.()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -64,6 +91,25 @@ export default function VerifyModal({ step, onClose, onPassed, onOverride }) {
             autoFocus
           />
           {gap && <p className="verify-gap">{gap}</p>}
+          {suggestedPrerequisite && !prerequisiteHandled && (
+            <div className="verify-prerequisite">
+              <p className="verify-prerequisite-text">
+                Something might be missing first: "{suggestedPrerequisite}"
+              </p>
+              {prerequisiteWhy && <p className="verify-prerequisite-why">{prerequisiteWhy}</p>}
+              <span className="verify-prerequisite-actions">
+                <button className="step-edit-btn" onClick={acceptPrerequisite} disabled={busy}>
+                  Accept
+                </button>
+                <button className="step-edit-btn" onClick={() => setPrerequisiteHandled('dismissed')} disabled={busy}>
+                  Dismiss
+                </button>
+              </span>
+            </div>
+          )}
+          {prerequisiteHandled === 'accepted' && (
+            <p className="verify-prerequisite-done">Added as a step before this one.</p>
+          )}
           {error && <p className="verify-error">{error}</p>}
           <div className="verify-actions">
             <Button variant="danger" className="verify-override" onClick={onOverride} disabled={busy}>

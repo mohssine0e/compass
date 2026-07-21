@@ -261,7 +261,7 @@ public class ResurfacingService {
             }
             case "add_prerequisite" -> {
                 RoadmapAiService.Prerequisite p =
-                        roadmapAi.proposePrerequisite(title, stepText, priorStepsText(roadmap.getId(), step));
+                        roadmapAi.proposePrerequisite(title, stepText, priorStepsText(roadmap.getId(), step), null);
                 if (p == null) {
                     throw new IllegalStateException("Nothing obvious is missing first — this may just need doing.");
                 }

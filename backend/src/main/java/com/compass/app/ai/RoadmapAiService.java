@@ -477,10 +477,13 @@ public class RoadmapAiService {
     /**
      * A single prerequisite step to insert before a stalled step, or {@code null} when
      * unavailable, both providers fail, or the model judges nothing is genuinely missing.
+     * {@code gapHint} (Phase 20, nullable) is a specific named gap from a failed verification
+     * check — real evidence weighed heavily, not just the step's own text to guess from.
      */
-    public Prerequisite proposePrerequisite(String roadmapTitle, String stepText, String priorSteps) {
+    public Prerequisite proposePrerequisite(String roadmapTitle, String stepText, String priorSteps,
+                                            String gapHint) {
         JsonNode json = ai.generate(AiTier.HEAVY, "prerequisite proposal", PromptTemplates.PREREQUISITE_SYSTEM,
-                PromptTemplates.prerequisiteUser(roadmapTitle, stepText, priorSteps));
+                PromptTemplates.prerequisiteUser(roadmapTitle, stepText, priorSteps, gapHint));
         if (json == null) {
             return null;
         }
