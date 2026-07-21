@@ -4,11 +4,13 @@ import com.compass.app.entry.Entry;
 import com.compass.app.roadmap.dto.AddModuleStepsRequest;
 import com.compass.app.roadmap.dto.ArchiveRoadmapRequest;
 import com.compass.app.roadmap.dto.CreateRoadmapRequest;
+import com.compass.app.roadmap.dto.ExpandModulesBatchRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapResponse;
 import com.compass.app.roadmap.dto.GenerationJobResponse;
 import com.compass.app.roadmap.dto.InsertModuleRequest;
 import com.compass.app.roadmap.dto.InsertStepRequest;
+import com.compass.app.roadmap.dto.ModuleExpansionResult;
 import com.compass.app.roadmap.dto.ReorderStepsRequest;
 import com.compass.app.roadmap.dto.ReplanModuleItem;
 import com.compass.app.roadmap.dto.ReplanModulesRequest;
@@ -149,6 +151,17 @@ public class RoadmapController {
     @PostMapping("/{id}/modules/{moduleId}/expand")
     public GenerateRoadmapResponse expandModule(@PathVariable Long id, @PathVariable Long moduleId) {
         return service.expandModule(id, moduleId);
+    }
+
+    /**
+     * Expand more than one module at once (Phase 19), only on the founder's explicit request —
+     * runs concurrently (capped) rather than sequentially. Each module's result is independent;
+     * accept each one via {@link #addModuleSteps} as usual.
+     */
+    @PostMapping("/{id}/modules/expand-batch")
+    public List<ModuleExpansionResult> expandModulesBatch(
+            @PathVariable Long id, @RequestBody ExpandModulesBatchRequest request) {
+        return service.expandModulesBatch(id, request.moduleIds());
     }
 
     /** Accept a module's expanded steps. Body is {draftSteps: [...]}, same shape as roadmap creation. */

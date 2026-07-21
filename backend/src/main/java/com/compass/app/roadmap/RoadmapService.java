@@ -11,6 +11,7 @@ import com.compass.app.profile.ProfileService;
 import com.compass.app.roadmap.dto.CreateRoadmapRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapResponse;
+import com.compass.app.roadmap.dto.ModuleExpansionResult;
 import com.compass.app.roadmap.dto.ReplanModuleItem;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Roadmaps are just entries: a {@code roadmap} row plus ordered {@code roadmap_step}
@@ -38,6 +42,10 @@ public class RoadmapService {
     // on (Phase 19) — smaller prompts are faster and cheaper on every provider, especially the
     // slowest tier. Resource discovery separately reads the full uncapped result set.
     private final int maxGroundingSnippets;
+    // Bounds concurrency for expandModulesBatch (Phase 19) so a batch of many modules doesn't
+    // trip rate limits across the whole provider chain at once.
+    private static final int MAX_CONCURRENT_EXPANSIONS = 4;
+    private final ExecutorService expansionExecutor = Executors.newFixedThreadPool(MAX_CONCURRENT_EXPANSIONS);
 
     public RoadmapService(EntryRepository repository, RoadmapAiService roadmapAi,
                           ProfileService profileService, SearchGroundingService searchGrounding,
@@ -171,6 +179,32 @@ public class RoadmapService {
         }
         return GenerateRoadmapResponse.outline(outline.title(), outline.interpretation(),
                 outline.modules(), outline.skipped(), sources, assessment);
+    }
+
+    /**
+     * Expand more than one module at once (Phase 19), only on the founder's explicit request —
+     * the existing "expand on demand" single-module flow (JIT, quota-conscious per Phase 13)
+     * stays the silent default. Each module's expansion runs independently via
+     * {@link #expandModule}, concurrently rather than sequentially, capped at
+     * {@value #MAX_CONCURRENT_EXPANSIONS} at once so a batch of many modules doesn't trip rate
+     * limits across the whole provider chain simultaneously. One module failing doesn't affect
+     * the others — each result records its own success or error.
+     */
+    public List<ModuleExpansionResult> expandModulesBatch(Long roadmapId, List<Long> moduleIds) {
+        List<CompletableFuture<ModuleExpansionResult>> futures = moduleIds.stream()
+                .map(moduleId -> CompletableFuture.supplyAsync(
+                        () -> expandOneForBatch(roadmapId, moduleId), expansionExecutor))
+                .toList();
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        return futures.stream().map(CompletableFuture::join).toList();
+    }
+
+    private ModuleExpansionResult expandOneForBatch(Long roadmapId, Long moduleId) {
+        try {
+            return new ModuleExpansionResult(moduleId, expandModule(roadmapId, moduleId), null);
+        } catch (RuntimeException ex) {
+            return new ModuleExpansionResult(moduleId, null, ex.getMessage());
+        }
     }
 
     /**

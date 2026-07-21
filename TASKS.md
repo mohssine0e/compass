@@ -971,11 +971,25 @@ real headroom, before or alongside this phase's other work:
     whole set) stays uncapped. Applied to both the goal-level draft and module-expand paths.
 
 **Parallel module expansion**
-- [ ] Where the founder explicitly requests expanding more than one module at once (not as a
+- [x] Where the founder explicitly requests expanding more than one module at once (not as a
   silent default — the existing "expand on demand"/JIT design in Phase 13 is deliberate and
   quota-conscious, and should stay the default), use `CompletableFuture.allOf()` to run those
   expansions concurrently rather than sequentially, capped at a small concurrency limit (e.g. 4)
   to avoid tripping rate limits across the whole provider chain at once.
+  - `RoadmapService.expandModulesBatch` (new `POST /roadmaps/{id}/modules/expand-batch`) runs
+    each module's `expandModule` on a dedicated fixed-size (4) executor via
+    `CompletableFuture.supplyAsync` + `allOf`; one module failing doesn't affect the others —
+    each result records its own success or error independently. Frontend: a checkbox per
+    unexpanded module (`node-group-select`, opt-in, off by default) plus an "Expand N selected"
+    action bar that appears at 2+ selections, opening `ExpandModulesBatchModal` — the same
+    per-module `StepProposalEditor` review/accept as the single-module flow, just stacked so the
+    founder reviews and accepts each module independently without reopening the action per
+    module.
+  - Live-verified: batch-expanded 4 real unexpanded modules on the same roadmap at once — all 4
+    drafted successfully (8, 8, 10, and 10 steps) in ~112s total wall-clock, vs. an expected
+    ~280–360s sequentially at this session's per-call latency; `system_events` shows 4 Gemini Pro
+    quota failures logged within about a second of each other on two separate occasions,
+    confirming genuinely concurrent execution, not accidental serialization.
 
 **Considered and deferred (from the "MAIN ADDITIONS" doc) — not built in this phase:**
 - **Task-Aware Intelligent Routing across 6 discrete providers/3 tiers** — founder's confirmed

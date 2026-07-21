@@ -15,6 +15,7 @@ import {
   updateModule,
 } from '../api'
 import ExpandModuleModal from './ExpandModuleModal'
+import ExpandModulesBatchModal from './ExpandModulesBatchModal'
 import LearningPathView from './LearningPathView'
 import ModuleProposalModal from './ModuleProposalModal'
 import ProgressBar from './ProgressBar'
@@ -87,6 +88,11 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   const [showCompleted, setShowCompleted] = useState(false)
   // The module currently being expanded into steps (Phase 13), or null.
   const [expandingModuleId, setExpandingModuleId] = useState(null)
+  // Modules picked for a batch expansion (Phase 19) — an explicit, opt-in action; the default
+  // stays expanding one module at a time. A Set of module ids, or the batch modal's module list
+  // once the founder confirms.
+  const [selectedModuleIds, setSelectedModuleIds] = useState(new Set())
+  const [batchExpanding, setBatchExpanding] = useState(null)
   // The module currently being redrafted (Phase 18: "regenerate this module"), or null.
   const [regeneratingModuleId, setRegeneratingModuleId] = useState(null)
   // Whether a new module is being drafted to insert (Phase 18), or null.
@@ -466,8 +472,23 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   // A module (child roadmap) that hasn't been expanded into steps yet (Phase 13) — its own row
   // with the module's scope and an explicit "Expand" action, instead of being treated as a leaf.
   function EmptyModuleNode({ node, depth }) {
+    const selected = selectedModuleIds.has(node.id)
     return (
       <li className="node-group node-group-empty" style={depth ? { marginLeft: depth * 22 } : undefined}>
+        <input
+          type="checkbox"
+          className="node-group-select"
+          checked={selected}
+          aria-label={`Select ${nodeText(node)} for batch expansion`}
+          onChange={(e) => {
+            setSelectedModuleIds((prev) => {
+              const next = new Set(prev)
+              if (e.target.checked) next.add(node.id)
+              else next.delete(node.id)
+              return next
+            })
+          }}
+        />
         <span className="node-group-caret" aria-hidden="true">·</span>
         <span className="node-group-title">
           {nodeText(node)}
@@ -556,6 +577,26 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
       </div>
 
       {doneNote && <p className="roadmap-done-note">{doneNote}</p>}
+
+      {selectedModuleIds.size >= 2 && !reorderMode && (
+        <div className="roadmap-batch-bar">
+          <span>{selectedModuleIds.size} modules selected</span>
+          <Button variant="ghost" onClick={() => setSelectedModuleIds(new Set())}>
+            Clear
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => {
+              const picked = [...selectedModuleIds]
+                .map((id) => findNode(children, id))
+                .filter(Boolean)
+              setBatchExpanding(picked)
+            }}
+          >
+            Expand {selectedModuleIds.size} selected
+          </Button>
+        </div>
+      )}
 
       {view === 'path' && !reorderMode ? (
         <LearningPathView roadmap={roadmap} onOpenStep={setDeepStepId} />
@@ -657,6 +698,18 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
             setExpandingModuleId(null)
             await load()
           }}
+        />
+      )}
+
+      {batchExpanding && (
+        <ExpandModulesBatchModal
+          roadmapId={id}
+          modules={batchExpanding}
+          onClose={() => {
+            setBatchExpanding(null)
+            setSelectedModuleIds(new Set())
+          }}
+          onApplied={load}
         />
       )}
 

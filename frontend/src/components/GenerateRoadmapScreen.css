@@ -82,6 +82,20 @@
   padding-left: 32px;
 }
 
+/* One module's section in the batch-expansion review (Phase 19). */
+.gen-step-batch-module {
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+
+.gen-step-batch-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+
 .gen-module-scope {
   margin-left: 32px;
   width: calc(100% - 32px);

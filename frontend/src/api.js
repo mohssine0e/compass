@@ -95,6 +95,18 @@ export function expandModule(roadmapId, moduleId) {
   return request(`/roadmaps/${roadmapId}/modules/${moduleId}/expand`, { method: 'POST' })
 }
 
+/**
+ * Expand more than one module at once (Phase 19), only on explicit request — runs concurrently
+ * on the backend. Each entry in the returned array is `{moduleId, result, error}`; accept each
+ * one independently via `addModuleSteps`.
+ */
+export function expandModulesBatch(roadmapId, moduleIds) {
+  return request(`/roadmaps/${roadmapId}/modules/expand-batch`, {
+    method: 'POST',
+    body: JSON.stringify({ moduleIds }),
+  })
+}
+
 /** Accept a module's expanded steps. `draftSteps` is the same shape as roadmap creation. */
 export function addModuleSteps(roadmapId, moduleId, draftSteps) {
   return request(`/roadmaps/${roadmapId}/modules/${moduleId}/steps`, {

@@ -383,6 +383,26 @@
   font-weight: 400;
 }
 
+/* Checkbox to pick modules for a batch expansion (Phase 19) — opt-in, off by default. */
+.node-group-select {
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Action bar shown once 2+ modules are picked for batch expansion. */
+.roadmap-batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--faint);
+  font-size: 0.85rem;
+}
+
 .step-item.is-done .step-marker {
   color: var(--brass);
 }
