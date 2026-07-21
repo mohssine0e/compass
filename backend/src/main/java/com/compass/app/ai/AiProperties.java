@@ -4,9 +4,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
 /**
- * AI configuration (prefix {@code compass.ai}). Two OpenAI-compatible providers with
- * failover — primary first, backup on any failure. Only the API keys are secret; they
- * come from environment variables so they never live in the codebase.
+ * AI configuration (prefix {@code compass.ai}). Three OpenAI-compatible providers with
+ * failover, tried in order — primary, then backup, then tertiary — so one provider's quota
+ * running dry (a real, recurring issue on free tiers under real testing/usage volume) cascades
+ * to the next instead of failing the whole call. Only the API keys are secret; they come from
+ * environment variables so they never live in the codebase.
  */
 @Component
 @ConfigurationProperties(prefix = "compass.ai")
@@ -20,6 +22,10 @@ public class AiProperties {
     private int generationMaxTokens = 1200;
     private Provider primary = new Provider();
     private Provider backup = new Provider();
+    // A third, independent quota pool (e.g. NVIDIA's build.nvidia.com free NIM catalog) tried
+    // only once both primary and backup fail — same model class, not a quality downgrade, just
+    // more headroom before the caller has to degrade to a plain-text fallback.
+    private Provider tertiary = new Provider();
 
     public long getTimeoutSeconds() {
         return timeoutSeconds;
@@ -69,12 +75,29 @@ public class AiProperties {
         this.backup = backup;
     }
 
+    public Provider getTertiary() {
+        return tertiary;
+    }
+
+    public void setTertiary(Provider tertiary) {
+        this.tertiary = tertiary;
+    }
+
     /** One OpenAI-compatible provider (base URL + key + model). */
     public static class Provider {
         private String name = "provider";
         private String baseUrl;
         private String apiKey;
         private String model;
+        // Some models (e.g. NVIDIA's Nemotron Super, a reasoning model) emit a lengthy internal
+        // "thinking" trace that counts against max_tokens even though only the final JSON
+        // matters here — this asks the model to skip it via the chat_template_kwargs the NIM
+        // API supports. Left off (false) for providers that don't have/need this.
+        private boolean disableThinking = false;
+        // A slower free-tier provider (observed: NVIDIA's NIM catalog taking ~40s for a real
+        // outline prompt vs. Groq's sub-second responses) needs more patience than the shared
+        // generation timeout gives it. Null (the default) means "use the shared timeout."
+        private Long timeoutSecondsOverride;
 
         /** Configured only when both a base URL and an API key are present. */
         public boolean isConfigured() {
@@ -112,6 +135,22 @@ public class AiProperties {
 
         public void setModel(String model) {
             this.model = model;
+        }
+
+        public boolean isDisableThinking() {
+            return disableThinking;
+        }
+
+        public void setDisableThinking(boolean disableThinking) {
+            this.disableThinking = disableThinking;
+        }
+
+        public Long getTimeoutSecondsOverride() {
+            return timeoutSecondsOverride;
+        }
+
+        public void setTimeoutSecondsOverride(Long timeoutSecondsOverride) {
+            this.timeoutSecondsOverride = timeoutSecondsOverride;
         }
     }
 }

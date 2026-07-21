@@ -44,18 +44,22 @@ public class AiJsonGenerator {
 
     /** True when at least one provider could serve a generation request. */
     public boolean isAvailable() {
-        return props.getPrimary().isConfigured() || props.getBackup().isConfigured();
+        return props.getPrimary().isConfigured() || props.getBackup().isConfigured()
+                || props.getTertiary().isConfigured();
     }
 
     /**
-     * Try primary then backup with the generation budget; parse the reply as JSON. Returns
-     * {@code null} on any failure, logging a brief event ({@code feature} names which call
-     * degraded) when both providers fail or the reply won't parse.
+     * Try primary, then backup, then tertiary, with the generation budget; parse the reply as
+     * JSON. Returns {@code null} on any failure, logging a brief event ({@code feature} names
+     * which call degraded) when every configured provider fails or the reply won't parse.
      */
     public JsonNode generate(String feature, String system, String user) {
         String raw = complete(props.getPrimary(), system, user);
         if (raw == null) {
             raw = complete(props.getBackup(), system, user);
+        }
+        if (raw == null) {
+            raw = complete(props.getTertiary(), system, user);
         }
         if (raw == null) {
             if (isAvailable()) {
@@ -75,8 +79,9 @@ public class AiJsonGenerator {
             return null;
         }
         try {
-            String out = chat.complete(provider, props.getGenerationTimeoutSeconds(),
-                    props.getGenerationMaxTokens(), system, user);
+            long timeout = provider.getTimeoutSecondsOverride() != null
+                    ? provider.getTimeoutSecondsOverride() : props.getGenerationTimeoutSeconds();
+            String out = chat.complete(provider, timeout, props.getGenerationMaxTokens(), system, user);
             return out == null || out.isBlank() ? null : out;
         } catch (RuntimeException ex) {
             log.warn("AI JSON provider ({}) failed: {}", provider.getModel(), ex.getMessage());
@@ -96,9 +101,26 @@ public class AiJsonGenerator {
         }
     }
 
+    /**
+     * Reasoning models (e.g. NVIDIA's Nemotron Super) may prefix the reply with a visible
+     * "thinking" trace before the actual answer — often in a {@code <think>...</think>} block,
+     * sometimes containing stray {@code {}/{}} of its own (code snippets, set notation) that
+     * would otherwise confuse the brace-matching below. Strip it first, whether or not the tags
+     * are closed, so extraction always works from the real answer onward.
+     */
+    private static String stripReasoningTrace(String s) {
+        int openTag = s.indexOf("<think>");
+        if (openTag < 0) {
+            return s;
+        }
+        int closeTag = s.indexOf("</think>", openTag);
+        return closeTag >= 0 ? s.substring(closeTag + "</think>".length()).trim()
+                : s.substring(0, openTag).trim();
+    }
+
     /** Pull the first {...} block out of a reply, stripping any code fences around it. */
     private static String extractJson(String raw) {
-        String s = raw.trim();
+        String s = stripReasoningTrace(raw.trim());
         if (s.startsWith("```")) {
             int firstNewline = s.indexOf('\n');
             if (firstNewline >= 0) {

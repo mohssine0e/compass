@@ -38,11 +38,18 @@ public class AiVoiceService {
                 ? props.getPrimary().getModel() : "not configured";
         String backup = props.getBackup().isConfigured()
                 ? props.getBackup().getModel() : "not configured";
-        if (props.getPrimary().isConfigured() || props.getBackup().isConfigured()) {
-            log.info("AI acknowledgments: primary={}, backup={}.", primary, backup);
+        String tertiary = props.getTertiary().isConfigured()
+                ? props.getTertiary().getModel() : "not configured";
+        if (anyConfigured()) {
+            log.info("AI acknowledgments: primary={}, backup={}, tertiary={}.", primary, backup, tertiary);
         } else {
             log.info("AI acknowledgments disabled (no provider key set) — capture still works.");
         }
+    }
+
+    private boolean anyConfigured() {
+        return props.getPrimary().isConfigured() || props.getBackup().isConfigured()
+                || props.getTertiary().isConfigured();
     }
 
     /**
@@ -98,9 +105,9 @@ public class AiVoiceService {
     }
 
     /**
-     * Try primary then backup; null if neither is configured or both fail. Each provider
-     * failure records a brief event; if both fail (with at least one configured), records the
-     * feature-level fall-back to the plain path too.
+     * Try primary, then backup, then tertiary; null if none is configured or all fail. Each
+     * provider failure records a brief event; if all fail (with at least one configured),
+     * records the feature-level fall-back to the plain path too.
      */
     private String generate(String feature, String system, String user) {
         String line = tryProvider(props.getPrimary(), system, user);
@@ -111,7 +118,11 @@ public class AiVoiceService {
         if (line != null) {
             return line;
         }
-        if (props.getPrimary().isConfigured() || props.getBackup().isConfigured()) {
+        line = tryProvider(props.getTertiary(), system, user);
+        if (line != null) {
+            return line;
+        }
+        if (anyConfigured()) {
             events.aiWarning("fallback",
                     "All AI providers failed for " + feature + "; used the plain fallback.", null);
         }
@@ -153,8 +164,9 @@ public class AiVoiceService {
             return null;
         }
         try {
-            String line = chat.complete(
-                    provider, props.getTimeoutSeconds(), props.getMaxTokens(), system, user);
+            long timeout = provider.getTimeoutSecondsOverride() != null
+                    ? provider.getTimeoutSecondsOverride() : props.getTimeoutSeconds();
+            String line = chat.complete(provider, timeout, props.getMaxTokens(), system, user);
             if (line == null || line.isBlank()) {
                 return null;
             }
