@@ -17,11 +17,11 @@ export default function FocusScreen({ onOpenResurfacing, onOpenRoadmap }) {
     listRoadmaps()
       .then((roadmaps) => {
         if (!alive) return
-        // The first roadmap that's actually mid-flight (has a current step).
-        const inMotion = (roadmaps || []).find((r) => r.progress.currentOrderIndex !== null)
-        if (!inMotion) return setActive(null)
-        const step = inMotion.steps.find((s) => s.orderIndex === inMotion.progress.currentOrderIndex)
-        setActive({ roadmap: inMotion, step })
+        // The first roadmap that's actually mid-flight (has a current step). Roadmaps are a
+        // tree (Phase 13) — the backend already resolves the current leaf, so no need to walk
+        // `children` here ourselves.
+        const inMotion = (roadmaps || []).find((r) => r.progress.currentStepId !== null)
+        setActive(inMotion || null)
       })
       .catch((err) => alive && setError(err.message))
     return () => {
@@ -55,9 +55,11 @@ export default function FocusScreen({ onOpenResurfacing, onOpenRoadmap }) {
         {active === undefined ? (
           <p className="focus-faint">…</p>
         ) : active ? (
-          <button className="focus-card" onClick={() => onOpenRoadmap(active.roadmap.id)}>
-            <span className="focus-card-title">{active.roadmap.title}</span>
-            {active.step && <span className="focus-card-text">Now: {active.step.content.text}</span>}
+          <button className="focus-card" onClick={() => onOpenRoadmap(active.id)}>
+            <span className="focus-card-title">{active.title}</span>
+            {active.progress.currentStepText && (
+              <span className="focus-card-text">Now: {active.progress.currentStepText}</span>
+            )}
             <span className="focus-card-cue">Open →</span>
           </button>
         ) : (

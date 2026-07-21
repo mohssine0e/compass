@@ -174,6 +174,32 @@ public class RoadmapService {
         }
     }
 
+    /**
+     * Every leaf {@code roadmap_step} anywhere in this roadmap's tree — modules and steps-with-
+     * substeps are containers, not leaves, and are skipped. Callers that need "the real units of
+     * work" (e.g. review's stalled-step scan) should use this instead of {@link #stepsOf}, which
+     * only returns direct children and, for a nested roadmap, that's module entries, not steps.
+     */
+    @Transactional(readOnly = true)
+    public List<Entry> leafStepsOf(Long roadmapId) {
+        List<Entry> leaves = new ArrayList<>();
+        collectLeafSteps(roadmapId, leaves);
+        return leaves;
+    }
+
+    private void collectLeafSteps(Long parentId, List<Entry> out) {
+        for (Entry child : repository.findByParentIdOrderByOrderIndexAsc(parentId)) {
+            List<Entry> grandchildren = repository.findByParentIdOrderByOrderIndexAsc(child.getId());
+            if (grandchildren.isEmpty()) {
+                if (child.getType() == EntryType.ROADMAP_STEP) {
+                    out.add(child);
+                }
+            } else {
+                collectLeafSteps(child.getId(), out);
+            }
+        }
+    }
+
     /** The formats the founder marked to avoid (confirmed profile only), or empty. */
     @SuppressWarnings("unchecked")
     private List<String> avoidedFormats() {
@@ -417,16 +443,6 @@ public class RoadmapService {
         return entry;
     }
 
-    /** Load each roadmap together with its ordered steps. */
-    @Transactional(readOnly = true)
-    public List<RoadmapWithSteps> listRoadmapsWithSteps() {
-        List<RoadmapWithSteps> result = new ArrayList<>();
-        for (Entry roadmap : listRoadmaps()) {
-            result.add(new RoadmapWithSteps(roadmap, stepsOf(roadmap.getId())));
-        }
-        return result;
-    }
-
     /**
      * Reorder a roadmap's steps to match {@code orderedStepIds} exactly (every current
      * step, no more, no less) — a partial or mismatched list is rejected rather than
@@ -621,9 +637,5 @@ public class RoadmapService {
             orderedSteps.get(i).setOrderIndex(i);
         }
         repository.saveAll(orderedSteps);
-    }
-
-    /** Small carrier so controllers can map to the response DTO. */
-    public record RoadmapWithSteps(Entry roadmap, List<Entry> steps) {
     }
 }

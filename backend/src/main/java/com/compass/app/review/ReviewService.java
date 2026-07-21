@@ -39,7 +39,11 @@ public class ReviewService {
     List<Entry> ideas = all.stream()
         .filter(e -> e.getType() == EntryType.IDEA && e.getStatus() != EntryStatus.DROPPED)
         .toList();
-    List<RoadmapService.RoadmapWithSteps> roadmaps = roadmapService.listRoadmapsWithSteps();
+    // Top-level roadmaps only (listRoadmaps already excludes modules and archived ones); each
+    // roadmap's real "steps" are its leaf descendants, not its direct children — for a nested
+    // roadmap the direct children are modules, which have a title, not a text/skip/reformulate
+    // history (Phase 13).
+    List<Entry> roadmaps = roadmapService.listRoadmaps();
 
     boolean enough = ideas.size() + roadmaps.size() >= 2;
     if (!enough || !reviewAi.isAvailable()) {
@@ -66,15 +70,16 @@ public class ReviewService {
     return sb.toString();
   }
 
-  private static String formatRoadmaps(List<RoadmapService.RoadmapWithSteps> roadmaps) {
+  private String formatRoadmaps(List<Entry> roadmaps) {
     StringBuilder sb = new StringBuilder();
-    for (RoadmapService.RoadmapWithSteps r : roadmaps) {
-      String title = str(r.roadmap().getContent(), "title");
-      long done = r.steps().stream().filter(s -> s.getStatus() == EntryStatus.DONE).count();
-      Entry current = r.steps().stream()
+    for (Entry roadmap : roadmaps) {
+      String title = str(roadmap.getContent(), "title");
+      List<Entry> leaves = roadmapService.leafStepsOf(roadmap.getId());
+      long done = leaves.stream().filter(s -> s.getStatus() == EntryStatus.DONE).count();
+      Entry current = leaves.stream()
           .filter(s -> s.getStatus() != EntryStatus.DONE && s.getStatus() != EntryStatus.DROPPED)
           .findFirst().orElse(null);
-      sb.append("- ").append(title).append(": ").append(done).append('/').append(r.steps().size())
+      sb.append("- ").append(title).append(": ").append(done).append('/').append(leaves.size())
           .append(" done");
       if (current != null) {
         sb.append(", now on '").append(str(current.getContent(), "text")).append('\'');
@@ -87,11 +92,11 @@ public class ReviewService {
   }
 
   /** Steps that keep stalling — skipped or reformulated repeatedly — across all roadmaps. */
-  private static String formatStalledSteps(List<RoadmapService.RoadmapWithSteps> roadmaps) {
+  private String formatStalledSteps(List<Entry> roadmaps) {
     StringBuilder sb = new StringBuilder();
-    for (RoadmapService.RoadmapWithSteps r : roadmaps) {
-      String title = str(r.roadmap().getContent(), "title");
-      for (Entry step : r.steps()) {
+    for (Entry roadmap : roadmaps) {
+      String title = str(roadmap.getContent(), "title");
+      for (Entry step : roadmapService.leafStepsOf(roadmap.getId())) {
         int reformulated = intOf(step.getContent(), "reformulateCount");
         if (step.getSkipCount() >= 2 || reformulated >= 2) {
           sb.append("- ").append(str(step.getContent(), "text"))

@@ -547,7 +547,7 @@ certainly a Phase 13 regression: `FocusScreen` (or whatever it calls) still expe
 flat `roadmap.steps` array and calls `.find(...)` on it, but roadmaps are now a tree (`children`,
 per `RoadmapNodeResponse`/`RoadmapResponse`).
 
-- [ ] Find the exact break.
+- [x] Find the exact break.
   - Open `frontend/src/components/FocusScreen.jsx` and grep it for `.steps`, `.find(`, and any
     reference to `orderIndex`/`currentOrderIndex` — the pre-Phase-13 `RoadmapResponse` shape had a
     flat `steps: EntryResponse[]` array and a `progress.currentOrderIndex`; the current shape has
@@ -556,30 +556,30 @@ per `RoadmapNodeResponse`/`RoadmapResponse`).
   - Check whatever hook/API call `FocusScreen` uses to fetch roadmap summaries (likely
     `listRoadmaps()` in `api.js`, which already returns the new tree shape) — the crash is in how
     the component *consumes* that response, not in the API layer.
-- [ ] Rewrite the broken lookup(s) to work over the tree.
+- [x] Rewrite the broken lookup(s) to work over the tree.
   - If `FocusScreen` needs "the current step" for a roadmap, use `roadmap.progress.currentStepId` /
     `currentStepText` directly (already computed server-side) instead of re-deriving it from a flat
     array.
   - If it needs to find a specific step by id anywhere in the tree, write (or reuse) a recursive
     `findNode`-style helper the same way `RoadmapDetail.jsx` already has one — do not re-flatten
     the tree with a shallow `.find()` that only checks direct children.
-- [ ] Verify against real data, not just a flat roadmap.
+- [x] Verify against real data, not just a flat roadmap.
   - Test Focus against a roadmap with at least one expanded module and one step that has substeps
     (there's already a "DevOps Cloud Engineering" roadmap with modules in the dev DB to test
     against) — both "Worth revisiting" and "Where you are" sections must render without error.
   - Also test against a fully flat, non-nested roadmap (e.g. "Learn Rust properly") to make sure
     the fix doesn't regress the simple case.
-- [ ] Sweep for the same latent bug elsewhere.
+- [x] Sweep for the same latent bug elsewhere.
   - `grep -rn "\.steps\b" frontend/src` and manually check every hit against whether it assumes
     the pre-Phase-13 flat shape. `ReviewService.java`'s `RoadmapWithSteps`/`listRoadmapsWithSteps()`
     (backend) has the same latent issue noted in passing during Phase 13 work — `stepsOf()` returns
     only *direct* children, so for a nested roadmap those "steps" are actually module entries with
     a `title` field, not `text` — check whether `ReviewService.formatRoadmaps`/`formatStalledSteps`
     silently produce garbled text for nested roadmaps and fix if so.
-- [ ] Acceptance: navigating to Focus with the current real dev data shows no error, either
+- [x] Acceptance: navigating to Focus with the current real dev data shows no error, either
   "Nothing right now. Clear." / an actual worth-revisiting item, and either "..." never gets stuck
   or a real "where you are" summary, for both a flat and a nested roadmap.
-- [ ] **Push + tag `phase-16-complete`.**
+- [x] **Push + tag `phase-16-complete`.**
 
 ---
 
