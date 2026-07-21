@@ -413,8 +413,15 @@ public class RoadmapAiService {
                 dependsOn = null;
             }
             String rationale = AiJsonGenerator.text(node.get("rationale"));
+            JsonNode riskNode = node.get("riskScore");
+            Integer riskScore = riskNode != null && riskNode.isInt()
+                    ? Math.max(1, Math.min(5, riskNode.asInt())) : null;
+            // Only meaningful when a dependency is actually set — drop stray scores otherwise.
+            if (dependsOn == null && dependsOnEntryId == null) {
+                riskScore = null;
+            }
             steps.add(new DraftStep(text.trim(), kind, weight, dependsOn, dependsOnEntryId,
-                    rationale == null ? null : rationale.trim()));
+                    rationale == null ? null : rationale.trim(), riskScore));
         }
         // A same-batch dependsOn index is only valid if it points at an earlier step in THIS
         // batch; drop anything else. A cross-module dependsOnEntryId was already validated above.
@@ -424,7 +431,7 @@ public class RoadmapAiService {
             Integer dep = s.dependsOn() != null && s.dependsOn() >= 0 && s.dependsOn() < i
                     ? s.dependsOn() : null;
             validated.add(new DraftStep(s.text(), s.kind(), s.weight(), dep,
-                    s.dependsOnEntryId(), s.rationale()));
+                    s.dependsOnEntryId(), s.rationale(), s.riskScore()));
         }
         return validated;
     }
@@ -485,14 +492,36 @@ public class RoadmapAiService {
     }
 
     /**
+     * A short checkpoint step connecting a cross-module prerequisite to a step scored as a real
+     * conceptual leap (Phase 20) — cheap enough for the fast tier, since it's one small step, not
+     * a redraft. {@code null} on failure; the caller falls back to no bridge rather than blocking.
+     */
+    public String bridgeStep(String priorStepText, String nextStepText) {
+        JsonNode json = ai.generate(AiTier.FAST, "bridge step", PromptTemplates.BRIDGE_STEP_SYSTEM,
+                PromptTemplates.bridgeStepUser(priorStepText, nextStepText));
+        if (json == null) {
+            return null;
+        }
+        String step = AiJsonGenerator.text(json.get("step"));
+        return step == null || step.isBlank() ? null : step.trim();
+    }
+
+    /**
      * One proposed step. {@code kind} is concept|project, {@code weight} is small|medium|large,
      * {@code dependsOn} is the 0-based index of an earlier prerequisite step in this same batch
      * (or null), {@code dependsOnEntryId} (Phase 18) is the real id of a prerequisite step from an
-     * EARLIER module instead (or null — at most one of the two is ever set), and
-     * {@code rationale} says why it's here / why the prerequisite comes first.
+     * EARLIER module instead (or null — at most one of the two is ever set), {@code rationale}
+     * says why it's here / why the prerequisite comes first, and {@code riskScore} (Phase 20,
+     * 1-5, nullable) is the model's read of how big a conceptual leap the dependency represents —
+     * only meaningful when a dependency is actually set. A cross-module dependency scored 4+ gets
+     * an auto-generated bridge step (see {@link RoadmapService}).
      */
     public record DraftStep(String text, String kind, String weight, Integer dependsOn,
-                            Long dependsOnEntryId, String rationale) {
+                            Long dependsOnEntryId, String rationale, Integer riskScore) {
+        public DraftStep(String text, String kind, String weight, Integer dependsOn,
+                         Long dependsOnEntryId, String rationale) {
+            this(text, kind, weight, dependsOn, dependsOnEntryId, rationale, null);
+        }
     }
 
     /** A proposed prerequisite step plus the one-line reason it comes first. */

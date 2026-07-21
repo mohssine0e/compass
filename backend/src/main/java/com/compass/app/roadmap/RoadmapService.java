@@ -298,12 +298,60 @@ public class RoadmapService {
         if (steps == null) {
             return null;
         }
+        steps = withBridgeSteps(steps, priorStepTextById);
         List<String> stepTexts = steps.stream().map(RoadmapAiService.DraftStep::text).toList();
         List<List<RoadmapAiService.Resource>> resources = roadmapAi.suggestResources(
                 moduleTitle, stepTexts, grounding == null ? null : grounding.results(),
                 avoidedFormats(), usedResourceUrls(roadmapId));
         return GenerateRoadmapResponse.proposal(moduleTitle, null, steps, resources, List.of(),
                 sources, null, priorStepTextById);
+    }
+
+    // A cross-module dependency scored this risky or higher gets an auto-generated bridge step
+    // (Phase 20) — deliberately only cross-module, not same-batch, per TASKS.md: the conceptual
+    // gap is most likely to be real across modules, and scoring every same-batch pair would
+    // generate a bridge step between nearly every two steps in a module.
+    private static final int BRIDGE_RISK_THRESHOLD = 4;
+
+    /**
+     * Insert an auto-generated "bridge step" (Phase 20) immediately before any step whose
+     * cross-module dependency was scored a real conceptual leap ({@code riskScore >= 4}) —
+     * connecting the earlier module's concept to this one. Same propose→approve→apply pattern as
+     * everything else: nothing is persisted here, and the founder can remove the bridge step from
+     * the proposal before accepting like any other step. Falls back to leaving the step
+     * unchanged if the (cheap, fast-tier) bridge-step call fails — a missing bridge isn't worth
+     * blocking the whole module draft over.
+     */
+    private List<RoadmapAiService.DraftStep> withBridgeSteps(
+            List<RoadmapAiService.DraftStep> steps, Map<Long, String> priorStepTextById) {
+        List<RoadmapAiService.DraftStep> result = new ArrayList<>();
+        int[] oldToNew = new int[steps.size()];
+        for (int i = 0; i < steps.size(); i++) {
+            RoadmapAiService.DraftStep step = steps.get(i);
+            String priorText = step.dependsOnEntryId() != null
+                    ? priorStepTextById.get(step.dependsOnEntryId()) : null;
+            boolean needsBridge = priorText != null && step.riskScore() != null
+                    && step.riskScore() >= BRIDGE_RISK_THRESHOLD;
+            String bridgeText = needsBridge ? roadmapAi.bridgeStep(priorText, step.text()) : null;
+
+            if (bridgeText != null) {
+                result.add(new RoadmapAiService.DraftStep(bridgeText, "concept", "small", null,
+                        step.dependsOnEntryId(), "Bridges into the next step."));
+                int bridgeIndex = result.size() - 1;
+                // The original step now depends on the bridge (same-batch) instead of reaching
+                // across modules directly.
+                result.add(new RoadmapAiService.DraftStep(step.text(), step.kind(), step.weight(),
+                        bridgeIndex, null, step.rationale()));
+            } else {
+                // No bridge needed (or the call failed) — carry the step through unchanged, only
+                // remapping its same-batch dependsOn index for any steps inserted before it.
+                Integer remapped = step.dependsOn() != null ? oldToNew[step.dependsOn()] : null;
+                result.add(new RoadmapAiService.DraftStep(step.text(), step.kind(), step.weight(),
+                        remapped, step.dependsOnEntryId(), step.rationale(), step.riskScore()));
+            }
+            oldToNew[i] = result.size() - 1;
+        }
+        return result;
     }
 
     /**

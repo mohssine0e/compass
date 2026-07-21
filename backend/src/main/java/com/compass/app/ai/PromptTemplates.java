@@ -434,6 +434,10 @@ final class PromptTemplates {
         prerequisite, not just "comes before it in the roadmap".
       - rationale: one short plain line saying why this step is here — and if a dependency is set,
         why that step comes first. No praise, no filler.
+      - riskScore: ONLY set when dependsOnIndex or dependsOnEntryId is set — an honest 1-5 read of
+        how big a conceptual leap this step is from that prerequisite (1 = trivial continuation,
+        5 = a real jump that could lose someone). Leave null when there's no dependency, or when
+        the leap is small (don't inflate scores).
 
       Hard rules:
       - Size the number of steps to the assessed scope given below and this module's own scope —
@@ -441,7 +445,7 @@ final class PromptTemplates {
         not the primary sizing mechanism).
       - Stay inside this module's scope — don't wander into other modules' territory.
       - Output ONLY strict JSON, no prose around it:
-        {"steps": [{"text": "...", "kind": "concept", "weight": "medium", "dependsOnIndex": null, "dependsOnEntryId": null, "rationale": "..."}]}
+        {"steps": [{"text": "...", "kind": "concept", "weight": "medium", "dependsOnIndex": null, "dependsOnEntryId": null, "rationale": "...", "riskScore": null}]}
       """;
 
   static String expandModuleUser(String roadmapTitle, String moduleTitle, String moduleScope,
@@ -550,6 +554,29 @@ final class PromptTemplates {
     }
     sb.append("Write the smaller steps as JSON.");
     return sb.toString();
+  }
+
+  /**
+   * System prompt for a "bridge step" (Phase 20) — a small checkpoint auto-inserted between a
+   * cross-module prerequisite and a step the model scored as a real conceptual leap (riskScore
+   * 4+), explicitly connecting the two. Kept cheap/fast-tier: one short step, not a full redraft.
+   */
+  static final String BRIDGE_STEP_SYSTEM = """
+      Two roadmap steps are linked as prerequisite → dependent, but the gap between them is a
+      real conceptual leap. Write ONE small checkpoint step that sits between them and explicitly
+      connects the prior concept to the new one — a ~5-minute bridge, not a full lesson.
+
+      Hard rules:
+      - One concrete, checkable action. Plain, direct, imperative. No numbering, no "Step 1:", no
+        encouragement, no emoji.
+      - It must name or reference the actual connection — not a generic "review before continuing".
+      - Output ONLY strict JSON, no prose around it: {"step": "..."}
+      """;
+
+  static String bridgeStepUser(String priorStepText, String nextStepText) {
+    return "Prerequisite step: " + (priorStepText == null ? "" : priorStepText.trim())
+        + "\nStep it leads into: " + (nextStepText == null ? "" : nextStepText.trim())
+        + "\nWrite the bridge step as JSON.";
   }
 
   /**

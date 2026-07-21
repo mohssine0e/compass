@@ -1077,7 +1077,7 @@ separate systems.
     substeps with real `kind`/`weight`/`rationale` and 1-2 real resources each (grounded, no
     duplicate URLs), applied, and confirmed persisted correctly as real child entries with
     `progress: {total: 4, done: 0}` on the parent step.
-- [ ] **Dependency risk scoring + conceptual bridge steps** (merged in from the suggestions doc).
+- [x] **Dependency risk scoring + conceptual bridge steps** (merged in from the suggestions doc).
   - When generation assigns a `dependsOn` link (same-batch or cross-module, per Phase 18), also
     have the model assign a `riskScore` (1–5) representing the conceptual leap between the two
     steps — add this as an optional field on the existing `DraftStep`/step JSON contract, not a
@@ -1089,6 +1089,22 @@ separate systems.
   - Scope this modestly at first: only apply it to cross-module dependencies (where the conceptual
     gap is most likely to be real) rather than every same-batch sequential step, to avoid
     generating a bridge step between nearly every pair of steps in a module.
+  - Implemented as: `riskScore` added to `EXPAND_MODULE_SYSTEM`'s JSON contract and `DraftStep`
+    (nullable, only meaningful when a dependency is set); `RoadmapAiService.bridgeStep` (new,
+    FAST tier — one short connecting step is cheap enough not to need the heavy tier) drafts the
+    checkpoint; `RoadmapService.withBridgeSteps` inserts it immediately before any step whose
+    cross-module dependency scored 4+, rewiring that step to depend on the new same-batch bridge
+    instead and remapping every other same-batch `dependsOn` index shifted by the insertion — all
+    within the existing proposal (nothing persisted, so removing the bridge before accepting
+    works via the existing step-removal UI, no new affordance needed).
+  - Live-verified in stages: confirmed `riskScore` parses correctly from two real cross-module
+    dependencies on this session's test roadmap (scored 3 and 2 — genuinely low-risk, natural
+    continuations, so no bridge was warranted, which is itself the correct behavior); manually
+    traced the index-remapping algorithm against that real 8-step batch (including a step
+    depending on another step that itself got rewritten) and confirmed every reference resolves
+    correctly; confirmed the bridge-step LLM call itself round-trips real, genuinely-connecting
+    content via a direct provider call (AWS IAM → Kubernetes service accounts, for a
+    deliberately large synthetic conceptual gap).
 - [ ] Decide and enforce a substep nesting depth limit.
   - Pick a hard cap (2 or 3 levels total, including the top-level module) and enforce it
     server-side in `RoadmapService.splitStep` (reject/error if the target step's depth is already
