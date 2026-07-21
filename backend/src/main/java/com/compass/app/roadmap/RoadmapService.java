@@ -34,13 +34,20 @@ public class RoadmapService {
     private final RoadmapAiService roadmapAi;
     private final ProfileService profileService;
     private final SearchGroundingService searchGrounding;
+    // Search results arrive relevance-ordered; only the top few are worth spending prompt tokens
+    // on (Phase 19) — smaller prompts are faster and cheaper on every provider, especially the
+    // slowest tier. Resource discovery separately reads the full uncapped result set.
+    private final int maxGroundingSnippets;
 
     public RoadmapService(EntryRepository repository, RoadmapAiService roadmapAi,
-                          ProfileService profileService, SearchGroundingService searchGrounding) {
+                          ProfileService profileService, SearchGroundingService searchGrounding,
+                          @org.springframework.beans.factory.annotation.Value(
+                                  "${compass.search.max-context-snippets:5}") int maxGroundingSnippets) {
         this.repository = repository;
         this.roadmapAi = roadmapAi;
         this.profileService = profileService;
         this.searchGrounding = searchGrounding;
+        this.maxGroundingSnippets = maxGroundingSnippets;
     }
 
     /**
@@ -127,7 +134,7 @@ public class RoadmapService {
         // Ground once, in real sources when a search key is configured; null (and no sources)
         // when it isn't, and generation proceeds ungrounded. Shared by assessment and drafting.
         SearchGroundingService.Grounding grounding = searchGrounding.ground(goal);
-        String groundingContext = grounding == null ? null : grounding.context();
+        String groundingContext = grounding == null ? null : grounding.contextTop(maxGroundingSnippets);
         List<String> sources = grounding == null ? List.of() : grounding.sources();
 
         onStage.accept(GenerationStage.ASSESSING);
@@ -216,8 +223,10 @@ public class RoadmapService {
         String roadmapTitle = stringOf(roadmap, "title");
         String moduleTitle = stringOf(module, "title");
         String moduleScope = stringOf(module, "scope");
+        // Pruned to what's relevant to THIS module's topic (Phase 19), not the founder's whole
+        // profile every time — see ProfileContext.forModulePrompt.
         String profileContext = profileService.confirmedProfile()
-                .map(ProfileContext::forPrompt)
+                .map(p -> ProfileContext.forModulePrompt(p, moduleTitle, moduleScope))
                 .orElse(null);
         String assessmentContext = storedAssessmentContext(roadmap);
 
@@ -247,7 +256,7 @@ public class RoadmapService {
         String groundingQuery = moduleScope != null && !moduleScope.isBlank()
                 ? moduleTitle + ": " + moduleScope : moduleTitle;
         SearchGroundingService.Grounding grounding = searchGrounding.ground(groundingQuery);
-        String groundingContext = grounding == null ? null : grounding.context();
+        String groundingContext = grounding == null ? null : grounding.contextTop(maxGroundingSnippets);
         List<String> sources = grounding == null ? List.of() : grounding.sources();
 
         List<RoadmapAiService.DraftStep> steps = roadmapAi.expandModule(roadmapTitle, moduleTitle,

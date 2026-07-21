@@ -938,16 +938,37 @@ real headroom, before or alongside this phase's other work:
     `LearningPathView`).
 
 **Caching and pruning (the actual quota-relief mechanism, independent of provider count)**
-- [ ] Extend the Phase 13 search-result cache pattern to generation calls themselves: cache the
+- [x] Extend the Phase 13 search-result cache pattern to generation calls themselves: cache the
   outline/module-expansion result keyed by a hash of (goal + clarifications + assessment +
   grounding highlights), TTL-bounded (e.g. 1 hour), so repeated/test generations on the same input
   don't re-burn quota. This is a bigger quota saver during development/testing than adding more
   providers, and should be done regardless of how many providers are in the chain.
-- [ ] Prune prompt context instead of sending everything every time: reduce the profile passed
+  - `AiGenerationCache` (same `ConcurrentHashMap` + TTL + bounded-size pattern as
+    `SearchGroundingService`'s cache, generic over the return type) wraps `moduleOutline`,
+    `proposeFlat`, and `expandModule` in `RoadmapAiService`, keyed by a SHA-256 hash of each
+    call's real inputs (for `expandModule`, including the offered prior-step ids/text, since
+    that changes which cross-module `dependsOnEntryId` choices are even valid).
+  - Live-verified: called `expandModule` on the same real module twice in a row — the cached
+    steps (text/kind/weight/dependsOn/dependsOnEntryId) came back byte-identical both times,
+    confirming the AI drafting call itself isn't re-run. Total wall-clock time didn't drop
+    because `suggestResources` is a separate, deliberately uncached call (it dedupes against
+    URLs used elsewhere in the roadmap, which can change between calls) — caching that wasn't
+    in scope here.
+- [x] Prune prompt context instead of sending everything every time: reduce the profile passed
   into a module-expansion call to only what's relevant to that specific module's topic (not the
   founder's full profile every time), and cap search-grounding snippets passed into a prompt to
   the top few most relevant rather than the full result set. Smaller prompts are faster and
   cheaper on every provider, especially the slowest tier.
+  - `ProfileContext.forModulePrompt` prunes only the skills line (traits/experience/inferred/
+    stated preferences stay in full — they describe how the founder learns, not what they
+    already know about this specific topic) to those sharing vocabulary with the module's
+    title/scope, falling back to a capped slice of the full list if nothing overlaps (never
+    silently shows the model nothing about what they know) — and is a no-op below 8 skills,
+    since pruning an already-short list isn't worth the risk of dropping something relevant.
+  - `SearchGroundingService.Grounding.contextTop(n)` truncates the relevance-ordered snippet
+    context to its top N entries (`compass.search.max-context-snippets`, default 5) before it
+    reaches a prompt; `results()` (used for resource discovery, which needs real URLs across the
+    whole set) stays uncapped. Applied to both the goal-level draft and module-expand paths.
 
 **Parallel module expansion**
 - [ ] Where the founder explicitly requests expanding more than one module at once (not as a

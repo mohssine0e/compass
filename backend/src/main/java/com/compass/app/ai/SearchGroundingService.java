@@ -272,6 +272,25 @@ public class SearchGroundingService {
      * draws from.
      */
     public record Grounding(String context, List<String> sources, List<Result> results) {
+
+        /**
+         * {@code context}, truncated to its top {@code maxEntries} snippets (Phase 19) — results
+         * arrive relevance-ordered from the search provider, so this is a safe truncation, not a
+         * lossy one. Smaller prompts are faster and cheaper on every provider, especially the
+         * slowest tier. {@code results()} (used for resource discovery, which needs real URLs
+         * across the whole set) is deliberately left uncapped — only the prompt-facing snippet
+         * text is pruned here.
+         */
+        public String contextTop(int maxEntries) {
+            if (context == null || context.isBlank() || maxEntries <= 0) {
+                return context;
+            }
+            String[] lines = context.split("\n");
+            if (lines.length <= maxEntries) {
+                return context;
+            }
+            return String.join("\n", java.util.Arrays.copyOfRange(lines, 0, maxEntries));
+        }
     }
 
     /**

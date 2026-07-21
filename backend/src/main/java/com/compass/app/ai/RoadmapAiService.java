@@ -24,9 +24,11 @@ import java.util.Set;
 public class RoadmapAiService {
 
     private final AiJsonGenerator ai;
+    private final AiGenerationCache cache;
 
-    public RoadmapAiService(AiJsonGenerator ai) {
+    public RoadmapAiService(AiJsonGenerator ai, AiGenerationCache cache) {
         this.ai = ai;
+        this.cache = cache;
     }
 
     /** True when at least one provider could serve a generation request. */
@@ -116,6 +118,12 @@ public class RoadmapAiService {
      */
     public RoadmapOutline moduleOutline(String goal, String clarifications, String profileContext,
                                         String groundingContext, String assessmentContext) {
+        String cacheKey = AiGenerationCache.key("outline", goal, clarifications, profileContext,
+                groundingContext, assessmentContext);
+        RoadmapOutline cached = cache.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
         JsonNode json = ai.generate(AiTier.HEAVY, "roadmap outline", PromptTemplates.OUTLINE_SYSTEM,
                 PromptTemplates.outlineUser(goal, clarifications, profileContext, groundingContext,
                         assessmentContext));
@@ -129,7 +137,9 @@ public class RoadmapAiService {
             return null;
         }
         List<String> skipped = AiJsonGenerator.strings(json.get("skipped"));
-        return new RoadmapOutline(title, interpretation, modules, skipped);
+        RoadmapOutline outline = new RoadmapOutline(title, interpretation, modules, skipped);
+        cache.put(cacheKey, outline);
+        return outline;
     }
 
     /**
@@ -139,6 +149,12 @@ public class RoadmapAiService {
      */
     public FlatProposal proposeFlat(String goal, String clarifications, String profileContext,
                                     String groundingContext, String assessmentContext) {
+        String cacheKey = AiGenerationCache.key("flat", goal, clarifications, profileContext,
+                groundingContext, assessmentContext);
+        FlatProposal cached = cache.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
         JsonNode json = ai.generate(AiTier.HEAVY, "flat roadmap", PromptTemplates.FLAT_PROPOSE_SYSTEM,
                 PromptTemplates.flatProposeUser(goal, clarifications, profileContext,
                         groundingContext, assessmentContext));
@@ -152,7 +168,9 @@ public class RoadmapAiService {
             return null;
         }
         List<String> skipped = AiJsonGenerator.strings(json.get("skipped"));
-        return new FlatProposal(title, interpretation, steps, skipped);
+        FlatProposal proposal = new FlatProposal(title, interpretation, steps, skipped);
+        cache.put(cacheKey, proposal);
+        return proposal;
     }
 
     /**
@@ -164,6 +182,14 @@ public class RoadmapAiService {
     public List<DraftStep> expandModule(String roadmapTitle, String moduleTitle, String moduleScope,
                                         String profileContext, String groundingContext,
                                         String assessmentContext, List<PriorStep> priorSteps) {
+        String priorStepsKey = priorSteps == null ? "" : priorSteps.stream()
+                .map(p -> p.id() + ":" + p.text()).collect(java.util.stream.Collectors.joining("|"));
+        String cacheKey = AiGenerationCache.key("expand", roadmapTitle, moduleTitle, moduleScope,
+                profileContext, groundingContext, assessmentContext, priorStepsKey);
+        List<DraftStep> cached = cache.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
         JsonNode json = ai.generate(AiTier.HEAVY, "module expansion", PromptTemplates.EXPAND_MODULE_SYSTEM,
                 PromptTemplates.expandModuleUser(roadmapTitle, moduleTitle, moduleScope,
                         profileContext, groundingContext, assessmentContext, priorSteps));
@@ -173,7 +199,11 @@ public class RoadmapAiService {
         Set<Long> priorIds = priorSteps == null ? Set.of()
                 : priorSteps.stream().map(PriorStep::id).collect(java.util.stream.Collectors.toSet());
         List<DraftStep> steps = parseSteps(json.get("steps"), priorIds);
-        return steps.isEmpty() ? null : steps;
+        if (steps.isEmpty()) {
+            return null;
+        }
+        cache.put(cacheKey, steps);
+        return steps;
     }
 
     /**
