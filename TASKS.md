@@ -1001,7 +1001,24 @@ real headroom, before or alongside this phase's other work:
   + `suggestResources` as a distinct call). Worth a quick audit as part of this phase's testing to
   confirm resource generation isn't blocking the initial step-structure response, but not a new
   task.
-- [ ] **Push + tag `phase-19-complete`. Stop. Let the founder use this for real before continuing.**
+  - Audited: it currently does block — `RoadmapService.attemptFullExpand` calls
+    `suggestResources` synchronously right after `expandModule`, both inside the same request.
+    Confirmed live: the cache-hit test above returned identical cached steps on the second call,
+    but total wall-clock time didn't drop, because the uncached `suggestResources` call still ran
+    in full. Not fixed here — genuinely a new task (splitting the response into two round-trips,
+    or making resource-fetch async/deferred) rather than an audit finding alone, and outside this
+    phase's cost/latency scope; worth a future phase if step-structure responsiveness becomes a
+    real pain point.
+- [x] **Push + tag `phase-19-complete`. Stop. Let the founder use this for real before continuing.**
+  - Every planned task above is implemented and live-verified this session against real API
+    calls, not just code-reviewed: the two-tier provider failover, the NVIDIA `enable_thinking`
+    bugfix (confirmed directly against the live endpoint), all three carried-over Phase 18
+    recheck items, the skeleton fallback path's persisted flag/badge, the generation cache
+    (byte-identical repeated draft), prompt pruning, and parallel batch expansion (confirmed
+    genuinely concurrent via near-simultaneous provider-failure timestamps). Backend compiles and
+    frontend builds clean; backend `mvn test` itself is blocked by a pre-existing local
+    Maven/surefire plugin environment issue unrelated to this session's changes (a corrupted/
+    incompatible surefire plugin jar in the local `.m2` cache), not a code regression.
 
 ---
 
