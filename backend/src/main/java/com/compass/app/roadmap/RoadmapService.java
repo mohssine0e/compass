@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Roadmaps are just entries: a {@code roadmap} row plus ordered {@code roadmap_step}
@@ -42,11 +43,12 @@ public class RoadmapService {
     }
 
     /**
-     * One turn of the AI drafting flow (Phase 4). With no clarifications yet, returns the
-     * clarifying questions to ask first; once they're answered, returns a proposed step
-     * breakdown the user edits and owns. Nothing is persisted until the user creates the
-     * roadmap the normal way. Throws {@link IllegalStateException} when no AI provider can
-     * serve the request, so the caller can fall back to writing steps by hand.
+     * One turn of the AI drafting flow (Phase 4, reshaped by Phase 13). With no clarifications
+     * yet, returns the clarifying questions to ask first; once they're answered, returns a
+     * top-level MODULE OUTLINE — not individual steps. Each module is expanded into its own
+     * steps later, on demand, via {@link #expandModule}. Nothing is persisted until the user
+     * creates the roadmap the normal way. Throws {@link IllegalStateException} when no AI
+     * provider can serve the request, so the caller can fall back to writing steps by hand.
      */
     public GenerateRoadmapResponse generate(GenerateRoadmapRequest req) {
         String goal = req.goal() != null ? req.goal().trim() : "";
@@ -72,28 +74,104 @@ public class RoadmapService {
             return GenerateRoadmapResponse.needsClarification(questions);
         }
 
-        // Ground the draft in real sources when a search key is configured; null (and no
+        // Ground the outline in real sources when a search key is configured; null (and no
         // sources) when it isn't, and generation proceeds ungrounded.
         SearchGroundingService.Grounding grounding = searchGrounding.ground(goal);
         String groundingContext = grounding == null ? null : grounding.context();
         List<String> sources = grounding == null ? List.of() : grounding.sources();
 
-        RoadmapAiService.RoadmapDraft draft = roadmapAi.proposeRoadmap(
+        RoadmapAiService.RoadmapOutline outline = roadmapAi.moduleOutline(
                 goal, formatClarifications(req.clarifications()), profileContext, groundingContext);
-        if (draft == null) {
+        if (outline == null) {
             throw new IllegalStateException(
                     "Drafting is unavailable right now — write the steps yourself.");
         }
 
-        // Suggest real learning resources per step from the grounding pool, honoring the
-        // profile's avoided formats. Empty per step when there's no grounding.
-        List<String> stepTexts = draft.steps().stream()
-                .map(RoadmapAiService.DraftStep::text).toList();
-        List<List<RoadmapAiService.Resource>> resources = roadmapAi.suggestResources(
-                goal, stepTexts, grounding == null ? null : grounding.results(), avoidedFormats());
+        return GenerateRoadmapResponse.outline(outline.title(), outline.modules(), outline.skipped(), sources);
+    }
 
-        return GenerateRoadmapResponse.proposal(
-                draft.title(), draft.steps(), resources, draft.skipped(), sources);
+    /**
+     * Expand one module of a roadmap into its own proposed steps (Phase 13), grounded on that
+     * module's own title/scope (not the whole goal) so search stays relevant and resources stay
+     * scoped. Resources also exclude every url already used elsewhere in this roadmap, so the
+     * same link never appears on two steps. Nothing is persisted — accept via
+     * {@link #addStepsToModule}. Throws {@link IllegalStateException} when drafting fails.
+     */
+    @Transactional(readOnly = true)
+    public GenerateRoadmapResponse expandModule(Long roadmapId, Long moduleId) {
+        Entry roadmap = getRoadmap(roadmapId);
+        Entry module = requireModule(roadmapId, moduleId);
+        if (!roadmapAi.isAvailable()) {
+            throw new IllegalStateException(
+                    "Drafting is unavailable right now — write its steps yourself.");
+        }
+
+        String roadmapTitle = stringOf(roadmap, "title");
+        String moduleTitle = stringOf(module, "title");
+        String moduleScope = stringOf(module, "scope");
+        String profileContext = profileService.confirmedProfile()
+                .map(ProfileContext::forPrompt)
+                .orElse(null);
+
+        String groundingQuery = moduleScope != null && !moduleScope.isBlank()
+                ? moduleTitle + ": " + moduleScope : moduleTitle;
+        SearchGroundingService.Grounding grounding = searchGrounding.ground(groundingQuery);
+        String groundingContext = grounding == null ? null : grounding.context();
+        List<String> sources = grounding == null ? List.of() : grounding.sources();
+
+        List<RoadmapAiService.DraftStep> steps = roadmapAi.expandModule(
+                roadmapTitle, moduleTitle, moduleScope, profileContext, groundingContext);
+        if (steps == null) {
+            throw new IllegalStateException(
+                    "Couldn't draft this module right now — write its steps yourself.");
+        }
+
+        List<String> stepTexts = steps.stream().map(RoadmapAiService.DraftStep::text).toList();
+        List<List<RoadmapAiService.Resource>> resources = roadmapAi.suggestResources(
+                moduleTitle, stepTexts, grounding == null ? null : grounding.results(),
+                avoidedFormats(), usedResourceUrls(roadmapId));
+
+        return GenerateRoadmapResponse.proposal(moduleTitle, steps, resources, List.of(), sources);
+    }
+
+    /** Accept a module's expanded steps (Phase 13) — same shape and validation as roadmap steps. */
+    @Transactional
+    public void addStepsToModule(Long roadmapId, Long moduleId,
+                                  List<CreateRoadmapRequest.DraftStepInput> draftSteps) {
+        requireModule(roadmapId, moduleId);
+        createDraftSteps(moduleId, draftSteps);
+        repository.touchUpdatedAt(roadmapId, Instant.now());
+    }
+
+    private Entry requireModule(Long roadmapId, Long moduleId) {
+        return repository.findById(moduleId)
+                .filter(e -> e.getType() == EntryType.ROADMAP && roadmapId.equals(e.getParentId()))
+                .orElseThrow(() -> new java.util.NoSuchElementException(
+                        "No module " + moduleId + " on roadmap " + roadmapId));
+    }
+
+    /** Every resource url already attached anywhere in this roadmap's tree (Phase 13 dedup). */
+    @Transactional(readOnly = true)
+    public Set<String> usedResourceUrls(Long roadmapId) {
+        Set<String> urls = new HashSet<>();
+        collectResourceUrls(roadmapId, urls);
+        return urls;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void collectResourceUrls(Long parentId, Set<String> urls) {
+        for (Entry child : repository.findByParentIdOrderByOrderIndexAsc(parentId)) {
+            if (child.getType() == EntryType.ROADMAP_STEP && child.getContent() != null
+                    && child.getContent().get("resources") instanceof List<?> list) {
+                for (Object item : list) {
+                    if (item instanceof Map<?, ?> map && map.get("url") instanceof String url
+                            && !url.isBlank()) {
+                        urls.add(url);
+                    }
+                }
+            }
+            collectResourceUrls(child.getId(), urls);
+        }
     }
 
     /** The formats the founder marked to avoid (confirmed profile only), or empty. */
@@ -164,7 +242,37 @@ public class RoadmapService {
             }
         }
 
+        if (req.modules() != null && !req.modules().isEmpty()) {
+            createModules(roadmap.getId(), req.modules());
+        }
+
         return roadmap;
+    }
+
+    /**
+     * Create empty module entries from an accepted outline (Phase 13) — each a child roadmap
+     * under the root, with no steps yet. Steps are added later via {@link #expandModule} +
+     * {@link #addStepsToModule}, so depth only grows where the user asks for it.
+     */
+    private void createModules(Long roadmapId, List<CreateRoadmapRequest.ModuleInput> modules) {
+        int order = 0;
+        for (CreateRoadmapRequest.ModuleInput m : modules) {
+            if (m == null || m.title() == null || m.title().isBlank()) {
+                continue;
+            }
+            Entry module = new Entry();
+            module.setType(EntryType.ROADMAP);
+            module.setStatus(EntryStatus.IN_MOTION);
+            module.setParentId(roadmapId);
+            module.setOrderIndex(order++);
+            Map<String, Object> moduleContent = new HashMap<>();
+            moduleContent.put("title", m.title().trim());
+            if (m.scope() != null && !m.scope().isBlank()) {
+                moduleContent.put("scope", m.scope().trim());
+            }
+            module.setContent(moduleContent);
+            repository.save(module);
+        }
     }
 
     /**
@@ -377,9 +485,10 @@ public class RoadmapService {
     }
 
     /**
-     * Replace one step with several smaller ones at the same position — the "break this step
-     * down" restructuring (Phase 4). The replacements start fresh (captured), so breaking a
-     * step down re-opens it as concrete sub-steps.
+     * Break one step into smaller SUBSTEPS underneath it (Phase 4, reshaped by Phase 13's tree
+     * model) — the "break this step down" restructuring. The original step stays (now a
+     * container, like a module); the substeps are what's actually worked through. Anywhere in
+     * the tree, not just directly under the root.
      */
     @Transactional
     public void splitStep(Long roadmapId, Long stepId, List<String> replacements) {
@@ -392,23 +501,21 @@ public class RoadmapService {
             throw new IllegalArgumentException("Give at least one step to replace it with.");
         }
 
-        List<Entry> steps = stepsOf(roadmapId);
-        int index = indexOfStep(steps, stepId, roadmapId);
-        Entry original = steps.remove(index);
-        repository.delete(original);
+        Entry original = repository.findById(stepId)
+                .filter(s -> s.getType() == EntryType.ROADMAP_STEP)
+                .orElseThrow(() -> new java.util.NoSuchElementException(
+                        "No step " + stepId + " on roadmap " + roadmapId));
 
-        List<Entry> replacementSteps = new ArrayList<>();
-        for (String text : clean) {
-            replacementSteps.add(newStep(roadmapId, text));
-        }
-        steps.addAll(index, replacementSteps);
-        reindexAndSave(steps);
+        List<Entry> substeps = clean.stream().map(text -> newStep(original.getId(), text)).toList();
+        reindexAndSave(substeps);
         repository.touchUpdatedAt(roadmapId, Instant.now());
     }
 
     /**
-     * Insert a prerequisite step immediately before {@code stepId} and record it as that step's
-     * real prerequisite (depends_on) — the "something's missing first" restructuring (Phase 4).
+     * Insert a prerequisite step immediately before {@code stepId}, as its sibling under
+     * whichever parent it actually lives under (root roadmap, a module, or another step's
+     * substeps), and record it as that step's real prerequisite (depends_on) — the "something's
+     * missing first" restructuring (Phase 4).
      */
     @Transactional
     public Entry addPrerequisite(Long roadmapId, Long stepId, String prerequisiteText) {
@@ -417,13 +524,16 @@ public class RoadmapService {
             throw new IllegalArgumentException("A prerequisite needs some text.");
         }
 
-        List<Entry> steps = stepsOf(roadmapId);
-        int index = indexOfStep(steps, stepId, roadmapId);
-        Entry target = steps.get(index);
+        Entry target = repository.findById(stepId)
+                .filter(s -> s.getType() == EntryType.ROADMAP_STEP)
+                .orElseThrow(() -> new java.util.NoSuchElementException(
+                        "No step " + stepId + " on roadmap " + roadmapId));
+        List<Entry> siblings = repository.findByParentIdOrderByOrderIndexAsc(target.getParentId());
+        int index = indexOfStep(siblings, stepId, roadmapId);
 
-        Entry prerequisite = newStep(roadmapId, text);
-        steps.add(index, prerequisite);
-        reindexAndSave(steps); // assigns the new step its id
+        Entry prerequisite = newStep(target.getParentId(), text);
+        siblings.add(index, prerequisite);
+        reindexAndSave(siblings); // assigns the new step its id
         target.setDependsOn(prerequisite.getId());
         repository.save(target);
         repository.touchUpdatedAt(roadmapId, Instant.now());

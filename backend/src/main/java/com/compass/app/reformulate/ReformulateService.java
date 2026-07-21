@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
@@ -112,7 +113,7 @@ public class ReformulateService {
       return List.of();
     }
     List<List<RoadmapAiService.Resource>> perStep = roadmapAi.suggestResources(
-        stepText, List.of(stepText), grounding.results(), avoidedFormats());
+        stepText, List.of(stepText), grounding.results(), avoidedFormats(), Set.of());
     List<Map<String, Object>> out = new ArrayList<>();
     if (!perStep.isEmpty()) {
       for (RoadmapAiService.Resource r : perStep.get(0)) {

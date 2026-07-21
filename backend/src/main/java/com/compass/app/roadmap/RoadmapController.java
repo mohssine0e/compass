@@ -1,6 +1,7 @@
 package com.compass.app.roadmap;
 
 import com.compass.app.entry.Entry;
+import com.compass.app.roadmap.dto.AddModuleStepsRequest;
 import com.compass.app.roadmap.dto.ArchiveRoadmapRequest;
 import com.compass.app.roadmap.dto.CreateRoadmapRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapRequest;
@@ -111,6 +112,26 @@ public class RoadmapController {
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         service.deleteRoadmap(id);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Draft steps for one module of this roadmap (Phase 13) — grounded on the module's own
+     * scope, deduped against resources already used elsewhere in the roadmap. Nothing persisted;
+     * accept via {@link #addModuleSteps}.
+     */
+    @PostMapping("/{id}/modules/{moduleId}/expand")
+    public GenerateRoadmapResponse expandModule(@PathVariable Long id, @PathVariable Long moduleId) {
+        return service.expandModule(id, moduleId);
+    }
+
+    /** Accept a module's expanded steps. Body is {draftSteps: [...]}, same shape as roadmap creation. */
+    @PostMapping("/{id}/modules/{moduleId}/steps")
+    public ResponseEntity<RoadmapResponse> addModuleSteps(@PathVariable Long id, @PathVariable Long moduleId,
+                                                           @RequestBody AddModuleStepsRequest request) {
+        service.addStepsToModule(id, moduleId, request.draftSteps());
+        Entry roadmap = service.getRoadmap(id);
+        RoadmapResponse body = RoadmapResponse.of(roadmap, service::stepsOf);
+        return ResponseEntity.status(HttpStatus.CREATED).body(body);
     }
 
     /** "What this step covers" bullets for the deep view — generated once, then cached. */

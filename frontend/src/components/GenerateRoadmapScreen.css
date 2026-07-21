@@ -67,23 +67,11 @@
   padding-left: 32px;
 }
 
-.gen-badge {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 2px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
+.gen-module-scope {
+  margin-left: 32px;
+  width: calc(100% - 32px);
   color: var(--muted);
-}
-
-.gen-badge.kind-project {
-  color: var(--brass);
-  border-color: var(--brass);
-}
-
-.gen-badge.weight {
-  color: var(--faint);
+  font-size: 0.9rem;
 }
 
 .gen-depends {

@@ -8,6 +8,8 @@ import {
   reorderRoadmapSteps,
   setRoadmapArchived,
 } from '../api'
+import ExpandModuleModal from './ExpandModuleModal'
+import LearningPathView from './LearningPathView'
 import ProgressBar from './ProgressBar'
 import StepDeepView from './StepDeepView'
 import VerifyModal from './VerifyModal'
@@ -65,6 +67,10 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   const [collapsed, setCollapsed] = useState(null)
   // For a flat roadmap: collapse the run of completed steps above the current one (Phase 12).
   const [showCompleted, setShowCompleted] = useState(false)
+  // The module currently being expanded into steps (Phase 13), or null.
+  const [expandingModuleId, setExpandingModuleId] = useState(null)
+  // Structural tree vs. the ordered "what's next" learning path (Phase 13).
+  const [view, setView] = useState('tree')
 
   const load = useCallback(async () => {
     try {
@@ -421,7 +427,29 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     )
   }
 
+  // A module (child roadmap) that hasn't been expanded into steps yet (Phase 13) — its own row
+  // with the module's scope and an explicit "Expand" action, instead of being treated as a leaf.
+  function EmptyModuleNode({ node, depth }) {
+    return (
+      <li className="node-group node-group-empty" style={depth ? { marginLeft: depth * 22 } : undefined}>
+        <span className="node-group-caret" aria-hidden="true">·</span>
+        <span className="node-group-title">
+          {nodeText(node)}
+          {node.content?.scope && <span className="node-group-scope"> — {node.content.scope}</span>}
+        </span>
+        <Button variant="ghost" onClick={() => setExpandingModuleId(node.id)}>
+          Expand this module
+        </Button>
+      </li>
+    )
+  }
+
   function NodeRenderer({ node, depth }) {
+    if (node.type === 'roadmap') {
+      return node.children && node.children.length > 0
+        ? <GroupNode node={node} depth={depth} />
+        : <EmptyModuleNode node={node} depth={depth} />
+    }
     if (node.children && node.children.length > 0) return <GroupNode node={node} depth={depth} />
     return <StepRow node={node} depth={depth} />
   }
@@ -465,7 +493,13 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           </>
         ) : (
           <>
-            {children.length > 1 && (
+            <Button variant={view === 'tree' ? 'primary' : 'ghost'} onClick={() => setView('tree')}>
+              Tree
+            </Button>
+            <Button variant={view === 'path' ? 'primary' : 'ghost'} onClick={() => setView('path')}>
+              Path
+            </Button>
+            {view === 'tree' && children.length > 1 && (
               <Button variant="ghost" onClick={enterReorder}>
                 Reorder
               </Button>
@@ -483,7 +517,9 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
 
       {doneNote && <p className="roadmap-done-note">{doneNote}</p>}
 
-      {reorderMode ? (
+      {view === 'path' && !reorderMode ? (
+        <LearningPathView roadmap={roadmap} onOpenStep={setDeepStepId} />
+      ) : reorderMode ? (
         <ol className="step-list is-reordering">
           {draftOrder.map((node, index) => (
             <li
@@ -555,6 +591,18 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
             const target = verifyStepId
             setVerifyStepId(null)
             await markDone(target)
+          }}
+        />
+      )}
+
+      {expandingModuleId && findNode(children, expandingModuleId) && (
+        <ExpandModuleModal
+          roadmapId={id}
+          module={findNode(children, expandingModuleId)}
+          onClose={() => setExpandingModuleId(null)}
+          onApplied={async () => {
+            setExpandingModuleId(null)
+            await load()
           }}
         />
       )}

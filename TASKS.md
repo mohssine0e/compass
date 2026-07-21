@@ -454,27 +454,39 @@ core product gap from real use — highest value, highest risk. Design and get s
   so re-running generation on the same goal doesn't burn fresh queries.
 
 **Nesting (via the existing `parent_id` tree — no engine change)**
-- [ ] Generalize roadmaps from flat to tree: a roadmap can contain child roadmaps (modules) and a
+- [x] Generalize roadmaps from flat to tree: a roadmap can contain child roadmaps (modules) and a
   step can contain substeps. Ordering is per-parent (`order_index` already handles siblings).
-- [ ] Progress rolls **up**: a parent's progress aggregates over its leaf descendants; "current
-  step" is a leaf-first traversal. Resurfacing, verification, and sessions keep operating on leaves.
-- [ ] Roadmap tree view: render nesting with collapsible modules/substeps; a simple roadmap still
-  reads as a plain linear list.
+  (`RoadmapNodeResponse` recursively builds the tree from `childrenOf`; a leaf is a
+  `roadmap_step` with no children.)
+- [x] Progress rolls **up**: a parent's progress aggregates over its leaf descendants; "current
+  step" is a leaf-first traversal. Resurfacing, verification, and sessions keep operating on
+  leaves. (`RoadmapResponse.of` collects leaves in pre-order and computes total/done/current from
+  them; the roadmap list and resurfacing query only ever surface top-level roadmaps.)
+- [x] Roadmap tree view: render nesting with collapsible modules/substeps; a simple roadmap still
+  reads as a plain linear list. (Fully-done groups collapse by default; an unexpanded module shows
+  its scope + an "Expand this module" action instead of being treated as a leaf.)
 
 **Outline-then-expand generation (replaces one-shot flat generation)**
-- [ ] Goal → clarifying questions → a top-level **module outline** (4–8 modules, each a one-line
-  scope), editable, then accepted — instead of one giant step list up front.
-- [ ] Expand on demand: "expand this module" generates its steps (grounded for that module's
-  topic); "break this step down" generates substeps (reuse the Phase 4 break-down). Depth grows
-  only where the founder wants it.
+- [x] Goal → clarifying questions → a top-level **module outline** (2–8 modules, each a one-line
+  scope — relaxed from a 4–8 floor so a genuinely small goal isn't padded), editable, then
+  accepted — instead of one giant step list up front.
+- [x] Expand on demand: "expand this module" generates its steps (grounded for that module's
+  topic); "break this step down" generates substeps (reuse the Phase 4 break-down — `splitStep`
+  now nests the replacements under the original step instead of deleting it, so the step becomes
+  a container like a module). Depth grows only where the founder wants it.
 
 **Resource discovery, de-duplicated**
-- [ ] Search per module (scoped, more relevant) instead of one goal-wide pool; keep a roadmap-wide
+- [x] Search per module (scoped, more relevant) instead of one goal-wide pool; keep a roadmap-wide
   set of used URLs/domains and cap one resource per topic+format, with a dedup pass before showing
-  — so the same video never appears on two steps.
-- [ ] A "learning path" view: an explicit ordered traversal (current leaf + the next few + their
-  resources + estimated time), distinct from the structural tree — ties into Focus / guided sessions.
-- [ ] **Push + tag `phase-13-complete`. Stop. Let the founder use this for real before continuing.**
+  — so the same video never appears on two steps. (`suggestResources` now threads an exclude set
+  through the per-step loop — fixing duplication *within* one generation call, which was the
+  original reported bug — and `usedResourceUrls` walks the whole tree so a module expansion also
+  avoids everything already attached elsewhere in the roadmap. The model is told the exclude list
+  too, but the Java-side filter is the real guarantee.)
+- [x] A "learning path" view: an explicit ordered traversal (current leaf + the next few + their
+  resources + estimated time), distinct from the structural tree — ties into Focus / guided
+  sessions. (`LearningPathView`, a Tree/Path toggle on the roadmap detail.)
+- [x] **Push + tag `phase-13-complete`. Stop. Let the founder use this for real before continuing.**
 
 ---
 

@@ -153,51 +153,40 @@ final class PromptTemplates {
   }
 
   /**
-   * System prompt for the proposed step breakdown, written after the clarifying
-   * answers are
-   * in. The user edits and owns the result, so err toward concrete, checkable
-   * steps.
+   * System prompt for the top-level MODULE OUTLINE of a big goal (Phase 13). Instead of one
+   * giant flat step list, draft the few big areas the goal breaks into; each module's own steps
+   * are generated later, on demand, when the user expands it.
    */
-  static final String PROPOSE_SYSTEM = """
-      Draft an ordered, step-by-step roadmap for the user's goal, using their answers to the
-      clarifying questions to size and sequence it. The user will edit this before keeping it —
-      draft honestly, don't pad.
+  static final String OUTLINE_SYSTEM = """
+      The user gave a goal big enough to need structure, not a flat checklist. Draft the
+      top-level MODULES it breaks into — the few major areas they'll work through in order. Do
+      NOT write the individual steps yet; each module gets expanded into its own steps later.
 
-      If a profile of what they already know is given, use it: SKIP or condense topics the
-      profile shows they already have, and don't re-teach them. State every such skip plainly
-      in a "skipped" list, each with the reason grounded in their profile (e.g. "skipping basic
-      syntax — your profile lists C++ as solid"). Never skip silently. If nothing is skipped,
-      return an empty "skipped" list.
+      If a profile of what they already know is given, use it: SKIP or condense whole modules the
+      profile shows they already have. State every skip plainly in a "skipped" list with the
+      reason (e.g. "skipping HTTP basics — your profile lists backend work as solid"). Never skip
+      silently. If nothing is skipped, return an empty list.
 
-      If real search results (official docs, established curricula) are given as grounding, use
-      them to shape and CORRECT the roadmap's structure and sequence — prefer how authoritative
-      sources actually order this material over your own memory. Do not invent sources; only the
-      given ones are real.
+      If real search results (official curricula, docs) are given as grounding, prefer how
+      authoritative sources actually structure this material over your own memory. Don't invent
+      sources.
 
-      Each step is an object with these fields:
-      - text: one concrete, checkable action or milestone — plain, direct, imperative. No
-        numbering, no "Step 1:", no motivational language, no emoji.
-      - kind: "concept" for learning/understanding something, or "project" for building/applying
-        it. Mix them — a good roadmap is not just topics to read, it includes real project steps
-        (e.g. "build a small CLI tool using traits and generics"), not only "read about traits".
-      - weight: an honest relative size — "small", "medium", or "large". Do NOT make everything
-        the same; a big topic and a tiny one must not look equal.
-      - dependsOn: the 0-based index of the ONE earlier step that is a genuine prerequisite for
-        this one (must be a lower index than this step), or null if none. This is a real
-        prerequisite, not just "the previous step" — only set it when the step truly cannot be
-        done without that other one.
-      - rationale: one short plain line saying why this step is here — and if dependsOn is set,
-        why that step must come first. No praise, no filler.
+      Each module is an object:
+      - title: a few plain words naming the area (e.g. "Ownership & memory"). No numbering, no
+        "Module 1", no emoji.
+      - scope: one plain line saying what falls under it — the user's own clear-headed inner
+        voice, not a course blurb. No praise, no hype.
 
       Hard rules:
-      - Between 4 and 10 steps. Order them so each builds on the ones before it.
-      - Fit the scope to their stated time and starting point. Don't assume more than they said.
-      - Give the roadmap a short, plain title (a few words) naming what they'll be able to do.
+      - Between 2 and 8 modules, ordered so each builds on the ones before it. A genuinely small
+        goal should get as few modules as it honestly needs — don't pad to look bigger.
+      - Fit the scope to their stated time and starting point. Don't pad.
+      - Give the whole roadmap a short, plain title (a few words) naming what they'll be able to do.
       - Output ONLY strict JSON, no prose around it:
-        {"title": "...", "steps": [{"text": "...", "kind": "concept", "weight": "medium", "dependsOn": null, "rationale": "..."}], "skipped": ["..."]}
+        {"title": "...", "modules": [{"title": "...", "scope": "..."}], "skipped": ["..."]}
       """;
 
-  static String proposeUser(String goal, String clarifications, String profileContext,
+  static String outlineUser(String goal, String clarifications, String profileContext,
       String groundingContext) {
     StringBuilder sb = new StringBuilder();
     sb.append("Goal: ").append(goal == null ? "" : goal.trim()).append('\n');
@@ -209,7 +198,57 @@ final class PromptTemplates {
       sb.append("Real search results to ground the structure in:\n")
           .append(groundingContext.trim()).append('\n');
     }
-    sb.append("Write the roadmap as JSON.");
+    sb.append("Write the module outline as JSON.");
+    return sb.toString();
+  }
+
+  /**
+   * System prompt for expanding ONE module of a roadmap into its ordered steps (Phase 13). Same
+   * step shape as {@link #PROPOSE_SYSTEM}, but scoped to a single module so depth grows only
+   * where the user asks for it.
+   */
+  static final String EXPAND_MODULE_SYSTEM = """
+      The user is expanding ONE module of a larger roadmap into its steps. Draft the ordered,
+      step-by-step breakdown for just this module — nothing from other modules. They'll edit it
+      before keeping it, so draft honestly, don't pad.
+
+      If a profile of what they already know is given, skip or condense what they already have,
+      and don't re-teach it. If real search results are given, prefer how authoritative sources
+      order this material.
+
+      Each step is an object with these fields:
+      - text: one concrete, checkable action or milestone — plain, direct, imperative. No
+        numbering, no "Step 1:", no motivational language, no emoji.
+      - kind: "concept" for learning something, or "project" for building/applying it. Mix them —
+        include real project steps, not only things to read.
+      - weight: an honest relative size — "small", "medium", or "large". Don't make everything equal.
+      - dependsOn: the 0-based index of the ONE earlier step in THIS module that is a genuine
+        prerequisite (lower index than this step), or null. A real prerequisite, not just "the
+        previous step".
+      - rationale: one short plain line saying why this step is here — and if dependsOn is set,
+        why that step comes first. No praise, no filler.
+
+      Hard rules:
+      - Between 3 and 8 steps for this module, ordered so each builds on the ones before it.
+      - Stay inside this module's scope — don't wander into other modules' territory.
+      - Output ONLY strict JSON, no prose around it:
+        {"steps": [{"text": "...", "kind": "concept", "weight": "medium", "dependsOn": null, "rationale": "..."}]}
+      """;
+
+  static String expandModuleUser(String roadmapTitle, String moduleTitle, String moduleScope,
+      String profileContext, String groundingContext) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Roadmap: ").append(roadmapTitle == null ? "" : roadmapTitle.trim()).append('\n');
+    sb.append("Module to expand: ").append(moduleTitle == null ? "" : moduleTitle.trim()).append('\n');
+    if (moduleScope != null && !moduleScope.isBlank()) {
+      sb.append("What this module covers: ").append(moduleScope.trim()).append('\n');
+    }
+    appendProfile(sb, profileContext);
+    if (groundingContext != null && !groundingContext.isBlank()) {
+      sb.append("Real search results to ground this module in:\n")
+          .append(groundingContext.trim()).append('\n');
+    }
+    sb.append("Write this module's steps as JSON.");
     return sb.toString();
   }
 
@@ -358,6 +397,9 @@ final class PromptTemplates {
 
       Hard rules:
       - NEVER suggest a resource in a format the user avoids (given below). Drop it entirely.
+      - NEVER reuse the same url on two different steps, and never reuse a url already listed as
+        "already used elsewhere in this roadmap" (given below, if any) — pick a different result
+        instead, or give that step no resource rather than repeat one.
       - Match resources to the step they actually help with; don't pad every step.
       - Output ONLY strict JSON, no prose: {"steps": [{"index": 0, "resources": [{"title": "...",
         "url": "...", "format": "written", "source_type": "official_docs",
@@ -365,7 +407,7 @@ final class PromptTemplates {
       """;
 
   static String resourceSuggestUser(String goal, List<String> stepTexts,
-      String searchResults, List<String> avoidFormats) {
+      String searchResults, List<String> avoidFormats, List<String> alreadyUsedUrls) {
     StringBuilder sb = new StringBuilder();
     sb.append("Goal: ").append(goal == null ? "" : goal.trim()).append('\n');
     sb.append("Steps (0-based index):\n");
@@ -375,6 +417,12 @@ final class PromptTemplates {
     if (avoidFormats != null && !avoidFormats.isEmpty()) {
       sb.append("Formats the user AVOIDS (never suggest these): ")
           .append(String.join(", ", avoidFormats)).append('\n');
+    }
+    if (alreadyUsedUrls != null && !alreadyUsedUrls.isEmpty()) {
+      sb.append("Already used elsewhere in this roadmap (do not repeat these urls):\n");
+      for (String url : alreadyUsedUrls) {
+        sb.append("- ").append(url).append('\n');
+      }
     }
     sb.append("Real search results (use only these urls):\n")
         .append(searchResults == null ? "" : searchResults.trim()).append('\n');

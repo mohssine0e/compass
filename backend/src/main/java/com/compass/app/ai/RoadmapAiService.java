@@ -49,23 +49,55 @@ public class RoadmapAiService {
     }
 
     /**
-     * A proposed roadmap for a goal + clarifying answers, using the profile context to skip what
-     * the user already knows (each skip stated plainly). {@code null} on failure.
+     * A top-level module outline for a big goal (Phase 13) — the few major areas, each a title
+     * plus a one-line scope, drafted before any individual steps. {@code null} on failure.
      */
-    public RoadmapDraft proposeRoadmap(String goal, String clarifications, String profileContext,
-                                       String groundingContext) {
-        JsonNode json = ai.generate("roadmap proposal", PromptTemplates.PROPOSE_SYSTEM,
-                PromptTemplates.proposeUser(goal, clarifications, profileContext, groundingContext));
+    public RoadmapOutline moduleOutline(String goal, String clarifications, String profileContext,
+                                        String groundingContext) {
+        JsonNode json = ai.generate("roadmap outline", PromptTemplates.OUTLINE_SYSTEM,
+                PromptTemplates.outlineUser(goal, clarifications, profileContext, groundingContext));
         if (json == null) {
             return null;
         }
         String title = AiJsonGenerator.text(json.get("title"));
-        List<DraftStep> steps = parseSteps(json.get("steps"));
-        if (steps.isEmpty()) {
+        List<OutlineModule> modules = parseModules(json.get("modules"));
+        if (modules.isEmpty()) {
             return null;
         }
         List<String> skipped = AiJsonGenerator.strings(json.get("skipped"));
-        return new RoadmapDraft(title, steps, skipped);
+        return new RoadmapOutline(title, modules, skipped);
+    }
+
+    /**
+     * Expand ONE module of a roadmap into its ordered steps (Phase 13), scoped to that module.
+     * Same shape as {@link #proposeRoadmap}; {@code null} on failure.
+     */
+    public List<DraftStep> expandModule(String roadmapTitle, String moduleTitle, String moduleScope,
+                                        String profileContext, String groundingContext) {
+        JsonNode json = ai.generate("module expansion", PromptTemplates.EXPAND_MODULE_SYSTEM,
+                PromptTemplates.expandModuleUser(roadmapTitle, moduleTitle, moduleScope,
+                        profileContext, groundingContext));
+        if (json == null) {
+            return null;
+        }
+        List<DraftStep> steps = parseSteps(json.get("steps"));
+        return steps.isEmpty() ? null : steps;
+    }
+
+    private static List<OutlineModule> parseModules(JsonNode array) {
+        List<OutlineModule> modules = new ArrayList<>();
+        if (array == null || !array.isArray()) {
+            return modules;
+        }
+        for (JsonNode node : array) {
+            String title = AiJsonGenerator.text(node.get("title"));
+            if (title == null || title.isBlank()) {
+                continue;
+            }
+            String scope = AiJsonGenerator.text(node.get("scope"));
+            modules.add(new OutlineModule(title.trim(), scope == null ? null : scope.trim()));
+        }
+        return modules;
     }
 
     private static final Set<String> KINDS = Set.of("concept", "project");
@@ -76,12 +108,15 @@ public class RoadmapAiService {
 
     /**
      * Up to 3 real learning resources per step, drawn only from the given search results (real
-     * URLs, never invented) and never in an avoided format. Returns a list aligned to
-     * {@code stepTexts} (empty list for a step with no fitting resources); an all-empty result
-     * when unavailable or nothing fits. Used for Phase 7.5 resource discovery.
+     * URLs, never invented), never in an avoided format, and never a url already in
+     * {@code excludeUrls} or reused across two steps in this same call — the fix for resources
+     * duplicating across a roadmap (Phase 13). Returns a list aligned to {@code stepTexts}
+     * (empty list for a step with no fitting resources); an all-empty result when unavailable or
+     * nothing fits. Used for Phase 7.5 resource discovery.
      */
     public List<List<Resource>> suggestResources(String goal, List<String> stepTexts,
-                                                 List<Result> groundingResults, List<String> avoidFormats) {
+                                                 List<Result> groundingResults, List<String> avoidFormats,
+                                                 Set<String> excludeUrls) {
         List<List<Resource>> perStep = new ArrayList<>();
         for (int i = 0; i < stepTexts.size(); i++) {
             perStep.add(new ArrayList<>());
@@ -107,8 +142,10 @@ public class RoadmapAiService {
         }
 
         Set<String> avoid = avoidFormats == null ? Set.of() : new HashSet<>(avoidFormats);
+        Set<String> used = excludeUrls == null ? new HashSet<>() : new HashSet<>(excludeUrls);
         JsonNode json = ai.generate("resource suggestions", PromptTemplates.RESOURCE_SUGGEST_SYSTEM,
-                PromptTemplates.resourceSuggestUser(goal, stepTexts, results.toString(), avoidFormats));
+                PromptTemplates.resourceSuggestUser(goal, stepTexts, results.toString(), avoidFormats,
+                        List.copyOf(used)));
         if (json == null || json.get("steps") == null || !json.get("steps").isArray()) {
             return perStep;
         }
@@ -125,8 +162,11 @@ public class RoadmapAiService {
             List<Resource> resources = perStep.get(index);
             for (JsonNode resNode : arrayOrEmpty(stepNode.get("resources"))) {
                 Resource resource = toResource(resNode, realUrls, avoid);
-                if (resource != null && resources.size() < 3) {
+                // Belt-and-suspenders: even if the model repeats a url despite the prompt rule,
+                // never let a duplicate through code-side.
+                if (resource != null && !used.contains(resource.url()) && resources.size() < 3) {
                     resources.add(resource);
+                    used.add(resource.url());
                 }
             }
         }
@@ -230,13 +270,6 @@ public class RoadmapAiService {
     }
 
     /**
-     * A drafted roadmap the user will edit and own. {@code skipped} lists topics left out
-     * because the profile shows they're already known, each with its plainly-stated reason.
-     */
-    public record RoadmapDraft(String title, List<DraftStep> steps, List<String> skipped) {
-    }
-
-    /**
      * One proposed step. {@code kind} is concept|project, {@code weight} is small|medium|large,
      * {@code dependsOn} is the 0-based index of an earlier prerequisite step (or null), and
      * {@code rationale} says why it's here / why the prerequisite comes first.
@@ -246,6 +279,17 @@ public class RoadmapAiService {
 
     /** A proposed prerequisite step plus the one-line reason it comes first. */
     public record Prerequisite(String step, String why) {
+    }
+
+    /**
+     * A drafted top-level outline (Phase 13): the roadmap title, its modules, and any whole
+     * modules skipped because the profile shows they're already known.
+     */
+    public record RoadmapOutline(String title, List<OutlineModule> modules, List<String> skipped) {
+    }
+
+    /** One proposed module: a short title and a one-line scope. Its steps come later, on expand. */
+    public record OutlineModule(String title, String scope) {
     }
 
     /**

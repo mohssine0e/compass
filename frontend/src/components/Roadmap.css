@@ -370,6 +370,19 @@
   color: var(--brass);
 }
 
+.node-group-empty {
+  cursor: default;
+}
+
+.node-group-empty:hover .node-group-title {
+  color: var(--text);
+}
+
+.node-group-scope {
+  color: var(--faint);
+  font-weight: 400;
+}
+
 .step-item.is-done .step-marker {
   color: var(--brass);
 }
@@ -401,4 +414,94 @@
   color: var(--faint);
   font-size: 0.78rem;
   margin-top: 4px;
+}
+
+/* Learning path (Phase 13): an ordered "what's next" traversal, distinct from the tree. */
+.learning-path {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.path-step {
+  display: flex;
+  gap: 14px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+
+.path-step-marker {
+  width: 20px;
+  text-align: center;
+  font-size: 0.95rem;
+  color: var(--faint);
+  flex-shrink: 0;
+}
+
+.path-step.is-current .path-step-marker {
+  color: var(--brass);
+}
+
+.path-step-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.path-step-text {
+  margin: 0;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.path-step.is-current .path-step-text {
+  font-weight: 500;
+}
+
+.path-step-meta {
+  display: flex;
+  gap: 6px;
+}
+
+.path-step-resources {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.path-step-resource {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.path-step-resource a {
+  color: var(--brass);
+  text-decoration: none;
+}
+
+.path-step-resource a:hover {
+  border-bottom: 1px solid var(--brass);
+}
+
+.path-step-time {
+  color: var(--faint);
+  font-size: 0.82rem;
+}
+
+.path-more {
+  padding: 14px 0 0 34px;
+  color: var(--faint);
+  font-size: 0.85rem;
+}
+
+.path-empty {
+  color: var(--muted);
 }

@@ -52,13 +52,27 @@ export function createRoadmap(payload) {
 
 /**
  * One turn of AI roadmap drafting. Call with `{ goal }` to get clarifying questions back,
- * then with `{ goal, clarifications: [{ question, answer }] }` to get an editable proposal.
- * Throws (503) when drafting is unavailable — fall back to the manual form.
+ * then with `{ goal, clarifications: [{ question, answer }] }` to get an editable top-level
+ * module outline (Phase 13) — no individual steps yet. Throws (503) when drafting is
+ * unavailable — fall back to the manual form.
  */
 export function generateRoadmap(payload) {
   return request('/roadmaps/generate', {
     method: 'POST',
     body: JSON.stringify(payload),
+  })
+}
+
+/** Draft steps for one module, grounded on its own scope. Nothing persisted. */
+export function expandModule(roadmapId, moduleId) {
+  return request(`/roadmaps/${roadmapId}/modules/${moduleId}/expand`, { method: 'POST' })
+}
+
+/** Accept a module's expanded steps. `draftSteps` is the same shape as roadmap creation. */
+export function addModuleSteps(roadmapId, moduleId, draftSteps) {
+  return request(`/roadmaps/${roadmapId}/modules/${moduleId}/steps`, {
+    method: 'POST',
+    body: JSON.stringify({ draftSteps }),
   })
 }
 
