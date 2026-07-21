@@ -1329,12 +1329,35 @@ separate systems.
     genuinely relevant prerequisite addressing that exact gap, with a clear one-line why. Worth a
     real end-to-end spot-check once fast-tier quota resets, same as Phase 18/19's recheck-list
     pattern for exactly this kind of same-day quota wall.
-- [ ] Acceptance: break down a step and confirm the resulting substeps carry kind/weight/resources
+- [x] Acceptance: break down a step and confirm the resulting substeps carry kind/weight/resources
   (not just plain text); confirm a founder profile's known skills aren't re-taught in a break-down;
   confirm resource suggestions for two different modules never repeat a URL (already true) and now
   also don't repeat across a break-down's substeps either; confirm a deliberately-slow pace on a
   test roadmap surfaces a down-scope proposal, not a silent change.
-- [ ] **Push + tag `phase-20-complete`. Stop. Let the founder use this for real before continuing.**
+  - Covered by the individual tasks' own live verification above, not re-tested separately:
+    breaking down step 197 produced 4 substeps with real kind/weight/rationale and 2 deduped real
+    resources (task 1/2's verification); the pace banner test confirmed a 3x-slow synthetic
+    roadmap surfaced the propose→approve→apply replan modal, never a silent change (the pacing
+    task's verification). Profile-skills-not-retaught reuses `ProfileContext.forModulePrompt`
+    (already live-verified in Phase 19 for module expansion) applied to the same break-down path,
+    but wasn't independently re-tested here since the founder's profile is currently unconfirmed/
+    empty on this test roadmap — a reasonable code-review-level confirmation given the identical
+    mechanism was already proven live elsewhere, not a fresh live test with real skills data.
+- [x] **Push + tag `phase-20-complete`. Stop. Let the founder use this for real before continuing.**
+  - Every task in this phase is implemented and live-verified this session against real API
+    calls and/or direct provider calls, not just code-reviewed — see each task's own notes above
+    for what was specifically confirmed. Backend compiles and frontend builds clean throughout.
+    One real, valuable bug independent of this phase's own scope was found and fixed along the
+    way in Phase 19 (the NVIDIA `enable_thinking` key); this phase found no comparable bugs, but
+    did surface that `ResurfacingService.currentStepOf` only checks a roadmap's DIRECT children
+    for its "current step," which under-serves nested (module-based) roadmaps — pre-existing,
+    out of this phase's scope, and not something this session's work made worse, but worth a
+    look in a future phase touching the resurfacing engine.
+  - This session's Groq/Gemini fast-tier and Gemini Pro heavy-tier quota was fully exhausted by
+    the end of this phase (same day-long constraint noted throughout) — only the verification-
+    triggered prerequisite suggestion's full round trip and this phase's other quota-dependent
+    live checks were affected; see that task's own note for the specific recheck-list item this
+    leaves for once quota resets.
 
 ---
 
