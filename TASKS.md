@@ -672,7 +672,7 @@ re-guessing scope from raw text — the single highest-leverage structural chang
 `ROADMAP_INTELLIGENCE_NOTES.md` Section 2. Everything downstream (module count, flat-vs-nested,
 step sizing) should read from this one source of truth instead of guessing separately.
 
-- [ ] Add the explicit assessment pass.
+- [x] Add the explicit assessment pass.
   - New method `RoadmapAiService.assessGoal(String goal, String clarifications, String
     profileContext, String groundingContext)` returning a new record, e.g.
     `GoalAssessment(int complexity, Integer estimatedTotalHours, String domain, String priorLevel,
@@ -690,7 +690,11 @@ step sizing) should read from this one source of truth instead of guessing separ
   - Decide what happens if the assessment call fails (same graceful-degradation pattern as
     everywhere else in this codebase: fall back to today's un-assessed behavior — treat as
     `shape: "nested"` with mid-range complexity — rather than blocking generation entirely).
-- [ ] Gate outline-then-expand behind `shape`.
+  - Done. Live-verified: "read chapter 3 of the book on my desk this week" → `complexity: 1`,
+    `shape: "flat"`; "become a distributed systems engineer…" and "learn conversational Spanish
+    for a trip in 3 months" → `complexity: 5`/`3`, `shape: "nested"`. Failed-assessment fallback
+    (nested, complexity 3) implemented in `RoadmapService.draft()` but not separately forced/tested.
+- [x] Gate outline-then-expand behind `shape`.
   - When `shape == "flat"`, skip the module-outline step and go straight to a single flat step
     list. This effectively revives something like the pre-Phase-13 `proposeRoadmap`/`PROPOSE_SYSTEM`
     path that was removed in Phase 13 (check git history — `git log -p --all -- '*/PromptTemplates.java'`
@@ -705,14 +709,22 @@ step sizing) should read from this one source of truth instead of guessing separ
     already built this component to be shared — reuse it here for the top-level flat case too)
     instead of the outline-editing UI; accepting creates the roadmap with `draftSteps` directly
     (the existing `createRoadmap({title, draftSteps})` path already supports this).
-- [ ] Derive module/step count bands from the assessment instead of hardcoding them.
+  - Done. Live-verified end to end: the small-goal test above returned `status: "proposal"` with
+    a real flat step list (dependsOn chained correctly), shown via `StepProposalEditor` and
+    created with `draftSteps`; the nested-goal tests returned `status: "outline"` as before.
+- [x] Derive module/step count bands from the assessment instead of hardcoding them.
   - Replace `OUTLINE_SYSTEM`'s fixed "Between 2 and 8 modules" and `EXPAND_MODULE_SYSTEM`'s fixed
     "Between 3 and 8 steps" with instructions that reference the passed-in complexity/hours, e.g.
     "size the number of modules to the assessed complexity and estimated hours — don't apply a
     fixed count regardless of scale."
   - Keep *some* outer safety rail (e.g. never propose more than ~10 modules or ~10 steps in one
     call) purely as a parsing/UX safety net, not as the primary sizing mechanism.
-- [ ] Add cross-module `dependsOn`.
+  - Done. Prompts now reference the assessed complexity/hours instead of a fixed range, with a
+    10-item outer safety rail kept. Live-verified the scaling direction (a complexity-1 flat goal
+    got 4 steps; a complexity-3 nested goal got 6 modules) — did not get a live sample of the
+    complexity-5 case's actual module count due to repeated tertiary-provider timeouts on that
+    specific heavy prompt (see `generation-max-tokens` note below).
+- [x] Add cross-module `dependsOn`.
   - Current limitation: `RoadmapAiService.parseSteps` validates `dependsOn` as `dep < i` within the
     *current batch only* — a module expansion has no visibility into other modules' step ids at
     all right now.
@@ -726,14 +738,28 @@ step sizing) should read from this one source of truth instead of guessing separ
   - `RoadmapService.addStepsToModule`/`createDraftSteps` needs updating to resolve a real
     cross-module id directly (no index translation needed, since it's already a real entry id)
     alongside the existing same-batch index resolution.
-- [ ] Add total-estimated-time rollup.
+  - Done, code-reviewed but NOT live-verified end to end: implemented as two separate optional
+    fields (`dependsOnIndex`, `dependsOnEntryId`) exactly as suggested here, with
+    `parseSteps`/`RoadmapService.expandModule` gathering earlier modules' real step ids and
+    `StepProposalEditor` showing a read-only "needs (earlier module): …" label. Same-batch
+    `dependsOn` chaining WAS live-verified (a real 7-step module expansion resolved every
+    same-batch prerequisite to its real id correctly); getting the AI to actually choose a
+    cross-module id in one live call was blocked by repeated NVIDIA tertiary-provider
+    timeouts/quota exhaustion on both other providers during this session — re-verify live once a
+    provider has real headroom again.
+- [x] Add total-estimated-time rollup.
   - Add a method (backend, since resource data + tree traversal both live there) that walks the
     whole tree's `resources[].estimatedTime` strings, parses the common formats already produced by
     generation (`~30 min`, `~1h`, `~2h`, "a few hours" — decide whether to parse the free-text ones
     or only sum the ones matching a strict pattern, dropping the rest silently), and returns a
     total. Surface it in `RoadmapResponse` (e.g. `progress.estimatedTotalMinutes`) and render it in
     `RoadmapDetail` next to the existing progress bar.
-- [ ] Add AI-assisted outline maintenance.
+  - Done. Live-verified against a real, pre-existing roadmap's actual resource data (not just new
+    test data): `progress.estimatedTotalMinutes: 870` computed correctly across its mix of
+    `~30 min`/`~1h`/`~2h`/`~4h` resources, correctly and silently dropping the one free-text
+    `"a few hours"` entry that doesn't match the strict pattern. Rendered in `RoadmapDetail` next
+    to the progress count as `· ~Xh Ym`.
+- [x] Add AI-assisted outline maintenance.
   - "Regenerate this module": new endpoint (e.g. `POST /roadmaps/{id}/modules/{moduleId}/regenerate-scope`)
     that re-runs a scoped version of the outline call for just that module's title+scope, given the
     rest of the roadmap's modules as context (so it doesn't duplicate/contradict siblings) — propose
@@ -745,16 +771,41 @@ step sizing) should read from this one source of truth instead of guessing separ
     hasn't been expanded yet, leaving completed/in-progress modules untouched. This is the most
     involved of the three — fine to sequence last within this phase, or explicitly punt to a later
     phase if time-boxing this one is needed, but don't drop it silently.
+  - "Regenerate this module" and "Insert a module here" are done and live-verified end to end
+    (both propose and apply halves): `POST .../regenerate-scope` and `POST .../insert-proposal`
+    return a `{title, scope}` proposal that stays genuinely distinct from sibling modules (tested
+    against a real 6-module roadmap — regenerating one module and proposing a 7th, "Cost
+    Optimization", both avoided re-covering existing modules); `PUT .../modules/{moduleId}` and
+    `POST .../modules` apply the accepted result. Frontend: a shared `ModuleProposalModal` (propose
+    → edit → accept) wired into `RoadmapDetail` — "Regenerate scope" next to "Expand this module"
+    on each unexpanded module row, "+ Insert a module" replacing "+ Add step" at the bottom of a
+    module-based roadmap's list.
+  - **"Replan remaining unexpanded modules" is explicitly punted, not dropped** — genuinely the
+    most involved of the three and not started this pass. Needs its own follow-up task before
+    Phase 18 can be called fully done; tracked here so it isn't forgotten.
 - [ ] Note: model routing by task complexity (cheap/fast model for a trivial goal, a stronger one
   for an ambiguous/large goal) is explicitly **not** a task here — it would mean going beyond the
   Gemini/Groq provider constraint in CLAUDE.md Section 3. Worth revisiting only if that constraint
   is ever deliberately reopened.
-- [ ] Acceptance: generate a roadmap for a genuinely small goal (e.g. "read one book chapter this
+- [x] Acceptance: generate a roadmap for a genuinely small goal (e.g. "read one book chapter this
   week") and confirm it takes the flat path with no outline/expand round-trip; generate one for a
   large goal (e.g. "become a distributed systems engineer") and confirm module count/step sizing
   visibly scales up versus a mid-size goal: this is the direct test of "flexible based on content,
   complexity, background" from the original ask.
+  - Verified: small goal → flat, 4-step proposal, no outline round-trip. Mid goal (Spanish, 3
+    months) → nested, 6 modules. The large goal (distributed systems engineer) correctly assessed
+    as `complexity: 5`/`nested` on every attempt, but the actual module-outline generation call for
+    it repeatedly failed on the tertiary provider (NVIDIA free tier) — first via a genuine ~90s+
+    read timeout, then via the response getting truncated mid-JSON at the old 1200-token budget
+    (fixed by raising `compass.ai.generationMaxTokens` to 2200), then via timeout again. Groq and
+    Gemini were both quota-exhausted for this entire session, so there was no working fast provider
+    to fall back to for the single heaviest possible prompt. The assess→branch mechanism itself is
+    confirmed correct (it correctly reached the "nested, complexity 5" verdict every time); only the
+    *actual outline content* for the most extreme case wasn't captured live. Re-run this specific
+    case once a fast provider has quota again.
 - [ ] **Push + tag `phase-18-complete`. Stop. Let the founder use this for real before continuing.**
+  - Not done yet — holding off per the "Replan remaining unexpanded modules" gap above and the
+    large-goal case not being fully live-verified. Both are real, known gaps, not silently dropped.
 
 ---
 
