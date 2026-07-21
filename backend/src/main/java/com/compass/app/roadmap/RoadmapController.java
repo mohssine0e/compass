@@ -6,6 +6,7 @@ import com.compass.app.roadmap.dto.ArchiveRoadmapRequest;
 import com.compass.app.roadmap.dto.CreateRoadmapRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapResponse;
+import com.compass.app.roadmap.dto.GenerationJobResponse;
 import com.compass.app.roadmap.dto.InsertModuleRequest;
 import com.compass.app.roadmap.dto.InsertStepRequest;
 import com.compass.app.roadmap.dto.ReorderStepsRequest;
@@ -23,15 +24,18 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/roadmaps")
 public class RoadmapController {
 
     private final RoadmapService service;
+    private final GenerationJobService jobs;
 
-    public RoadmapController(RoadmapService service) {
+    public RoadmapController(RoadmapService service, GenerationJobService jobs) {
         this.service = service;
+        this.jobs = jobs;
     }
 
     /** Create a roadmap with an ordered list of manually-written steps. */
@@ -43,13 +47,32 @@ public class RoadmapController {
     }
 
     /**
-     * One turn of AI drafting. Body {goal} with no clarifications → clarifying questions;
-     * body {goal, clarifications:[{question, answer}]} → an editable step proposal. 503 when
-     * no AI provider is configured/reachable, so the UI falls back to the manual form.
+     * Start one turn of AI drafting in the background (Phase 18) — body {goal} with no
+     * clarifications, or {goal, clarifications:[{question, answer}]} once answered. Returns
+     * immediately with a job id; poll {@link #generationJob} for progress and the eventual
+     * result, rather than blocking on a single AI call that can take up to a minute on the
+     * free-tier tertiary provider. The job survives independently of this request, so it can be
+     * started on one device and checked from another.
      */
-    @PostMapping("/generate")
-    public GenerateRoadmapResponse generate(@RequestBody GenerateRoadmapRequest request) {
-        return service.generate(request);
+    @PostMapping("/generate/start")
+    public Map<String, String> startGeneration(@RequestBody GenerateRoadmapRequest request) {
+        return Map.of("jobId", jobs.start(request));
+    }
+
+    /**
+     * Poll a drafting job's progress. {@code status} is PENDING/DONE/FAILED; {@code stage} names
+     * what's currently running while PENDING (CLARIFYING/ASSESSING/DRAFTING/FINDING_RESOURCES);
+     * {@code result} is the same shape {@code /generate} used to return, once DONE; {@code error}
+     * is set (the same message the old synchronous 503 used to carry) once FAILED.
+     */
+    @GetMapping("/generate/jobs/{jobId}")
+    public GenerationJobResponse generationJob(@PathVariable String jobId) {
+        GenerationJob job = jobs.get(jobId);
+        return new GenerationJobResponse(
+                job.status().name(),
+                job.stage() == null ? null : job.stage().name(),
+                job.result(),
+                job.error());
     }
 
     /** Active roadmaps with their steps and progress, newest first (archived excluded). */

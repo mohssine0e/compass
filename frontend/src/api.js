@@ -56,16 +56,38 @@ export function createRoadmap(payload) {
 }
 
 /**
- * One turn of AI roadmap drafting. Call with `{ goal }` to get clarifying questions back,
- * then with `{ goal, clarifications: [{ question, answer }] }` to get an editable top-level
- * module outline (Phase 13) — no individual steps yet. Throws (503) when drafting is
- * unavailable — fall back to the manual form.
+ * One turn of AI roadmap drafting (Phase 18: runs as a background job, polled for progress —
+ * the free-tier tertiary AI provider can take up to a minute, so a plain blocking call left the
+ * user staring at a frozen button). Call with `{ goal }` to get clarifying questions back, then
+ * with `{ goal, clarifications: [{ question, answer }] }` for the eventual outline/proposal.
+ *
+ * `onStage(stage)`, if given, is called each time the server reports a new stage
+ * (CLARIFYING/ASSESSING/DRAFTING/FINDING_RESOURCES) — display-only, a fixed set of values the
+ * backend defines. Throws when drafting is unavailable (mirrors the old 503 message) — fall back
+ * to the manual form.
  */
-export function generateRoadmap(payload) {
-  return request('/roadmaps/generate', {
+export async function generateRoadmap(payload, onStage) {
+  const { jobId } = await request('/roadmaps/generate/start', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
+  let lastStage = null
+  for (;;) {
+    await sleep(1200)
+    const job = await request(`/roadmaps/generate/jobs/${jobId}`)
+    if (job.stage && job.stage !== lastStage) {
+      lastStage = job.stage
+      onStage?.(job.stage)
+    }
+    if (job.status === 'DONE') return job.result
+    if (job.status === 'FAILED') {
+      throw new Error(job.error || 'Drafting is unavailable right now — write the steps yourself.')
+    }
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 /** Draft steps for one module, grounded on its own scope. Nothing persisted. */

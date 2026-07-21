@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createRoadmap, generateRoadmap } from '../api'
 import { Button } from './ui'
 import StepProposalEditor, { fromProposedSteps, toDraftSteps } from './StepProposalEditor'
@@ -9,6 +9,21 @@ let cidCounter = 0
 function nextCid() {
   cidCounter += 1
   return cidCounter
+}
+
+// What each backend generation stage (Phase 18) reads as while waiting — the free-tier tertiary
+// AI provider can take up to a minute, so naming the actual stage plus a live elapsed-time count
+// replaces a frozen "Thinking…" button with something that's honestly still moving.
+const STAGE_LABELS = {
+  CLARIFYING: 'Thinking about what to ask',
+  ASSESSING: 'Sizing up your goal',
+  DRAFTING: 'Drafting',
+  FINDING_RESOURCES: 'Finding resources',
+}
+
+function formatElapsed(seconds) {
+  if (seconds < 60) return `${seconds}s`
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`
 }
 
 // AI drafts a roadmap's top-level shape from a goal; the user edits and owns it before it's
@@ -40,9 +55,23 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
   // later module-expand call reads the same numbers instead of re-guessing.
   const [assessment, setAssessment] = useState(null)
   const [busy, setBusy] = useState(false)
+  // Live progress while busy (Phase 18): which backend stage is running, plus a ticking
+  // elapsed-time count so a slow AI call reads as "still working," not "stuck."
+  const [stage, setStage] = useState(null)
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [error, setError] = useState(null)
   // 503 = drafting unavailable; offer the manual form instead of a dead end.
   const [unavailable, setUnavailable] = useState(false)
+
+  useEffect(() => {
+    if (!busy) {
+      setElapsedSeconds(0)
+      return
+    }
+    const start = Date.now()
+    const id = setInterval(() => setElapsedSeconds(Math.floor((Date.now() - start) / 1000)), 1000)
+    return () => clearInterval(id)
+  }, [busy])
 
   function fail(err) {
     setError(err.message)
@@ -54,8 +83,12 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
     if (!goal.trim() || busy) return
     setBusy(true)
     setError(null)
+    setStage(null)
     try {
-      const res = await generateRoadmap({ goal: goal.trim(), clarifications: null, skipFollowUp: false })
+      const res = await generateRoadmap(
+        { goal: goal.trim(), clarifications: null, skipFollowUp: false },
+        setStage
+      )
       if (res.status === 'outline' || res.status === 'proposal') {
         showResult(res)
       } else {
@@ -77,8 +110,12 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
     if (!goal.trim() || busy) return
     setBusy(true)
     setError(null)
+    setStage(null)
     try {
-      const res = await generateRoadmap({ goal: goal.trim(), clarifications: [], skipFollowUp: true })
+      const res = await generateRoadmap(
+        { goal: goal.trim(), clarifications: [], skipFollowUp: true },
+        setStage
+      )
       showResult(res)
     } catch (err) {
       fail(err)
@@ -89,14 +126,14 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
     if (busy) return
     setBusy(true)
     setError(null)
+    setStage(null)
     try {
       const roundAnswers = questions.map((q, i) => ({ question: q, answer: answers[i] || '' }))
       const clarifications = [...priorClarifications, ...roundAnswers]
-      const res = await generateRoadmap({
-        goal: goal.trim(),
-        clarifications,
-        skipFollowUp: isFollowUpRound,
-      })
+      const res = await generateRoadmap(
+        { goal: goal.trim(), clarifications, skipFollowUp: isFollowUpRound },
+        setStage
+      )
       if (res.status === 'needs_clarification' && !isFollowUpRound) {
         // A genuine follow-up round, conditioned on what was just answered — show it, then cap
         // at one more round (the next submit sends skipFollowUp: true regardless of the answer).
@@ -185,6 +222,11 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
             rows={3}
             autoFocus
           />
+          {busy && (
+            <p className="gen-progress">
+              {STAGE_LABELS[stage] || 'Working'}… ({formatElapsed(elapsedSeconds)})
+            </p>
+          )}
           <div className="roadmap-actions">
             {error && <span className="roadmap-error">{error}</span>}
             <Button variant="ghost" onClick={onCancel}>
@@ -201,7 +243,7 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
               </Button>
             ) : (
               <Button variant="primary" onClick={askQuestions} disabled={!goal.trim() || busy}>
-                {busy ? 'Thinking…' : 'Draft an outline'}
+                {busy ? 'Working…' : 'Draft an outline'}
               </Button>
             )}
           </div>
@@ -228,13 +270,18 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
               </div>
             ))}
           </div>
+          {busy && (
+            <p className="gen-progress">
+              {STAGE_LABELS[stage] || 'Working'}… ({formatElapsed(elapsedSeconds)})
+            </p>
+          )}
           <div className="roadmap-actions">
             {error && <span className="roadmap-error">{error}</span>}
             <Button variant="ghost" onClick={onCancel}>
               Cancel
             </Button>
             <Button variant="primary" onClick={propose} disabled={busy}>
-              {busy ? 'Drafting…' : 'Draft the outline'}
+              {busy ? 'Working…' : 'Draft the outline'}
             </Button>
           </div>
         </>

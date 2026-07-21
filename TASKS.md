@@ -807,6 +807,24 @@ step sizing) should read from this one source of truth instead of guessing separ
   - Not done yet — holding off per the "Replan remaining unexpanded modules" gap above and the
     large-goal case not being fully live-verified. Both are real, known gaps, not silently dropped.
 
+**Added mid-phase, not originally scoped here:** heavy testing this session exhausted Groq's and
+Gemini's free-tier daily quotas, pushing most real calls onto the NVIDIA tertiary provider — free,
+but genuinely slow (30–90s per call, shared/queued GPU infra). A blocking `/roadmaps/generate`
+request could silently sit for minutes with zero indication of whether it was working or stuck.
+Fixed with a background job + polling pipeline: `POST /roadmaps/generate/start` returns a
+`jobId` immediately; `GET /roadmaps/generate/jobs/{jobId}` reports `{status, stage, result,
+error}`, where `stage` is one of `CLARIFYING`/`ASSESSING`/`DRAFTING`/`FINDING_RESOURCES` — the
+same stages the existing generation flow already has, now instrumented and observable. The
+frontend polls every 1.2s and shows the live stage plus a ticking elapsed-time counter instead of
+a frozen button. In-memory job store (`ConcurrentHashMap`, not a DB table — single-user, no auth,
+a lost job on restart just means "regenerate"), swept on a 10-minute TTL after completion. Job
+survives independently of the HTTP connection that started it, so it can be started on one device
+and polled from another. Live-verified end to end in the browser: watched a real generation go
+CLARIFYING-skip → ASSESSING → DRAFTING → FINDING_RESOURCES → done, with the elapsed counter
+ticking correctly throughout (one real run took 59s+ before resolving — exactly the case this was
+built for). `expandModule`/module-maintenance calls are NOT yet wrapped in this pipeline — same
+slow-call problem exists there, worth doing as a follow-up if it's still a pain point.
+
 ---
 
 ## Phase 19 — Substep richness, resource feedback loop, and generation self-checks

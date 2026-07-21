@@ -61,6 +61,16 @@ public class RoadmapService {
      * fall back to writing steps by hand.
      */
     public GenerateRoadmapResponse generate(GenerateRoadmapRequest req) {
+        return generate(req, stage -> { });
+    }
+
+    /**
+     * As {@link #generate(GenerateRoadmapRequest)}, but reports which {@link GenerationStage} is
+     * currently running via {@code onStage} (Phase 18) — used by {@link GenerationJobService} so
+     * a slow AI call (the free-tier tertiary provider can take up to a minute) shows live progress
+     * instead of a frozen wait. Called with a no-op consumer by the synchronous overload above.
+     */
+    GenerateRoadmapResponse generate(GenerateRoadmapRequest req, java.util.function.Consumer<GenerationStage> onStage) {
         String goal = req.goal() != null ? req.goal().trim() : "";
         if (goal.isEmpty()) {
             throw new IllegalArgumentException("Say what you want a roadmap for first.");
@@ -76,6 +86,7 @@ public class RoadmapService {
                 .orElse(null);
 
         if (req.clarifications() == null) {
+            onStage.accept(GenerationStage.CLARIFYING);
             List<String> questions = roadmapAi.clarifyingQuestions(goal, profileContext);
             if (questions == null) {
                 throw new IllegalStateException(
@@ -84,13 +95,14 @@ public class RoadmapService {
             if (questions.isEmpty()) {
                 // Nothing genuinely worth asking — draft straight away rather than showing an
                 // empty question form; the outline prompt states its assumptions plainly instead.
-                return draft(goal, "", profileContext);
+                return draft(goal, "", profileContext, onStage);
             }
             return GenerateRoadmapResponse.needsClarification(questions);
         }
 
         String firstRoundQa = formatClarifications(req.clarifications());
         if (!req.skipFollowUp()) {
+            onStage.accept(GenerationStage.CLARIFYING);
             List<String> followUps = roadmapAi.followUpQuestions(goal, firstRoundQa, profileContext);
             // followUps == null means the follow-up check itself failed (unavailable/error) —
             // treat that the same as "nothing to add" rather than blocking drafting on it.
@@ -99,7 +111,7 @@ public class RoadmapService {
             }
         }
 
-        return draft(goal, firstRoundQa, profileContext);
+        return draft(goal, firstRoundQa, profileContext, onStage);
     }
 
     /**
@@ -109,13 +121,15 @@ public class RoadmapService {
      * A failed assessment falls back to today's un-assessed behavior (nested, mid-range) rather
      * than blocking generation on it.
      */
-    private GenerateRoadmapResponse draft(String goal, String clarificationsText, String profileContext) {
+    private GenerateRoadmapResponse draft(String goal, String clarificationsText, String profileContext,
+                                          java.util.function.Consumer<GenerationStage> onStage) {
         // Ground once, in real sources when a search key is configured; null (and no sources)
         // when it isn't, and generation proceeds ungrounded. Shared by assessment and drafting.
         SearchGroundingService.Grounding grounding = searchGrounding.ground(goal);
         String groundingContext = grounding == null ? null : grounding.context();
         List<String> sources = grounding == null ? List.of() : grounding.sources();
 
+        onStage.accept(GenerationStage.ASSESSING);
         RoadmapAiService.GoalAssessment assessment = roadmapAi.assessGoal(
                 goal, clarificationsText, profileContext, groundingContext);
         if (assessment == null) {
@@ -124,12 +138,14 @@ public class RoadmapService {
         String assessmentContext = RoadmapAiService.assessmentContext(assessment);
 
         if ("flat".equals(assessment.shape())) {
+            onStage.accept(GenerationStage.DRAFTING);
             RoadmapAiService.FlatProposal flat = roadmapAi.proposeFlat(
                     goal, clarificationsText, profileContext, groundingContext, assessmentContext);
             if (flat == null) {
                 throw new IllegalStateException(
                         "Drafting is unavailable right now — write the steps yourself.");
             }
+            onStage.accept(GenerationStage.FINDING_RESOURCES);
             List<String> stepTexts = flat.steps().stream().map(RoadmapAiService.DraftStep::text).toList();
             List<List<RoadmapAiService.Resource>> resources = roadmapAi.suggestResources(
                     goal, stepTexts, grounding == null ? null : grounding.results(),
@@ -138,6 +154,7 @@ public class RoadmapService {
                     resources, flat.skipped(), sources, assessment, Map.of());
         }
 
+        onStage.accept(GenerationStage.DRAFTING);
         RoadmapAiService.RoadmapOutline outline = roadmapAi.moduleOutline(
                 goal, clarificationsText, profileContext, groundingContext, assessmentContext);
         if (outline == null) {
