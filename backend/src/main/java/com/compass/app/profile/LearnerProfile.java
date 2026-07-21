@@ -45,7 +45,7 @@ public class LearnerProfile {
     @Column(name = "self_description", columnDefinition = "jsonb")
     private Map<String, Object> selfDescription;
 
-    /** {avoid:[...], prefer:[...]}: resource formats to steer discovery (Phase 7.5). */
+    /** {avoid:[...]}: resource formats to steer discovery away from (Phase 7.5). */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "format_preferences", columnDefinition = "jsonb")
     private Map<String, Object> formatPreferences;

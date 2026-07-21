@@ -1160,7 +1160,7 @@ separate systems.
     just the one response), then flattened the remaining container back to a plain leaf (children
     emptied, progress rollup cleared). Confirmed in the browser that the "Flatten"/"Graduate" menu
     items only appear on the rows they actually apply to, given the tree's real current shape.
-- [ ] Wire up (or remove) `formatPreferences.prefer`.
+- [x] Wire up (or remove) `formatPreferences.prefer`.
   - Decide first: is this worth building, or worth deleting? If building: add "prefer" chips to
     `ProfileScreen` (mirroring the existing "avoid" chips, probably in the same `Learning formats`
     section) so there's actually a way to set it, then pass `formatPreferences.prefer` into
@@ -1169,6 +1169,15 @@ separate systems.
     no-hallucination rule intact). If removing: delete the dead `prefer` handling from
     `ProfileService.sanitizeFormatPreferences`, `LearnerProfile`, `ProfileResponse`,
     `SaveProfileRequest` cleanly (don't leave a half-dead field).
+  - Decided: remove. Confirmed there was genuinely no path to set it — `ProfileScreen` only ever
+    built "avoid" chips (grepped the whole frontend; zero references to a "prefer" format
+    anywhere), so it was sanitized server-side and then went nowhere — dead scaffolding, not a
+    real feature anyone had started using. `ProfileResponse`/`SaveProfileRequest` only ever held
+    the generic `formatPreferences` map (no dedicated `prefer` field to remove there); the actual
+    dead code was `ProfileService.sanitizeFormatPreferences`'s `avoid`/`prefer` loop, simplified
+    to just `avoid`, plus updating `LearnerProfile`'s doc comment. If a real "prefer this format"
+    need shows up later, the resource-usage feedback loop (next task, same phase) covers similar
+    intent behaviorally — bias toward historically-used formats — rather than a stated preference.
 - [ ] Close the resource-usage and pace-calibration feedback loop, with concrete pacing mechanics.
   - This is the biggest lift in this phase — scope it as: (a) a read path that aggregates a
     founder's history (which resource formats got used vs. skipped from `session_history` across

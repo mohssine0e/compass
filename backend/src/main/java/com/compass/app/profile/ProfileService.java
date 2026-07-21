@@ -24,7 +24,7 @@ public class ProfileService {
     /** The confidence levels a skill may carry; anything else is dropped to null. */
     static final Set<String> CONFIDENCE_LEVELS = Set.of("just_started", "comfortable", "solid");
 
-    /** The resource formats a founder can prefer/avoid — matches the resource format enum. */
+    /** The resource formats a founder can avoid — matches the resource format enum. */
     static final Set<String> FORMATS = Set.of("written", "video", "interactive", "repo", "book_chapter");
 
     /**
@@ -111,26 +111,27 @@ public class ProfileService {
         return clean.isEmpty() ? null : clean;
     }
 
-    /** Keep only known format names under avoid/prefer; drop anything else. */
+    /**
+     * Keep only known format names under {@code avoid}; drop anything else. {@code prefer} was
+     * dropped (Phase 20) — it was sanitized here but never had a UI to set it or generation code
+     * that read it, so it was dead scaffolding, not a real feature. Revisit only if a real
+     * "prefer this format" need shows up — the resource-usage feedback loop (also Phase 20)
+     * covers the same intent behaviorally instead (bias toward historically-used formats).
+     */
     static Map<String, Object> sanitizeFormatPreferences(Map<String, Object> raw) {
         if (raw == null) {
             return null;
         }
-        Map<String, Object> clean = new LinkedHashMap<>();
-        for (String key : List.of("avoid", "prefer")) {
-            Object value = raw.get(key);
-            if (value instanceof List<?> list) {
-                List<String> formats = list.stream()
-                        .filter(f -> f instanceof String s && FORMATS.contains(s))
-                        .map(Object::toString)
-                        .distinct()
-                        .toList();
-                if (!formats.isEmpty()) {
-                    clean.put(key, formats);
-                }
-            }
+        Object value = raw.get("avoid");
+        if (!(value instanceof List<?> list)) {
+            return null;
         }
-        return clean.isEmpty() ? null : clean;
+        List<String> formats = list.stream()
+                .filter(f -> f instanceof String s && FORMATS.contains(s))
+                .map(Object::toString)
+                .distinct()
+                .toList();
+        return formats.isEmpty() ? null : Map.of("avoid", formats);
     }
 
     /**
