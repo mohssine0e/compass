@@ -11,8 +11,20 @@
   padding-bottom: 0;
 }
 
-.all-list .screen-title {
+.all-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 24px;
+}
+
+.all-head-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.all-list .screen-title {
+  margin: 0;
 }
 
 .all-empty,
@@ -22,6 +34,74 @@
 
 .all-error {
   color: var(--danger);
+}
+
+/* Collapsible status/theme groups (Phase 14). */
+.all-group {
+  margin-bottom: 8px;
+}
+
+.all-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  cursor: pointer;
+}
+
+.all-group-caret {
+  width: 14px;
+  color: var(--faint);
+  font-size: 0.8rem;
+}
+
+.all-group-label {
+  flex: 1;
+  color: var(--text);
+  font-weight: 500;
+}
+
+.all-group-head:hover .all-group-label {
+  color: var(--brass);
+}
+
+/* Theme clustering proposals (Phase 14) — propose→approve, same pattern as elsewhere. */
+.cluster-proposals {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 12px 0 24px;
+}
+
+.cluster-proposal {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cluster-label-input {
+  font-weight: 500;
+}
+
+.cluster-members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.cluster-proposal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .all-items {

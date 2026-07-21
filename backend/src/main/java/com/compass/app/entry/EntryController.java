@@ -43,6 +43,15 @@ public class EntryController {
         return service.listAll().stream().map(EntryResponse::from).toList();
     }
 
+    /**
+     * Propose theme clusters over not-yet-themed ideas (Phase 14). Nothing is tagged — the
+     * founder confirms/renames, then tags each accepted idea via the normal patch endpoint.
+     */
+    @PostMapping("/cluster")
+    public List<EntryService.IdeaCluster> cluster() {
+        return service.clusterIdeas();
+    }
+
     /** Partial update — self-report completion with {"status":"done"}. */
     @PatchMapping("/{id}")
     public EntryResponse patch(@PathVariable Long id, @RequestBody PatchEntryRequest request) {

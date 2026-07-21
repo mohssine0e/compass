@@ -1,5 +1,6 @@
 package com.compass.app.entry;
 
+import com.compass.app.ai.ReviewAiService;
 import com.compass.app.entry.dto.CreateEntryRequest;
 import com.compass.app.entry.dto.EndSessionRequest;
 import com.compass.app.entry.dto.PatchEntryRequest;
@@ -19,15 +20,44 @@ import java.util.NoSuchElementException;
 public class EntryService {
 
     private final EntryRepository repository;
+    private final ReviewAiService reviewAi;
 
-    public EntryService(EntryRepository repository) {
+    public EntryService(EntryRepository repository, ReviewAiService reviewAi) {
         this.repository = repository;
+        this.reviewAi = reviewAi;
     }
 
     /** All entries, newest first. */
     @Transactional(readOnly = true)
     public List<Entry> listAll() {
         return repository.findAllByOrderByCreatedAtDesc();
+    }
+
+    /**
+     * Propose theme clusters over active, not-yet-themed ideas (Phase 14) — nothing is tagged
+     * until the founder confirms via a normal patch ({@code content.theme}). Only ideas without
+     * a theme already are offered, so confirming doesn't need to be redone on every call.
+     */
+    @Transactional(readOnly = true)
+    public List<IdeaCluster> clusterIdeas() {
+        List<Entry> ideas = repository.findAllByOrderByCreatedAtDesc().stream()
+                .filter(e -> e.getType() == EntryType.IDEA)
+                .filter(e -> e.getStatus() != EntryStatus.DROPPED && e.getStatus() != EntryStatus.DONE)
+                .filter(e -> e.getContent() == null || e.getContent().get("theme") == null)
+                .toList();
+        List<String> texts = ideas.stream().map(e -> stringOf(e, "text")).toList();
+        return reviewAi.clusterIdeas(texts).stream()
+                .map(c -> new IdeaCluster(c.label(), c.indices().stream().map(i -> ideas.get(i).getId()).toList()))
+                .toList();
+    }
+
+    private static String stringOf(Entry entry, String key) {
+        Object value = entry.getContent() != null ? entry.getContent().get(key) : null;
+        return value instanceof String s ? s : "";
+    }
+
+    /** A proposed theme and the real idea ids that fit it — for the founder to confirm/edit. */
+    public record IdeaCluster(String label, List<Long> ideaIds) {
     }
 
     @Transactional(readOnly = true)

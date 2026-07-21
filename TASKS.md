@@ -495,14 +495,23 @@ core product gap from real use — highest value, highest risk. Design and get s
 Goal: captured ideas and things become pleasant to view and actually get organized — not one long
 scroll. Reuses the Phase 10 cross-thread engine to group, not just read.
 
-- [ ] Redesign the ideas / "Everything" view: group and collapse (by AI theme, or by
+- [x] Redesign the ideas / "Everything" view: group and collapse (by AI theme, or by
   status/significance) so it stops forcing a scroll; tasks nest tidily under their parent with
-  done ones collapsible.
-- [ ] Auto-cluster captures into themes (reuse the Phase 10 threading), shown for the founder to
-  rename/confirm; a confirmed group can seed a roadmap.
-- [ ] Better idea detail: status, linked next-step tasks, resurface history, and the AI's
+  done ones collapsible. (A Status/Theme toggle; status groups collapse done/dropped/archived by
+  default, each group shows a count and folds away.)
+- [x] Auto-cluster captures into themes (reuse the Phase 10 threading pattern — same
+  AiJsonGenerator plumbing, a sibling to `findThreads`), shown for the founder to rename/confirm;
+  a confirmed group can seed a roadmap. (New `ReviewAiService.clusterIdeas` + `POST
+  /entries/cluster`, proposing groups over not-yet-themed ideas only. Confirming tags each idea
+  with `content.theme` via the existing generic patch endpoint — no new table. "Draft a roadmap"
+  on a confirmed theme pre-fills the existing goal→outline flow with that group's ideas.)
+- [x] Better idea detail: status, linked next-step tasks, resurface history, and the AI's
   interpretation — shown clearly, editable/confirmable (same propose→approve pattern).
-- [ ] **Push + tag `phase-14-complete`. Stop. Let the founder use this for real before continuing.**
+  (`IdeaDetailModal`: editable text, status/significance as toggle chips, linked tasks with
+  check-off, and the resurface log — skip count plus each past resurface response/note — which
+  *is* the AI's engagement with the idea over time; there's no separate stored "interpretation"
+  of an idea elsewhere in the model to surface.)
+- [x] **Push + tag `phase-14-complete`. Stop. Let the founder use this for real before continuing.**
 
 ---
 

@@ -42,6 +42,11 @@ export function patchEntry(id, patch) {
   })
 }
 
+/** Propose theme clusters over not-yet-themed ideas. Returns [{ label, ideaIds }]. */
+export function clusterIdeas() {
+  return request('/entries/cluster', { method: 'POST' })
+}
+
 /** Create a roadmap. `payload` is { title, notes?, steps: string[] }. */
 export function createRoadmap(payload) {
   return request('/roadmaps', {

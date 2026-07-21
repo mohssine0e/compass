@@ -40,4 +40,43 @@ public class ReviewAiService {
     String summary = AiJsonGenerator.text(json.get("summary"));
     return summary == null || summary.isBlank() ? null : summary.trim();
   }
+
+  /**
+   * Proposed theme clusters over a list of idea texts (Phase 14) — for the founder to rename or
+   * drop before anything is tagged. Indices are validated against {@code ideaTexts.size()} and
+   * deduplicated so no idea appears in two themes; empty list when unavailable or nothing clusters.
+   */
+  public List<Cluster> clusterIdeas(List<String> ideaTexts) {
+    if (ideaTexts == null || ideaTexts.size() < 2) {
+      return List.of();
+    }
+    JsonNode json = ai.generate("idea clustering",
+        PromptTemplates.CLUSTER_SYSTEM, PromptTemplates.clusterUser(ideaTexts));
+    if (json == null || json.get("themes") == null || !json.get("themes").isArray()) {
+      return List.of();
+    }
+    List<Cluster> clusters = new java.util.ArrayList<>();
+    java.util.Set<Integer> claimed = new java.util.HashSet<>();
+    for (JsonNode node : json.get("themes")) {
+      String label = AiJsonGenerator.text(node.get("label"));
+      if (label == null || label.isBlank() || node.get("indices") == null
+          || !node.get("indices").isArray()) {
+        continue;
+      }
+      List<Integer> indices = new java.util.ArrayList<>();
+      for (JsonNode i : node.get("indices")) {
+        if (i.isInt() && i.asInt() >= 0 && i.asInt() < ideaTexts.size() && claimed.add(i.asInt())) {
+          indices.add(i.asInt());
+        }
+      }
+      if (indices.size() >= 2) {
+        clusters.add(new Cluster(label.trim(), indices));
+      }
+    }
+    return clusters;
+  }
+
+  /** A proposed theme: its label and the 0-based indices (into the request list) that fit it. */
+  public record Cluster(String label, List<Integer> indices) {
+  }
 }

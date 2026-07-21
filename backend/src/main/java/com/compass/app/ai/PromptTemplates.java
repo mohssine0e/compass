@@ -616,4 +616,33 @@ final class PromptTemplates {
     sb.append("Write the review as JSON.");
     return sb.toString();
   }
+
+  // --- Captures & organization: auto-cluster into themes (Phase 14) ----------------------
+
+  static final String CLUSTER_SYSTEM = """
+      Group the person's captured ideas below into a handful of real THEMES — ideas that are
+      genuinely about the same thing, not a forced category for every idea. Ideas that don't fit
+      any real theme with at least one other idea should be left out entirely, not stuffed into a
+      catch-all group.
+
+      Each theme is an object:
+      - label: a few plain words naming the theme (e.g. "side project ideas", "things to read").
+        Not a category-speak label like "Miscellaneous" or "Other".
+      - indices: the 0-based indices (from the numbered list given) of the ideas in this theme.
+
+      Hard rules:
+      - Only real groupings — at least 2 ideas each. Skip ideas that don't cluster with anything.
+      - An idea can appear in at most one theme.
+      - Output ONLY strict JSON, no prose around it: {"themes": [{"label": "...", "indices": [0, 2]}]}
+      """;
+
+  static String clusterUser(List<String> ideaTexts) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Ideas:\n");
+    for (int i = 0; i < ideaTexts.size(); i++) {
+      sb.append(i).append(". ").append(ideaTexts.get(i)).append('\n');
+    }
+    sb.append("Group them into themes as JSON.");
+    return sb.toString();
+  }
 }

@@ -1,0 +1,82 @@
+.idea-detail-text {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 1rem;
+  line-height: 1.5;
+  outline: none;
+  resize: vertical;
+}
+
+.idea-detail-text:focus {
+  border-color: var(--faint);
+}
+
+.idea-detail-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.idea-detail-section {
+  border-top: 1px solid var(--line);
+  margin-top: 16px;
+  padding-top: 14px;
+}
+
+.idea-detail-tasks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.idea-detail-tasks li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.idea-detail-tasks li.is-done {
+  color: var(--faint);
+  text-decoration: line-through;
+}
+
+.idea-detail-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.idea-detail-log li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.idea-detail-log-date {
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.idea-detail-log-response {
+  color: var(--text);
+}
+
+.idea-detail-log-note {
+  color: var(--muted);
+  font-style: italic;
+}

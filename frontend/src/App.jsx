@@ -91,6 +91,7 @@ export default function App() {
         )}
         {view.name === 'generateRoadmap' && (
           <GenerateRoadmapScreen
+            initialGoal={view.goal}
             onCreated={(id) => go('roadmap', { id })}
             onManual={() => go('newRoadmap')}
             onCancel={() => go('roadmaps')}
@@ -111,7 +112,10 @@ export default function App() {
         )}
         {view.name === 'review' && <ReviewScreen />}
         {view.name === 'all' && (
-          <AllEntriesScreen onOpenRoadmap={(id) => go('roadmap', { id })} />
+          <AllEntriesScreen
+            onOpenRoadmap={(id) => go('roadmap', { id })}
+            onDraftFromTheme={(goal) => go('generateRoadmap', { goal })}
+          />
         )}
         {view.name === 'profile' && <ProfileScreen />}
         {view.name === 'events' && <AdminEventsScreen />}

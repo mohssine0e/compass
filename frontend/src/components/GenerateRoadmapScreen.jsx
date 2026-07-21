@@ -14,9 +14,9 @@ function nextCid() {
 // kept (Phase 4, reshaped by Phase 13). Three phases: state a goal → answer 1–2 clarifying
 // questions → edit the proposed MODULE OUTLINE. Individual steps aren't drafted here — each
 // module is expanded into its own steps later, on demand, from the roadmap view.
-export default function GenerateRoadmapScreen({ onCreated, onManual, onCancel }) {
+export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual, onCancel }) {
   const [phase, setPhase] = useState('goal') // goal | questions | outline
-  const [goal, setGoal] = useState('')
+  const [goal, setGoal] = useState(initialGoal || '')
   const [questions, setQuestions] = useState([])
   const [answers, setAnswers] = useState([])
   const [title, setTitle] = useState('')
