@@ -11,15 +11,24 @@ function nextCid() {
 }
 
 // AI drafts a roadmap's top-level shape from a goal; the user edits and owns it before it's
-// kept (Phase 4, reshaped by Phase 13). Three phases: state a goal → answer 1–2 clarifying
-// questions → edit the proposed MODULE OUTLINE. Individual steps aren't drafted here — each
-// module is expanded into its own steps later, on demand, from the roadmap view.
+// kept (Phase 4, reshaped by Phases 13 and 17). Up to four phases: state a goal → answer 0–4
+// goal-specific clarifying questions → optionally one genuine follow-up round → edit the
+// proposed MODULE OUTLINE. Individual steps aren't drafted here — each module is expanded into
+// its own steps later, on demand, from the roadmap view. The question count and content are
+// adaptive per goal, not a fixed pair — a narrow goal with a rich profile can skip straight to
+// the outline; a founder in a hurry can always skip ahead and let the system state its
+// assumptions instead (see `skipAndDraft`).
 export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual, onCancel }) {
   const [phase, setPhase] = useState('goal') // goal | questions | outline
   const [goal, setGoal] = useState(initialGoal || '')
   const [questions, setQuestions] = useState([])
   const [answers, setAnswers] = useState([])
+  // Clarifications already answered in a prior round, carried forward once a genuine follow-up
+  // round is shown, so the final draft call sends every round's answers merged together.
+  const [priorClarifications, setPriorClarifications] = useState([])
+  const [isFollowUpRound, setIsFollowUpRound] = useState(false)
   const [title, setTitle] = useState('')
+  const [interpretation, setInterpretation] = useState(null)
   const [modules, setModules] = useState([])
   const [skipped, setSkipped] = useState([])
   const [sources, setSources] = useState([])
@@ -39,10 +48,12 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
     setBusy(true)
     setError(null)
     try {
-      const res = await generateRoadmap({ goal: goal.trim() })
+      const res = await generateRoadmap({ goal: goal.trim(), clarifications: null, skipFollowUp: false })
       if (res.status === 'outline') {
         showOutline(res)
       } else {
+        setPriorClarifications([])
+        setIsFollowUpRound(false)
         setQuestions(res.questions || [])
         setAnswers((res.questions || []).map(() => ''))
         setPhase('questions')
@@ -53,14 +64,43 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
     }
   }
 
+  // Skip clarification entirely — draft straight from the goal, with the model stating its
+  // assumptions plainly in the outline instead of asking anything first.
+  async function skipAndDraft() {
+    if (!goal.trim() || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await generateRoadmap({ goal: goal.trim(), clarifications: [], skipFollowUp: true })
+      showOutline(res)
+    } catch (err) {
+      fail(err)
+    }
+  }
+
   async function propose() {
     if (busy) return
     setBusy(true)
     setError(null)
     try {
-      const clarifications = questions.map((q, i) => ({ question: q, answer: answers[i] || '' }))
-      const res = await generateRoadmap({ goal: goal.trim(), clarifications })
-      showOutline(res)
+      const roundAnswers = questions.map((q, i) => ({ question: q, answer: answers[i] || '' }))
+      const clarifications = [...priorClarifications, ...roundAnswers]
+      const res = await generateRoadmap({
+        goal: goal.trim(),
+        clarifications,
+        skipFollowUp: isFollowUpRound,
+      })
+      if (res.status === 'needs_clarification' && !isFollowUpRound) {
+        // A genuine follow-up round, conditioned on what was just answered — show it, then cap
+        // at one more round (the next submit sends skipFollowUp: true regardless of the answer).
+        setPriorClarifications(clarifications)
+        setIsFollowUpRound(true)
+        setQuestions(res.questions || [])
+        setAnswers((res.questions || []).map(() => ''))
+        setBusy(false)
+      } else {
+        showOutline(res)
+      }
     } catch (err) {
       fail(err)
     }
@@ -68,6 +108,7 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
 
   function showOutline(res) {
     setTitle(res.title || '')
+    setInterpretation(res.interpretation || null)
     const raw = res.modules && res.modules.length ? res.modules : [{ title: '', scope: '' }]
     setModules(raw.map((m) => ({ cid: nextCid(), title: m.title || '', scope: m.scope || '' })))
     setSkipped(res.skipped || [])
@@ -126,6 +167,11 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
             <Button variant="ghost" onClick={onCancel}>
               Cancel
             </Button>
+            {!unavailable && (
+              <Button variant="ghost" onClick={skipAndDraft} disabled={!goal.trim() || busy}>
+                Skip — just draft it
+              </Button>
+            )}
             {unavailable ? (
               <Button variant="primary" onClick={onManual}>
                 Write it yourself
@@ -141,7 +187,9 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
 
       {phase === 'questions' && (
         <>
-          <p className="gen-lead">A couple of things first, so the plan fits you.</p>
+          <p className="gen-lead">
+            {isFollowUpRound ? 'One more thing.' : 'A couple of things first, so the plan fits you.'}
+          </p>
           <div className="gen-questions">
             {questions.map((q, i) => (
               <div className="gen-question" key={i}>
@@ -175,6 +223,7 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
             A shape, not a full plan yet. Change anything, then expand each module into steps
             when you're ready to work on it.
           </p>
+          {interpretation && <p className="gen-interpretation">{interpretation}</p>}
           {skipped.length > 0 && (
             <div className="gen-skipped">
               <span className="gen-skipped-label">Skipped, based on your profile:</span>

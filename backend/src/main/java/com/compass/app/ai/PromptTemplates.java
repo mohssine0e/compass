@@ -118,28 +118,48 @@ final class PromptTemplates {
   // clarifying questions) still follows the self-talk-voice rules above.
 
   /**
-   * System prompt for the 1–2 clarifying questions asked before any steps are
-   * drafted.
-   * Not a single-shot generation (CLAUDE.md Phase 4) — the point is to pin down
-   * the two
-   * things that most change the plan: time available and where they're starting
-   * from.
+   * System prompt for the clarifying questions asked before any steps are drafted (Phase 4,
+   * reshaped by Phase 17). Not a single-shot generation — the point is to pin down whatever
+   * actually changes the shape of *this* plan, which is different for every goal. There is
+   * deliberately no default pair of questions here: picking the same two dimensions
+   * ("how much time" / "what do you know") for every goal is exactly the failure mode this
+   * rewrite fixes — a language goal and an infrastructure goal have almost nothing in common as
+   * planning problems, and forcing both through the same two questions makes both shallow.
    */
   static final String CLARIFY_SYSTEM = """
-      The user gave a goal they want a step-by-step roadmap for. Before drafting any steps,
-      ask the 1–2 questions whose answers would most change the shape of that roadmap —
-      usually how much time they have per week and what they already know / have done.
+      The user gave a goal they want a step-by-step roadmap for. Before drafting anything, identify
+      whichever 1–4 dimensions would most change the SHAPE of this specific roadmap — not a fixed
+      pair of questions reused across every goal. Different goals turn on completely different
+      things: a language-learning goal might turn on which languages they already speak and whether
+      there's a trip or deadline; an infrastructure goal might turn on target scale and whether a
+      codebase already exists; a fitness or creative goal might turn on equipment/access and how
+      much of the basics they already have. Those are illustrations of the KIND of specificity
+      wanted, not a menu to pick from — read the actual goal and decide what's genuinely load-
+      bearing for it. Time-per-week and prior experience are sometimes the right dimensions, but
+      treat them as two options among many, never the default.
 
-      If a profile of what they already know is given, use it to make the questions SHARPER,
-      not generic: don't ask about something the profile already answers — instead ask the
-      follow-up it raises (e.g. "you've already covered ownership — skip it here, or want a
-      quick refresher step?" rather than "how much Rust do you know?").
+      Feel free to ask about things beyond raw time/experience when they'd change the plan more:
+      a deadline or target date, budget for paid resources, tools or hardware access, the real
+      motivation (career change vs. hobby vs. passing a specific exam), whether this has to fit an
+      existing team's stack or is fully solo.
+
+      If a confirmed profile is given, do not ask about anything it already answers. Instead of
+      re-asking, state your assumption as a plain statement the person can correct (e.g. "Assuming
+      ~5–8 hrs/week and solid backend experience from your profile — different for this one?").
+      This is a hard rule, not a suggestion: never ask a question whose answer the profile already
+      gives.
+
+      If the goal is narrow, specific, and the profile already covers most of what would matter,
+      it is completely fine to return zero questions — say so by returning an empty list rather
+      than inventing a question just to have one. If the goal is broad or vague, more questions
+      (up to four) are warranted precisely because forcing it into fewer would make each one
+      shallow.
 
       Hard rules:
-      - At most two questions. Fewer is better if one already covers it.
+      - 0 to 4 questions. Every one must be genuinely load-bearing for this specific goal — cut
+        anything that would apply to a random other goal unchanged.
       - Each question is one plain line, in the user's own clear-headed inner voice — not a
         form field, not a chatbot. No greeting, no preamble, no "let me ask".
-      - Specific to this goal (and their profile, if given), not generic.
       - No praise, no encouragement, no emoji, no exclamation points.
       - Output ONLY strict JSON, no prose around it: {"questions": ["...", "..."]}
       """;
@@ -149,6 +169,39 @@ final class PromptTemplates {
     sb.append("Goal: ").append(goal == null ? "" : goal.trim()).append('\n');
     appendProfile(sb, profileContext);
     sb.append("Write the clarifying questions as JSON.");
+    return sb.toString();
+  }
+
+  /**
+   * System prompt for an optional single follow-up round (Phase 17), conditioned on the first
+   * round's actual answers — a genuine follow-up, not a second generic pass. Returning nothing
+   * is the expected common case; this must not become a de facto third hoop for every goal.
+   */
+  static final String FOLLOWUP_CLARIFY_SYSTEM = """
+      The user already answered a first round of clarifying questions about their roadmap goal.
+      Look at what they actually said. Only if one of their answers raises a real, more specific
+      follow-up question worth asking before drafting — ask it now. If their answers were already
+      clear and specific enough to draft from, return an empty list; that should be the common
+      outcome, not the exception.
+
+      Example of a genuine follow-up: they said "a few months, part-time" for a deadline question
+      — worth pinning down roughly how many hours a week that means. Example of a NON-follow-up:
+      they gave a clear, specific answer already — do not ask a rephrased version of the same
+      question, and do not ask something new just to fill a slot.
+
+      Hard rules:
+      - 0 to 2 questions. Zero is the expected common case.
+      - Each question is one plain line, self-talk voice, no greeting, no "thanks for answering".
+      - Output ONLY strict JSON, no prose around it: {"questions": ["...", "..."]}
+      """;
+
+  static String followUpClarifyUser(String goal, String firstRoundQa, String profileContext) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Goal: ").append(goal == null ? "" : goal.trim()).append('\n');
+    sb.append("First round of questions and answers:\n")
+        .append(firstRoundQa == null ? "" : firstRoundQa.trim()).append('\n');
+    appendProfile(sb, profileContext);
+    sb.append("Write any genuine follow-up questions as JSON (usually none).");
     return sb.toString();
   }
 
@@ -176,6 +229,18 @@ final class PromptTemplates {
       authoritative sources actually structure this material over your own memory. Don't invent
       sources.
 
+      If the goal could reasonably mean more than one thing (different domains, scopes, or
+      end points — e.g. "learn Rust" could mean systems programming, web backends, embedded, or
+      games), include an "interpretation" field: one plain line stating plainly which reading
+      you're running with, so it can be corrected before anything else happens (e.g. "Reading
+      this as: Rust for backend services, not embedded or game dev — say if that's wrong."). If
+      the goal is already unambiguous, omit it or set it to null — don't manufacture one.
+
+      If little or nothing was said in clarification (the person skipped ahead, or the profile
+      already covered everything worth asking), state your key assumptions plainly as part of the
+      interpretation line instead of silently guessing (e.g. "Assuming ~5 hrs/week and no prior
+      experience — say if that's off.").
+
       Each module is an object:
       - title: a few plain words naming the area (e.g. "Ownership & memory"). No numbering, no
         "Module 1", no emoji.
@@ -188,7 +253,7 @@ final class PromptTemplates {
       - Fit the scope to their stated time and starting point. Don't pad.
       - Give the whole roadmap a short, plain title (a few words) naming what they'll be able to do.
       - Output ONLY strict JSON, no prose around it:
-        {"title": "...", "modules": [{"title": "...", "scope": "..."}], "skipped": ["..."]}
+        {"title": "...", "interpretation": "..." or null, "modules": [{"title": "...", "scope": "..."}], "skipped": ["..."]}
       """;
 
   static String outlineUser(String goal, String clarifications, String profileContext,
@@ -197,6 +262,8 @@ final class PromptTemplates {
     sb.append("Goal: ").append(goal == null ? "" : goal.trim()).append('\n');
     if (clarifications != null && !clarifications.isBlank()) {
       sb.append("What they told you:\n").append(clarifications.trim()).append('\n');
+    } else {
+      sb.append("(No clarification given — state your key assumptions plainly.)\n");
     }
     appendProfile(sb, profileContext);
     if (groundingContext != null && !groundingContext.isBlank()) {

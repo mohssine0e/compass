@@ -35,6 +35,15 @@
   line-height: 1.4;
 }
 
+.gen-interpretation {
+  margin: 0;
+  padding: 10px 14px;
+  border-left: 2px solid var(--brass);
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
 .gen-skipped {
   border-left: 2px solid var(--line);
   padding: 4px 0 4px 14px;

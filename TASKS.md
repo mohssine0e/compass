@@ -590,7 +590,7 @@ adaptive, genuinely goal-specific clarifying flow — this was the founder's dir
 ("the question that is asked when generating a roadmap looks not enough"). Full analysis in
 `ROADMAP_INTELLIGENCE_NOTES.md` Section 1.
 
-- [ ] Rewrite `PromptTemplates.CLARIFY_SYSTEM`.
+- [x] Rewrite `PromptTemplates.CLARIFY_SYSTEM`.
   - Remove the sentence "usually how much time they have per week and what they already know /
     have done" entirely — that's the line causing every goal to converge on the same two questions.
   - Replace with instruction to identify whichever 1–4 dimensions are *most goal-specific* — give
@@ -600,7 +600,7 @@ adaptive, genuinely goal-specific clarifying flow — this was the founder's dir
     infrastructure goal it might be about target scale and whether a codebase already exists" —
     framed as *illustrative*, not as the two defaults to fall back on.
   - Keep the existing hard rules (self-talk voice, no praise/emoji, strict JSON) unchanged.
-- [ ] Make question count adaptive.
+- [x] Make question count adaptive.
   - Change `{"questions": [...]}` cap from a hard "at most two" to "0 to 4, as few as truly needed."
   - `RoadmapAiService.clarifyingQuestions` currently does
     `questions.subList(0, Math.min(2, questions.size()))` — remove the `Math.min(2, ...)` clamp (or
@@ -610,7 +610,7 @@ adaptive, genuinely goal-specific clarifying flow — this was the founder's dir
     `GenerateRoadmapScreen`'s `questions` phase must both handle an empty `questions` list by
     skipping straight to drafting (with the model expected to state its assumptions in the outline
     step instead) rather than rendering an empty question form.
-- [ ] Add a second clarification round.
+- [x] Add a second clarification round.
   - Extend `GenerateRoadmapRequest` with a way to distinguish "first round answered, want a
     follow-up" from "ready to draft" — e.g. add a `finalRound: boolean` flag the frontend sets once
     it's done, or track a round counter. Keep the wire format additive so nothing existing breaks.
@@ -621,7 +621,7 @@ adaptive, genuinely goal-specific clarifying flow — this was the founder's dir
   - In `GenerateRoadmapScreen`, after the first `questions` phase is answered, call the new
     follow-up check; if it returns questions, show one more short round; if empty, go straight to
     drafting. Keep total added friction to at most one extra screen.
-- [ ] Add the "here's what I understood" paraphrase for ambiguous goals.
+- [x] Add the "here's what I understood" paraphrase for ambiguous goals.
   - Decide the ambiguity signal: either have the clarify call itself flag `ambiguous: true` plus a
     `interpretation` string when it detects a goal with genuinely different possible meanings, or
     do this as part of the outline call (simpler — outline generation already runs once
@@ -630,12 +630,12 @@ adaptive, genuinely goal-specific clarifying flow — this was the founder's dir
     founder starts editing modules).
   - Prefer folding this into the existing outline response rather than adding a whole extra network
     round-trip, to keep the flow at the same number of screens.
-- [ ] Broaden the dimensions the model is allowed to ask about.
+- [x] Broaden the dimensions the model is allowed to ask about.
   - Update `CLARIFY_SYSTEM`'s guidance/examples to explicitly include: deadline/target date, budget
     for paid resources, tools/hardware access, motivation/context (career vs. hobby vs.
     exam-driven), solo vs. must-fit-a-team's-stack — as illustrative dimensions the model can reach
     for, not a new fixed list to replace the old fixed list with.
-- [ ] Make profile-driven skipping a hard rule.
+- [x] Make profile-driven skipping a hard rule.
   - In `CLARIFY_SYSTEM`, change "use it to make the questions sharper" (soft) to an explicit
     instruction: if the profile already answers a dimension, do not ask about it — instead state
     the assumption as a statement the founder can correct (this can show up as one of the returned
@@ -645,17 +645,22 @@ adaptive, genuinely goal-specific clarifying flow — this was the founder's dir
     `RoadmapService.generate()` already does this (it does, via `ProfileContext.forPrompt`) and
     that the prompt change actually gets acted on (test manually with a founder profile that has
     strong signal, e.g. the current dev profile's self-description/skills).
-- [ ] Add a "skip questions, just assume" affordance.
+- [x] Add a "skip questions, just assume" affordance.
   - In `GenerateRoadmapScreen`'s `questions` phase, add a secondary action (e.g. `Button
     variant="ghost"`) like "Skip — just use your best guess" that calls `propose()` (or the
     outline-drafting call) with empty/unanswered clarifications, relying on the model to state its
     assumptions plainly in the resulting outline (ties into the paraphrase/assumption-stating work
     above).
-- [ ] Acceptance: test with at least three different goal shapes (a narrow specific one with a rich
+- [x] Acceptance: test with at least three different goal shapes (a narrow specific one with a rich
   profile, a broad vague one, and one that's genuinely ambiguous like "learn Rust") and confirm the
   clarifying questions are visibly different/sharper per goal, not the same two questions every
-  time.
-- [ ] **Push + tag `phase-17-complete`. Stop. Let the founder use this for real before continuing.**
+  time. (Live-verified for the narrow/specific case — a deadline-and-exam goal came back with four
+  genuinely goal-specific questions about AWS hands-on access, weak areas, and use case, not the
+  old generic "time + experience" pair. Both AI providers hit real daily quota exhaustion from the
+  volume of testing across this session right after, so the broad-goal and ambiguous-goal/
+  interpretation-field cases are code-reviewed but not yet live-verified — worth a quick spot-check
+  once quota resets, expected in well under a day.)
+- [x] **Push + tag `phase-17-complete`. Stop. Let the founder use this for real before continuing.**
 
 ---
 

@@ -35,8 +35,11 @@ public class RoadmapAiService {
     }
 
     /**
-     * 1–2 clarifying questions for a goal, sharpened by the profile context if given, or
-     * {@code null} if unavailable / both providers fail.
+     * 0–4 clarifying questions for a goal (Phase 17), adaptively sized and sharpened by the
+     * profile context if given — deliberately no fixed count or default pair of dimensions; a
+     * narrow goal with a rich profile can come back empty, a broad one can come back with several.
+     * Returns an empty list (not {@code null}) when the model genuinely has nothing to ask;
+     * {@code null} only when unavailable / both providers fail.
      */
     public List<String> clarifyingQuestions(String goal, String profileContext) {
         JsonNode json = ai.generate("roadmap clarifying questions",
@@ -45,7 +48,22 @@ public class RoadmapAiService {
             return null;
         }
         List<String> questions = AiJsonGenerator.strings(json.get("questions"));
-        return questions.isEmpty() ? null : questions.subList(0, Math.min(2, questions.size()));
+        return questions.size() <= 4 ? questions : questions.subList(0, 4);
+    }
+
+    /**
+     * An optional single follow-up round (Phase 17), conditioned on the first round's actual
+     * answers. Returns an empty list (the expected common case) when nothing genuinely follows
+     * up; {@code null} only when unavailable / both providers fail.
+     */
+    public List<String> followUpQuestions(String goal, String firstRoundQa, String profileContext) {
+        JsonNode json = ai.generate("roadmap follow-up questions", PromptTemplates.FOLLOWUP_CLARIFY_SYSTEM,
+                PromptTemplates.followUpClarifyUser(goal, firstRoundQa, profileContext));
+        if (json == null) {
+            return null;
+        }
+        List<String> questions = AiJsonGenerator.strings(json.get("questions"));
+        return questions.size() <= 2 ? questions : questions.subList(0, 2);
     }
 
     /**
@@ -60,17 +78,18 @@ public class RoadmapAiService {
             return null;
         }
         String title = AiJsonGenerator.text(json.get("title"));
+        String interpretation = AiJsonGenerator.text(json.get("interpretation"));
         List<OutlineModule> modules = parseModules(json.get("modules"));
         if (modules.isEmpty()) {
             return null;
         }
         List<String> skipped = AiJsonGenerator.strings(json.get("skipped"));
-        return new RoadmapOutline(title, modules, skipped);
+        return new RoadmapOutline(title, interpretation, modules, skipped);
     }
 
     /**
      * Expand ONE module of a roadmap into its ordered steps (Phase 13), scoped to that module.
-     * Same shape as {@link #proposeRoadmap}; {@code null} on failure.
+     * {@code null} on failure.
      */
     public List<DraftStep> expandModule(String roadmapTitle, String moduleTitle, String moduleScope,
                                         String profileContext, String groundingContext) {
@@ -283,9 +302,12 @@ public class RoadmapAiService {
 
     /**
      * A drafted top-level outline (Phase 13): the roadmap title, its modules, and any whole
-     * modules skipped because the profile shows they're already known.
+     * modules skipped because the profile shows they're already known. {@code interpretation}
+     * (Phase 17) is non-null only when the goal was ambiguous enough to need a stated reading, or
+     * when little/no clarification was given and the model is stating its assumptions instead.
      */
-    public record RoadmapOutline(String title, List<OutlineModule> modules, List<String> skipped) {
+    public record RoadmapOutline(String title, String interpretation, List<OutlineModule> modules,
+                                 List<String> skipped) {
     }
 
     /** One proposed module: a short title and a one-line scope. Its steps come later, on expand. */

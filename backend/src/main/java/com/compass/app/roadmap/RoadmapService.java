@@ -43,12 +43,22 @@ public class RoadmapService {
     }
 
     /**
-     * One turn of the AI drafting flow (Phase 4, reshaped by Phase 13). With no clarifications
-     * yet, returns the clarifying questions to ask first; once they're answered, returns a
-     * top-level MODULE OUTLINE — not individual steps. Each module is expanded into its own
-     * steps later, on demand, via {@link #expandModule}. Nothing is persisted until the user
-     * creates the roadmap the normal way. Throws {@link IllegalStateException} when no AI
-     * provider can serve the request, so the caller can fall back to writing steps by hand.
+     * One turn of the AI drafting flow (Phase 4, reshaped by Phases 13 and 17). Up to three
+     * turns end to end:
+     * <ol>
+     *   <li>{@code clarifications == null} → ask 0–4 goal-specific questions (adaptive, no fixed
+     *       default pair); if the model genuinely has nothing to ask, draft immediately instead
+     *       of returning an empty question form;</li>
+     *   <li>{@code clarifications} present, {@code skipFollowUp == false} → check for one
+     *       genuine follow-up round conditioned on those answers; a real follow-up comes back as
+     *       another {@code needs_clarification}, otherwise falls through to drafting;</li>
+     *   <li>{@code skipFollowUp == true} (or no follow-up was found) → draft the top-level
+     *       MODULE OUTLINE — not individual steps. Each module is expanded into its own steps
+     *       later, on demand, via {@link #expandModule}.</li>
+     * </ol>
+     * Nothing is persisted until the user creates the roadmap the normal way. Throws
+     * {@link IllegalStateException} when no AI provider can serve the request, so the caller can
+     * fall back to writing steps by hand.
      */
     public GenerateRoadmapResponse generate(GenerateRoadmapRequest req) {
         String goal = req.goal() != null ? req.goal().trim() : "";
@@ -71,9 +81,29 @@ public class RoadmapService {
                 throw new IllegalStateException(
                         "Drafting is unavailable right now — write the steps yourself.");
             }
+            if (questions.isEmpty()) {
+                // Nothing genuinely worth asking — draft straight away rather than showing an
+                // empty question form; the outline prompt states its assumptions plainly instead.
+                return draftOutline(goal, "", profileContext);
+            }
             return GenerateRoadmapResponse.needsClarification(questions);
         }
 
+        String firstRoundQa = formatClarifications(req.clarifications());
+        if (!req.skipFollowUp()) {
+            List<String> followUps = roadmapAi.followUpQuestions(goal, firstRoundQa, profileContext);
+            // followUps == null means the follow-up check itself failed (unavailable/error) —
+            // treat that the same as "nothing to add" rather than blocking drafting on it.
+            if (followUps != null && !followUps.isEmpty()) {
+                return GenerateRoadmapResponse.needsClarification(followUps);
+            }
+        }
+
+        return draftOutline(goal, firstRoundQa, profileContext);
+    }
+
+    /** The actual outline-drafting call, shared by the zero-questions and answered-questions paths. */
+    private GenerateRoadmapResponse draftOutline(String goal, String clarificationsText, String profileContext) {
         // Ground the outline in real sources when a search key is configured; null (and no
         // sources) when it isn't, and generation proceeds ungrounded.
         SearchGroundingService.Grounding grounding = searchGrounding.ground(goal);
@@ -81,13 +111,14 @@ public class RoadmapService {
         List<String> sources = grounding == null ? List.of() : grounding.sources();
 
         RoadmapAiService.RoadmapOutline outline = roadmapAi.moduleOutline(
-                goal, formatClarifications(req.clarifications()), profileContext, groundingContext);
+                goal, clarificationsText, profileContext, groundingContext);
         if (outline == null) {
             throw new IllegalStateException(
                     "Drafting is unavailable right now — write the steps yourself.");
         }
 
-        return GenerateRoadmapResponse.outline(outline.title(), outline.modules(), outline.skipped(), sources);
+        return GenerateRoadmapResponse.outline(
+                outline.title(), outline.interpretation(), outline.modules(), outline.skipped(), sources);
     }
 
     /**
