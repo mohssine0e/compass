@@ -18,7 +18,7 @@ const HELP_ACTIONS = [
 // works fine without ever opening this — low friction preserved.
 const WEIGHT_LABEL = { small: 'small', medium: 'medium', large: 'large' }
 
-export default function StepDeepView({ step, onClose, onChanged }) {
+export default function StepDeepView({ step, atMaxDepth = false, onClose, onChanged }) {
   const content = step.content || {}
   const [covers, setCovers] = useState(content.covers || null)
   const [loadingCovers, setLoadingCovers] = useState(false)
@@ -335,6 +335,7 @@ export default function StepDeepView({ step, onClose, onChanged }) {
       {reformulating && (
         <ReformulatePanel
           step={step}
+          atMaxDepth={atMaxDepth}
           onClose={() => setReformulating(false)}
           onApplied={() => {
             setReformulating(false)

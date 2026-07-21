@@ -625,6 +625,37 @@ public class RoadmapService {
         return sb.toString();
     }
 
+    // Total tree depth allowed below the roadmap root (Phase 20) — module(1)/step(2)/substep(3),
+    // no deeper. Counted from the root, not by role, so a flat roadmap's step(1)/substep(2)
+    // naturally gets one more level of break-down room than a nested one, which is fine: the cap
+    // is about total nesting, not about labeling every level "module" or "step".
+    private static final int MAX_STEP_DEPTH = 3;
+
+    /** How many parents up to the root roadmap (root itself is depth 0). */
+    private int depthOf(Entry entry) {
+        int depth = 0;
+        Long parentId = entry.getParentId();
+        while (parentId != null) {
+            depth++;
+            Entry parent = repository.findById(parentId).orElse(null);
+            parentId = parent == null ? null : parent.getParentId();
+        }
+        return depth;
+    }
+
+    /**
+     * True when {@code stepId} is already as deep as the nesting cap allows, so breaking it down
+     * further would be rejected (Phase 20) — checked early (before spending an AI call on a draft
+     * that could never be applied) as well as enforced again in {@link #splitStep} itself.
+     */
+    @Transactional(readOnly = true)
+    public boolean isAtMaxStepDepth(Long stepId) {
+        return repository.findById(stepId)
+                .map(this::depthOf)
+                .map(depth -> depth >= MAX_STEP_DEPTH)
+                .orElse(false);
+    }
+
     /** Every resource url already attached anywhere in this roadmap's tree (Phase 13 dedup). */
     @Transactional(readOnly = true)
     public Set<String> usedResourceUrls(Long roadmapId) {
@@ -1026,6 +1057,9 @@ public class RoadmapService {
                 .filter(s -> s.getType() == EntryType.ROADMAP_STEP)
                 .orElseThrow(() -> new java.util.NoSuchElementException(
                         "No step " + stepId + " on roadmap " + roadmapId));
+        if (depthOf(original) >= MAX_STEP_DEPTH) {
+            throw new IllegalStateException("This is already broken down as far as it goes.");
+        }
 
         createDraftSteps(original.getId(), clean);
         repository.touchUpdatedAt(roadmapId, Instant.now());

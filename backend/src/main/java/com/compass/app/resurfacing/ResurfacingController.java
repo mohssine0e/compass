@@ -43,7 +43,8 @@ public class ResurfacingController {
         }
         return service.nextCandidate()
                 .map(entry -> ResponseEntity.ok(
-                        ResurfacingPrompt.of(entry, service.question(entry), service.historyNote(entry))))
+                        ResurfacingPrompt.of(entry, service.question(entry), service.historyNote(entry),
+                                service.canBreakDownCurrentStep(entry))))
                 .orElseGet(() -> ResponseEntity.noContent().build());
     }
 

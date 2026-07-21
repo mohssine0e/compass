@@ -50,9 +50,15 @@ public record ResurfacingPrompt(
             Option.restructure("break_down", "break this step down"),
             Option.restructure("add_prerequisite", "something's missing first"));
 
-    /** A normal resurface of a stalled idea/roadmap: an honest question + answer options. */
-    public static ResurfacingPrompt of(Entry entry, String question, String note) {
-        return new ResurfacingPrompt("resurface", EntryResponse.from(entry), question, note, optionsFor(entry));
+    /**
+     * A normal resurface of a stalled idea/roadmap: an honest question + answer options.
+     * {@code canBreakDown} (Phase 20) omits the "break this step down" option once the current
+     * step is already at the substep nesting cap, rather than offering an action that would just
+     * be rejected on apply.
+     */
+    public static ResurfacingPrompt of(Entry entry, String question, String note, boolean canBreakDown) {
+        return new ResurfacingPrompt("resurface", EntryResponse.from(entry), question, note,
+                optionsFor(entry, canBreakDown));
     }
 
     /** A spaced recheck of a done step (Phase 8): answer the check, no answer-options list. */
@@ -60,10 +66,14 @@ public record ResurfacingPrompt(
         return new ResurfacingPrompt("recheck", EntryResponse.from(step), question, null, List.of());
     }
 
-    private static List<Option> optionsFor(Entry entry) {
+    private static List<Option> optionsFor(Entry entry, boolean canBreakDown) {
         List<Option> options = new ArrayList<>(DEFAULT_OPTIONS);
         if (entry != null && entry.getType() == EntryType.ROADMAP) {
-            options.addAll(RESTRUCTURE_OPTIONS);
+            for (Option o : RESTRUCTURE_OPTIONS) {
+                if (canBreakDown || !"break_down".equals(o.value())) {
+                    options.add(o);
+                }
+            }
         }
         return options;
     }

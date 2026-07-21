@@ -12,7 +12,7 @@ const KINDS = [
   { kind: 'easier_resources', label: 'Find gentler resources' },
 ]
 
-export default function ReformulatePanel({ step, onClose, onApplied }) {
+export default function ReformulatePanel({ step, atMaxDepth = false, onClose, onApplied }) {
   const [proposal, setProposal] = useState(null) // { kind, ... } | { loading: true }
   const [steps, setSteps] = useState([])
   const [prerequisite, setPrerequisite] = useState('')
@@ -59,11 +59,18 @@ export default function ReformulatePanel({ step, onClose, onApplied }) {
 
         {!proposal && (
           <div className="reformulate-options">
-            {KINDS.map((k) => (
-              <button key={k.kind} className="reformulate-option" onClick={() => choose(k.kind)}>
-                {k.label}
-              </button>
-            ))}
+            {KINDS.map((k) =>
+              k.kind === 'break_down' && atMaxDepth ? (
+                <p key={k.kind} className="reformulate-note">
+                  This is already broken down as far as it goes. Try something else, or edit it
+                  directly.
+                </p>
+              ) : (
+                <button key={k.kind} className="reformulate-option" onClick={() => choose(k.kind)}>
+                  {k.label}
+                </button>
+              )
+            )}
           </div>
         )}
 

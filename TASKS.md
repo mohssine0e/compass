@@ -1105,7 +1105,7 @@ separate systems.
     correctly; confirmed the bridge-step LLM call itself round-trips real, genuinely-connecting
     content via a direct provider call (AWS IAM → Kubernetes service accounts, for a
     deliberately large synthetic conceptual gap).
-- [ ] Decide and enforce a substep nesting depth limit.
+- [x] Decide and enforce a substep nesting depth limit.
   - Pick a hard cap (2 or 3 levels total, including the top-level module) and enforce it
     server-side in `RoadmapService.splitStep` (reject/error if the target step's depth is already
     at the cap) and reflect the cap in the UI (e.g. "This is too much" / break-down action hidden
@@ -1113,6 +1113,24 @@ separate systems.
   - Manually test the Tree view's indentation and collapse/expand behavior at the chosen max depth
     with real multi-line step text, and fix any visual breakage found (this may feed into the
     design-system phase if it turns out to be primarily a CSS issue rather than a logic one).
+  - Picked 3 total levels below the roadmap root (module/step/substep — no sub-substeps), counted
+    from the root rather than by role, so a flat roadmap's step/substep naturally gets one more
+    level of room than a nested roadmap's module/step/substep — the cap is about total nesting
+    depth, not about labeling every level. `RoadmapService.depthOf`/`isAtMaxStepDepth` enforce it
+    in `splitStep` itself (defense in depth) and are also checked early in both
+    `ReformulateService.propose` and `ResurfacingService.proposeRestructure`'s `break_down` cases,
+    so a doomed request fails fast rather than wasting an AI call only to be rejected on apply.
+    Frontend: `ReformulatePanel` replaces the "Break it into smaller steps" option with a plain
+    explanation once `atMaxDepth` (computed from the existing tree-render depth in
+    `RoadmapDetail`); the resurfacing-triggered path omits the option server-side via
+    `ResurfacingPrompt.optionsFor` instead (a plain-voice explanation there was scoped as a
+    smaller follow-up, not blocking, since the backend already rejects safely either way).
+  - Live-verified: broke a real step down (from the task above) into 4 substeps, then confirmed
+    attempting to break one of those substeps down further was rejected instantly (0.2s, no AI
+    call spent) with "This is already broken down as far as it goes." Manually checked the Tree
+    view at this depth in the browser: indentation steps correctly per level, multi-line substep
+    text wraps cleanly with badges/dependency lines intact, and collapse/expand still works
+    correctly on the now-container parent step — no visual breakage found.
 - [ ] Add a "promote back up" path.
   - Flatten: new `RoadmapService` method that takes a container step (one with substeps) and either
     (a) requires it have no meaningful substep progress and just deletes the substeps, reverting the

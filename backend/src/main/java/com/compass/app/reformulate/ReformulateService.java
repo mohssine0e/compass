@@ -62,6 +62,9 @@ public class ReformulateService {
 
     return switch (kind == null ? "" : kind) {
       case "break_down" -> {
+        if (roadmapService.isAtMaxStepDepth(stepId)) {
+          throw new IllegalStateException("This is already broken down as far as it goes.");
+        }
         String profileContext = profileService.confirmedProfile()
             .map(p -> ProfileContext.forModulePrompt(p, roadmapTitle, stepText))
             .orElse(null);

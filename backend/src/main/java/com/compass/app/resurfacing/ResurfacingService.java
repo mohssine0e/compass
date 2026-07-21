@@ -143,6 +143,16 @@ public class ResurfacingService {
         return text instanceof String s ? s : null;
     }
 
+    /**
+     * Whether the current step (if any) is shallow enough for "break this step down" to still be
+     * a valid restructure option (Phase 20) — checked when building the prompt so the option
+     * isn't offered only to be rejected on apply.
+     */
+    public boolean canBreakDownCurrentStep(Entry entry) {
+        Entry step = currentStepOf(entry);
+        return step != null && !roadmapService.isAtMaxStepDepth(step.getId());
+    }
+
     /** The first not-done, not-dropped step of a roadmap — where you actually are — or null. */
     Entry currentStepOf(Entry entry) {
         if (entry == null || entry.getType() != com.compass.app.entry.EntryType.ROADMAP) {
@@ -225,6 +235,9 @@ public class ResurfacingService {
 
         return switch (kind == null ? "" : kind) {
             case "break_down" -> {
+                if (roadmapService.isAtMaxStepDepth(step.getId())) {
+                    throw new IllegalStateException("This is already broken down as far as it goes.");
+                }
                 String profileContext = profileService.confirmedProfile()
                         .map(p -> ProfileContext.forModulePrompt(p, title, stepText))
                         .orElse(null);

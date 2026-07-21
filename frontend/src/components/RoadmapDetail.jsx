@@ -667,6 +667,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
       {deepStepId && findNode(children, deepStepId) && (
         <StepDeepView
           step={toStepShape(findNode(children, deepStepId))}
+          atMaxDepth={(findNodeDepth(children, deepStepId) ?? 0) >= MAX_STEP_DEPTH}
           onClose={() => setDeepStepId(null)}
           onChanged={load}
         />
@@ -773,6 +774,23 @@ function findNode(nodes, targetId) {
   }
   return null
 }
+
+// Nesting depth of a node (0 = top-level, matching NodeRenderer's depth prop) — used to disable
+// "break it down" once a step is already at the substep nesting cap (Phase 20).
+function findNodeDepth(nodes, targetId, depth = 0) {
+  for (const n of nodes) {
+    if (n.id === targetId) return depth
+    if (n.children) {
+      const found = findNodeDepth(n.children, targetId, depth + 1)
+      if (found != null) return found
+    }
+  }
+  return null
+}
+
+// Matches RoadmapService's server-side MAX_STEP_DEPTH=3 (root roadmap not counted, so a
+// frontend depth of 2 is already the deepest substep the backend will accept splitting further).
+const MAX_STEP_DEPTH = 2
 
 function BackLink({ onBack }) {
   return (
