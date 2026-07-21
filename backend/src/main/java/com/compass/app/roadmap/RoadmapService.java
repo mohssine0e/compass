@@ -84,7 +84,7 @@ public class RoadmapService {
             if (questions.isEmpty()) {
                 // Nothing genuinely worth asking — draft straight away rather than showing an
                 // empty question form; the outline prompt states its assumptions plainly instead.
-                return draftOutline(goal, "", profileContext);
+                return draft(goal, "", profileContext);
             }
             return GenerateRoadmapResponse.needsClarification(questions);
         }
@@ -99,26 +99,53 @@ public class RoadmapService {
             }
         }
 
-        return draftOutline(goal, firstRoundQa, profileContext);
+        return draft(goal, firstRoundQa, profileContext);
     }
 
-    /** The actual outline-drafting call, shared by the zero-questions and answered-questions paths. */
-    private GenerateRoadmapResponse draftOutline(String goal, String clarificationsText, String profileContext) {
-        // Ground the outline in real sources when a search key is configured; null (and no
-        // sources) when it isn't, and generation proceeds ungrounded.
+    /**
+     * The actual drafting call (Phase 18), shared by the zero-questions and answered-questions
+     * paths. Grounds once, assesses the goal's scope once, then gates on {@code shape}: a small
+     * goal drafts straight to a flat step list; a bigger one drafts the module outline as before.
+     * A failed assessment falls back to today's un-assessed behavior (nested, mid-range) rather
+     * than blocking generation on it.
+     */
+    private GenerateRoadmapResponse draft(String goal, String clarificationsText, String profileContext) {
+        // Ground once, in real sources when a search key is configured; null (and no sources)
+        // when it isn't, and generation proceeds ungrounded. Shared by assessment and drafting.
         SearchGroundingService.Grounding grounding = searchGrounding.ground(goal);
         String groundingContext = grounding == null ? null : grounding.context();
         List<String> sources = grounding == null ? List.of() : grounding.sources();
 
-        RoadmapAiService.RoadmapOutline outline = roadmapAi.moduleOutline(
+        RoadmapAiService.GoalAssessment assessment = roadmapAi.assessGoal(
                 goal, clarificationsText, profileContext, groundingContext);
+        if (assessment == null) {
+            assessment = new RoadmapAiService.GoalAssessment(3, null, null, null, "nested");
+        }
+        String assessmentContext = RoadmapAiService.assessmentContext(assessment);
+
+        if ("flat".equals(assessment.shape())) {
+            RoadmapAiService.FlatProposal flat = roadmapAi.proposeFlat(
+                    goal, clarificationsText, profileContext, groundingContext, assessmentContext);
+            if (flat == null) {
+                throw new IllegalStateException(
+                        "Drafting is unavailable right now — write the steps yourself.");
+            }
+            List<String> stepTexts = flat.steps().stream().map(RoadmapAiService.DraftStep::text).toList();
+            List<List<RoadmapAiService.Resource>> resources = roadmapAi.suggestResources(
+                    goal, stepTexts, grounding == null ? null : grounding.results(),
+                    avoidedFormats(), Set.of());
+            return GenerateRoadmapResponse.proposal(flat.title(), flat.interpretation(), flat.steps(),
+                    resources, flat.skipped(), sources, assessment, Map.of());
+        }
+
+        RoadmapAiService.RoadmapOutline outline = roadmapAi.moduleOutline(
+                goal, clarificationsText, profileContext, groundingContext, assessmentContext);
         if (outline == null) {
             throw new IllegalStateException(
                     "Drafting is unavailable right now — write the steps yourself.");
         }
-
-        return GenerateRoadmapResponse.outline(
-                outline.title(), outline.interpretation(), outline.modules(), outline.skipped(), sources);
+        return GenerateRoadmapResponse.outline(outline.title(), outline.interpretation(),
+                outline.modules(), outline.skipped(), sources, assessment);
     }
 
     /**
@@ -143,6 +170,30 @@ public class RoadmapService {
         String profileContext = profileService.confirmedProfile()
                 .map(ProfileContext::forPrompt)
                 .orElse(null);
+        String assessmentContext = storedAssessmentContext(roadmap);
+
+        // Steps already drafted in genuinely earlier modules (lower order index), offered as
+        // real cross-module prerequisites (Phase 18) — not just same-batch ones.
+        List<RoadmapAiService.PriorStep> priorSteps = new ArrayList<>();
+        Map<Long, String> priorStepTextById = new HashMap<>();
+        if (module.getOrderIndex() != null) {
+            for (Entry sibling : repository.findByParentIdOrderByOrderIndexAsc(roadmapId)) {
+                if (sibling.getOrderIndex() == null || sibling.getOrderIndex() >= module.getOrderIndex()) {
+                    continue;
+                }
+                for (Entry step : repository.findByParentIdOrderByOrderIndexAsc(sibling.getId())) {
+                    if (step.getType() != EntryType.ROADMAP_STEP) {
+                        continue;
+                    }
+                    String text = stringOf(step, "text");
+                    if (text == null || text.isBlank()) {
+                        continue;
+                    }
+                    priorSteps.add(new RoadmapAiService.PriorStep(step.getId(), text));
+                    priorStepTextById.put(step.getId(), text);
+                }
+            }
+        }
 
         String groundingQuery = moduleScope != null && !moduleScope.isBlank()
                 ? moduleTitle + ": " + moduleScope : moduleTitle;
@@ -150,8 +201,8 @@ public class RoadmapService {
         String groundingContext = grounding == null ? null : grounding.context();
         List<String> sources = grounding == null ? List.of() : grounding.sources();
 
-        List<RoadmapAiService.DraftStep> steps = roadmapAi.expandModule(
-                roadmapTitle, moduleTitle, moduleScope, profileContext, groundingContext);
+        List<RoadmapAiService.DraftStep> steps = roadmapAi.expandModule(roadmapTitle, moduleTitle,
+                moduleScope, profileContext, groundingContext, assessmentContext, priorSteps);
         if (steps == null) {
             throw new IllegalStateException(
                     "Couldn't draft this module right now — write its steps yourself.");
@@ -162,7 +213,23 @@ public class RoadmapService {
                 moduleTitle, stepTexts, grounding == null ? null : grounding.results(),
                 avoidedFormats(), usedResourceUrls(roadmapId));
 
-        return GenerateRoadmapResponse.proposal(moduleTitle, steps, resources, List.of(), sources);
+        return GenerateRoadmapResponse.proposal(moduleTitle, null, steps, resources, List.of(),
+                sources, null, priorStepTextById);
+    }
+
+    /** The roadmap's stored goal-scope read (Phase 18), formatted for a prompt; null if none. */
+    private static String storedAssessmentContext(Entry roadmap) {
+        Object raw = roadmap.getContent() != null ? roadmap.getContent().get("assessment") : null;
+        if (!(raw instanceof Map<?, ?> map)) {
+            return null;
+        }
+        int complexity = map.get("complexity") instanceof Number n ? n.intValue() : 3;
+        Integer hours = map.get("estimatedTotalHours") instanceof Number n ? n.intValue() : null;
+        String domain = map.get("domain") instanceof String s ? s : null;
+        String priorLevel = map.get("priorLevel") instanceof String s ? s : null;
+        String shape = map.get("shape") instanceof String s ? s : "nested";
+        return RoadmapAiService.assessmentContext(
+                new RoadmapAiService.GoalAssessment(complexity, hours, domain, priorLevel, shape));
     }
 
     /** Accept a module's expanded steps (Phase 13) — same shape and validation as roadmap steps. */
@@ -179,6 +246,118 @@ public class RoadmapService {
                 .filter(e -> e.getType() == EntryType.ROADMAP && roadmapId.equals(e.getParentId()))
                 .orElseThrow(() -> new java.util.NoSuchElementException(
                         "No module " + moduleId + " on roadmap " + roadmapId));
+    }
+
+    /**
+     * Redraft one module's title/scope (Phase 18) — propose half of "regenerate this module";
+     * nothing changes until {@link #updateModule} is called with the (possibly edited) result.
+     */
+    @Transactional(readOnly = true)
+    public GenerateRoadmapResponse.ProposedModule regenerateModuleScope(Long roadmapId, Long moduleId) {
+        Entry roadmap = getRoadmap(roadmapId);
+        Entry module = requireModule(roadmapId, moduleId);
+        if (!roadmapAi.isAvailable()) {
+            throw new IllegalStateException("Drafting is unavailable right now — edit it yourself.");
+        }
+        RoadmapAiService.OutlineModule redraft = roadmapAi.regenerateModuleScope(
+                stringOf(roadmap, "title"), stringOf(module, "title"), stringOf(module, "scope"),
+                siblingModulesContext(roadmapId, moduleId));
+        if (redraft == null) {
+            throw new IllegalStateException("Couldn't redraft this module right now — edit it yourself.");
+        }
+        return GenerateRoadmapResponse.ProposedModule.from(redraft);
+    }
+
+    /** Apply an edited module title/scope (Phase 18) — the accept half of {@link #regenerateModuleScope}. */
+    @Transactional
+    public void updateModule(Long roadmapId, Long moduleId, String title, String scope) {
+        Entry module = requireModule(roadmapId, moduleId);
+        String trimmedTitle = title != null ? title.trim() : "";
+        if (trimmedTitle.isEmpty()) {
+            throw new IllegalArgumentException("A module needs a title.");
+        }
+        Map<String, Object> content = module.getContent() != null
+                ? new HashMap<>(module.getContent()) : new HashMap<>();
+        content.put("title", trimmedTitle);
+        if (scope != null && !scope.isBlank()) {
+            content.put("scope", scope.trim());
+        } else {
+            content.remove("scope");
+        }
+        module.setContent(content);
+        repository.save(module);
+        repository.touchUpdatedAt(roadmapId, Instant.now());
+    }
+
+    /**
+     * Draft one new module to insert into this roadmap's outline (Phase 18) — propose half of
+     * "insert a module here"; nothing changes until {@link #insertModule} is called.
+     */
+    @Transactional(readOnly = true)
+    public GenerateRoadmapResponse.ProposedModule proposeNewModule(Long roadmapId) {
+        Entry roadmap = getRoadmap(roadmapId);
+        if (!roadmapAi.isAvailable()) {
+            throw new IllegalStateException("Drafting is unavailable right now — add it yourself.");
+        }
+        RoadmapAiService.OutlineModule proposed = roadmapAi.proposeModule(stringOf(roadmap, "title"),
+                siblingModulesContext(roadmapId, null), storedAssessmentContext(roadmap));
+        if (proposed == null) {
+            throw new IllegalStateException("Couldn't draft a new module right now — add it yourself.");
+        }
+        return GenerateRoadmapResponse.ProposedModule.from(proposed);
+    }
+
+    /** Insert a new, empty module at {@code position} (Phase 18) — accept half of {@link #proposeNewModule}. */
+    @Transactional
+    public Entry insertModule(Long roadmapId, String title, String scope, Integer position) {
+        getRoadmap(roadmapId);
+        String trimmedTitle = title != null ? title.trim() : "";
+        if (trimmedTitle.isEmpty()) {
+            throw new IllegalArgumentException("A module needs a title.");
+        }
+
+        List<Entry> modules = repository.findByParentIdOrderByOrderIndexAsc(roadmapId).stream()
+                .filter(e -> e.getType() == EntryType.ROADMAP)
+                .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        int insertAt = position == null ? modules.size() : Math.max(0, Math.min(position, modules.size()));
+
+        Entry module = new Entry();
+        module.setType(EntryType.ROADMAP);
+        module.setStatus(EntryStatus.IN_MOTION);
+        module.setParentId(roadmapId);
+        Map<String, Object> content = new HashMap<>();
+        content.put("title", trimmedTitle);
+        if (scope != null && !scope.isBlank()) {
+            content.put("scope", scope.trim());
+        }
+        module.setContent(content);
+
+        modules.add(insertAt, module);
+        reindexAndSave(modules);
+        repository.touchUpdatedAt(roadmapId, Instant.now());
+        return module;
+    }
+
+    /** This roadmap's other modules, formatted as plain context; null if there are none. */
+    private String siblingModulesContext(Long roadmapId, Long excludeModuleId) {
+        StringBuilder sb = new StringBuilder();
+        for (Entry sibling : repository.findByParentIdOrderByOrderIndexAsc(roadmapId)) {
+            if (sibling.getType() != EntryType.ROADMAP
+                    || (excludeModuleId != null && excludeModuleId.equals(sibling.getId()))) {
+                continue;
+            }
+            String t = stringOf(sibling, "title");
+            if (t == null || t.isBlank()) {
+                continue;
+            }
+            sb.append("- ").append(t);
+            String s = stringOf(sibling, "scope");
+            if (s != null && !s.isBlank()) {
+                sb.append(": ").append(s);
+            }
+            sb.append('\n');
+        }
+        return sb.length() == 0 ? null : sb.toString();
     }
 
     /** Every resource url already attached anywhere in this roadmap's tree (Phase 13 dedup). */
@@ -272,6 +451,9 @@ public class RoadmapService {
         if (req.notes() != null && !req.notes().isBlank()) {
             content.put("notes", req.notes().trim());
         }
+        if (req.assessment() != null) {
+            content.put("assessment", assessmentMap(req.assessment()));
+        }
 
         Entry roadmap = new Entry();
         roadmap.setType(EntryType.ROADMAP);
@@ -304,6 +486,17 @@ public class RoadmapService {
         }
 
         return roadmap;
+    }
+
+    /** The stored form of an accepted assessment (Phase 18) for the roadmap's content JSONB. */
+    private static Map<String, Object> assessmentMap(CreateRoadmapRequest.AssessmentInput a) {
+        Map<String, Object> map = new java.util.LinkedHashMap<>();
+        map.put("complexity", a.complexity());
+        map.put("estimatedTotalHours", a.estimatedTotalHours());
+        map.put("domain", a.domain());
+        map.put("priorLevel", a.priorLevel());
+        map.put("shape", a.shape());
+        return map;
     }
 
     /**
@@ -371,8 +564,19 @@ public class RoadmapService {
 
         for (int i = 0; i < draftSteps.size(); i++) {
             Entry step = created.get(i);
-            Integer dep = draftSteps.get(i) == null ? null : draftSteps.get(i).dependsOn();
-            if (step == null || dep == null || dep < 0 || dep >= created.size() || dep == i) {
+            CreateRoadmapRequest.DraftStepInput draft = draftSteps.get(i);
+            if (step == null || draft == null) {
+                continue;
+            }
+            // A cross-module id (Phase 18) is already a real, existing step — resolve it
+            // directly, no index translation needed.
+            if (draft.dependsOnEntryId() != null) {
+                step.setDependsOn(draft.dependsOnEntryId());
+                repository.save(step);
+                continue;
+            }
+            Integer dep = draft.dependsOn();
+            if (dep == null || dep < 0 || dep >= created.size() || dep == i) {
                 continue;
             }
             Entry prerequisite = created.get(dep);

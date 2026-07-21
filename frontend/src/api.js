@@ -81,6 +81,32 @@ export function addModuleSteps(roadmapId, moduleId, draftSteps) {
   })
 }
 
+/** Redraft one module's title/scope (Phase 18). Nothing persisted; accept via `updateModule`. */
+export function regenerateModuleScope(roadmapId, moduleId) {
+  return request(`/roadmaps/${roadmapId}/modules/${moduleId}/regenerate-scope`, { method: 'POST' })
+}
+
+/** Apply an edited module title/scope. */
+export function updateModule(roadmapId, moduleId, title, scope) {
+  return request(`/roadmaps/${roadmapId}/modules/${moduleId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ title, scope }),
+  })
+}
+
+/** Draft one new module to insert (Phase 18). Nothing persisted; accept via `insertModule`. */
+export function proposeNewModule(roadmapId) {
+  return request(`/roadmaps/${roadmapId}/modules/insert-proposal`, { method: 'POST' })
+}
+
+/** Insert an accepted new module. `position` is 0-based; omit to append. */
+export function insertModule(roadmapId, title, scope, position) {
+  return request(`/roadmaps/${roadmapId}/modules`, {
+    method: 'POST',
+    body: JSON.stringify({ title, scope, position }),
+  })
+}
+
 /** Active roadmaps with their steps and progress, newest first (archived excluded). */
 export function listRoadmaps() {
   return request('/roadmaps')

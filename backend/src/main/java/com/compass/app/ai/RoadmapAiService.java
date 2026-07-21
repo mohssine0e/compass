@@ -67,13 +67,58 @@ public class RoadmapAiService {
     }
 
     /**
+     * A shared, structured read of how big/complex a goal is (Phase 18) — computed once so the
+     * flat/nested gate, module count, and step count all read the same numbers instead of each
+     * prompt independently re-guessing scope from raw text. {@code null} on failure; the caller
+     * falls back to today's un-assessed behavior (nested, mid-range) rather than blocking
+     * generation on it.
+     */
+    public GoalAssessment assessGoal(String goal, String clarifications, String profileContext,
+                                     String groundingContext) {
+        JsonNode json = ai.generate("goal assessment", PromptTemplates.ASSESS_SYSTEM,
+                PromptTemplates.assessUser(goal, clarifications, profileContext, groundingContext));
+        if (json == null) {
+            return null;
+        }
+        JsonNode complexityNode = json.get("complexity");
+        int complexity = complexityNode != null && complexityNode.isInt()
+                ? Math.max(1, Math.min(5, complexityNode.asInt())) : 3;
+        JsonNode hoursNode = json.get("estimatedTotalHours");
+        Integer hours = hoursNode != null && hoursNode.isIntegralNumber() ? hoursNode.asInt() : null;
+        String domain = AiJsonGenerator.text(json.get("domain"));
+        String priorLevel = AiJsonGenerator.text(json.get("priorLevel"));
+        String shape = "flat".equals(AiJsonGenerator.text(json.get("shape"))) ? "flat" : "nested";
+        return new GoalAssessment(complexity, hours, domain, priorLevel, shape);
+    }
+
+    /** A plain-text summary of an assessment for other prompts to read; {@code null} if none. */
+    public static String assessmentContext(GoalAssessment a) {
+        if (a == null) {
+            return null;
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("shape ").append(a.shape()).append(", complexity ").append(a.complexity()).append("/5");
+        if (a.estimatedTotalHours() != null) {
+            sb.append(", ~").append(a.estimatedTotalHours()).append(" hours total");
+        }
+        if (a.domain() != null && !a.domain().isBlank()) {
+            sb.append(", domain: ").append(a.domain());
+        }
+        if (a.priorLevel() != null && !a.priorLevel().isBlank()) {
+            sb.append(", starting point: ").append(a.priorLevel());
+        }
+        return sb.toString();
+    }
+
+    /**
      * A top-level module outline for a big goal (Phase 13) — the few major areas, each a title
      * plus a one-line scope, drafted before any individual steps. {@code null} on failure.
      */
     public RoadmapOutline moduleOutline(String goal, String clarifications, String profileContext,
-                                        String groundingContext) {
+                                        String groundingContext, String assessmentContext) {
         JsonNode json = ai.generate("roadmap outline", PromptTemplates.OUTLINE_SYSTEM,
-                PromptTemplates.outlineUser(goal, clarifications, profileContext, groundingContext));
+                PromptTemplates.outlineUser(goal, clarifications, profileContext, groundingContext,
+                        assessmentContext));
         if (json == null) {
             return null;
         }
@@ -88,19 +133,82 @@ public class RoadmapAiService {
     }
 
     /**
-     * Expand ONE module of a roadmap into its ordered steps (Phase 13), scoped to that module.
+     * A FLAT roadmap for a small goal (Phase 18) — one ordered step list drafted directly, no
+     * modules, used when the assessment judges the goal too small to need named areas.
      * {@code null} on failure.
      */
-    public List<DraftStep> expandModule(String roadmapTitle, String moduleTitle, String moduleScope,
-                                        String profileContext, String groundingContext) {
-        JsonNode json = ai.generate("module expansion", PromptTemplates.EXPAND_MODULE_SYSTEM,
-                PromptTemplates.expandModuleUser(roadmapTitle, moduleTitle, moduleScope,
-                        profileContext, groundingContext));
+    public FlatProposal proposeFlat(String goal, String clarifications, String profileContext,
+                                    String groundingContext, String assessmentContext) {
+        JsonNode json = ai.generate("flat roadmap", PromptTemplates.FLAT_PROPOSE_SYSTEM,
+                PromptTemplates.flatProposeUser(goal, clarifications, profileContext,
+                        groundingContext, assessmentContext));
         if (json == null) {
             return null;
         }
-        List<DraftStep> steps = parseSteps(json.get("steps"));
+        String title = AiJsonGenerator.text(json.get("title"));
+        String interpretation = AiJsonGenerator.text(json.get("interpretation"));
+        List<DraftStep> steps = parseSteps(json.get("steps"), Set.of());
+        if (steps.isEmpty()) {
+            return null;
+        }
+        List<String> skipped = AiJsonGenerator.strings(json.get("skipped"));
+        return new FlatProposal(title, interpretation, steps, skipped);
+    }
+
+    /**
+     * Expand ONE module of a roadmap into its ordered steps (Phase 13), scoped to that module.
+     * {@code priorSteps} (Phase 18) are already-expanded steps from EARLIER modules, with their
+     * real entry ids, so a step here can name a genuine cross-module prerequisite instead of only
+     * ones inside this same batch. {@code null} on failure.
+     */
+    public List<DraftStep> expandModule(String roadmapTitle, String moduleTitle, String moduleScope,
+                                        String profileContext, String groundingContext,
+                                        String assessmentContext, List<PriorStep> priorSteps) {
+        JsonNode json = ai.generate("module expansion", PromptTemplates.EXPAND_MODULE_SYSTEM,
+                PromptTemplates.expandModuleUser(roadmapTitle, moduleTitle, moduleScope,
+                        profileContext, groundingContext, assessmentContext, priorSteps));
+        if (json == null) {
+            return null;
+        }
+        Set<Long> priorIds = priorSteps == null ? Set.of()
+                : priorSteps.stream().map(PriorStep::id).collect(java.util.stream.Collectors.toSet());
+        List<DraftStep> steps = parseSteps(json.get("steps"), priorIds);
         return steps.isEmpty() ? null : steps;
+    }
+
+    /**
+     * Redraft one module's title/scope in place (Phase 18) — "regenerate this module" when the
+     * outline is right but one area isn't. {@code null} on failure.
+     */
+    public OutlineModule regenerateModuleScope(String roadmapTitle, String moduleTitle,
+                                               String currentScope, String siblingModulesContext) {
+        JsonNode json = ai.generate("module scope regeneration", PromptTemplates.REGENERATE_MODULE_SYSTEM,
+                PromptTemplates.regenerateModuleUser(roadmapTitle, moduleTitle, currentScope,
+                        siblingModulesContext));
+        return oneModule(json);
+    }
+
+    /**
+     * Draft ONE new module to insert into an existing outline (Phase 18) — "insert a module
+     * here" when the user notices a real gap. {@code null} on failure.
+     */
+    public OutlineModule proposeModule(String roadmapTitle, String existingModulesContext,
+                                       String assessmentContext) {
+        JsonNode json = ai.generate("module insertion", PromptTemplates.INSERT_MODULE_SYSTEM,
+                PromptTemplates.insertModuleUser(roadmapTitle, existingModulesContext, assessmentContext));
+        return oneModule(json);
+    }
+
+    private static OutlineModule oneModule(JsonNode json) {
+        if (json == null) {
+            return null;
+        }
+        String title = AiJsonGenerator.text(json.get("title"));
+        if (title == null || title.isBlank()) {
+            return null;
+        }
+        String scope = AiJsonGenerator.text(json.get("scope"));
+        return new OutlineModule(title.trim(), scope == null ? null : scope.trim());
     }
 
     private static List<OutlineModule> parseModules(JsonNode array) {
@@ -226,8 +334,12 @@ public class RoadmapAiService {
         return covers.isEmpty() ? null : covers;
     }
 
-    /** Parse and sanitize the structured step array; skips entries without real text. */
-    private static List<DraftStep> parseSteps(JsonNode array) {
+    /**
+     * Parse and sanitize the structured step array; skips entries without real text.
+     * {@code validPriorIds} (Phase 18) are the real ids offered as cross-module prerequisites —
+     * a {@code dependsOnEntryId} not in this set is dropped rather than trusted blindly.
+     */
+    private static List<DraftStep> parseSteps(JsonNode array, Set<Long> validPriorIds) {
         List<DraftStep> steps = new ArrayList<>();
         if (array == null || !array.isArray()) {
             return steps;
@@ -239,19 +351,31 @@ public class RoadmapAiService {
             }
             String kind = valueIn(AiJsonGenerator.text(node.get("kind")), KINDS, "concept");
             String weight = valueIn(AiJsonGenerator.text(node.get("weight")), WEIGHTS, "medium");
-            Integer dependsOn = node.get("dependsOn") != null && node.get("dependsOn").isInt()
-                    ? node.get("dependsOn").asInt() : null;
+            JsonNode indexNode = node.get("dependsOnIndex") != null ? node.get("dependsOnIndex") : node.get("dependsOn");
+            Integer dependsOn = indexNode != null && indexNode.isInt() ? indexNode.asInt() : null;
+            JsonNode entryIdNode = node.get("dependsOnEntryId");
+            Long dependsOnEntryId = entryIdNode != null && entryIdNode.isIntegralNumber()
+                    ? entryIdNode.asLong() : null;
+            if (dependsOnEntryId != null && !validPriorIds.contains(dependsOnEntryId)) {
+                dependsOnEntryId = null; // only ids we actually offered are real
+            }
+            // Mutually exclusive — a cross-module id takes priority if the model set both.
+            if (dependsOnEntryId != null) {
+                dependsOn = null;
+            }
             String rationale = AiJsonGenerator.text(node.get("rationale"));
-            steps.add(new DraftStep(text.trim(), kind, weight, dependsOn,
+            steps.add(new DraftStep(text.trim(), kind, weight, dependsOn, dependsOnEntryId,
                     rationale == null ? null : rationale.trim()));
         }
-        // A dependsOn index is only valid if it points at an earlier step; drop anything else.
+        // A same-batch dependsOn index is only valid if it points at an earlier step in THIS
+        // batch; drop anything else. A cross-module dependsOnEntryId was already validated above.
         List<DraftStep> validated = new ArrayList<>();
         for (int i = 0; i < steps.size(); i++) {
             DraftStep s = steps.get(i);
             Integer dep = s.dependsOn() != null && s.dependsOn() >= 0 && s.dependsOn() < i
                     ? s.dependsOn() : null;
-            validated.add(new DraftStep(s.text(), s.kind(), s.weight(), dep, s.rationale()));
+            validated.add(new DraftStep(s.text(), s.kind(), s.weight(), dep,
+                    s.dependsOnEntryId(), s.rationale()));
         }
         return validated;
     }
@@ -290,14 +414,40 @@ public class RoadmapAiService {
 
     /**
      * One proposed step. {@code kind} is concept|project, {@code weight} is small|medium|large,
-     * {@code dependsOn} is the 0-based index of an earlier prerequisite step (or null), and
+     * {@code dependsOn} is the 0-based index of an earlier prerequisite step in this same batch
+     * (or null), {@code dependsOnEntryId} (Phase 18) is the real id of a prerequisite step from an
+     * EARLIER module instead (or null — at most one of the two is ever set), and
      * {@code rationale} says why it's here / why the prerequisite comes first.
      */
-    public record DraftStep(String text, String kind, String weight, Integer dependsOn, String rationale) {
+    public record DraftStep(String text, String kind, String weight, Integer dependsOn,
+                            Long dependsOnEntryId, String rationale) {
     }
 
     /** A proposed prerequisite step plus the one-line reason it comes first. */
     public record Prerequisite(String step, String why) {
+    }
+
+    /**
+     * A shared, structured read of a goal's scope (Phase 18): {@code complexity} is 1-5,
+     * {@code estimatedTotalHours} is a best-effort estimate (nullable), {@code domain} and
+     * {@code priorLevel} are a couple of words each, and {@code shape} is strictly "flat" or
+     * "nested" — the gate between a single step list and a modules-then-steps roadmap.
+     */
+    public record GoalAssessment(int complexity, Integer estimatedTotalHours, String domain,
+                                 String priorLevel, String shape) {
+    }
+
+    /**
+     * A drafted FLAT roadmap (Phase 18): one ordered step list for a goal small enough not to
+     * need named modules. Same shape as {@link RoadmapOutline} otherwise — a title, an optional
+     * stated interpretation/assumptions, and any topics skipped based on the profile.
+     */
+    public record FlatProposal(String title, String interpretation, List<DraftStep> steps,
+                               List<String> skipped) {
+    }
+
+    /** One already-expanded step from an earlier module, offered as a real cross-module id. */
+    public record PriorStep(Long id, String text) {
     }
 
     /**

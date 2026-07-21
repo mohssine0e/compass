@@ -206,6 +206,127 @@ final class PromptTemplates {
   }
 
   /**
+   * System prompt for the assessment pass (Phase 18) — one shared, structured read of how big
+   * and complex a goal actually is, so the outline/expand/flat prompts all read the same numbers
+   * instead of independently re-guessing scope from raw text. Never shown to the user, so the
+   * self-talk-voice rules don't apply here — this is an internal signal, plain and analytical.
+   */
+  static final String ASSESS_SYSTEM = """
+      Assess a learning/goal-planning request before any structure is drafted for it. This output
+      is never shown to the user directly — it's an internal sizing signal other prompts read, so
+      be plain, analytical, and precise rather than encouraging or hedged.
+
+      Judge:
+      - complexity: 1-5, how much genuine structure this goal needs. 1 is a single afternoon task
+        needing a short flat checklist; 5 is a multi-month, multi-domain undertaking needing deep
+        nested structure (named modules, each broken into its own steps later).
+      - estimatedTotalHours: your best honest estimate of total hours to reach the stated depth,
+        given their stated experience/time — a plain integer, or null if genuinely unknowable from
+        what's given.
+      - domain: a couple of words naming the general field (e.g. "systems programming", "language
+        learning", "fitness", "cooking").
+      - priorLevel: a couple of words on their apparent starting point for THIS goal specifically
+        (e.g. "complete beginner", "some adjacent experience", "returning after a break") — read
+        from their answers/profile, don't invent detail they didn't give.
+      - shape: "flat" when complexity is low enough that a single ordered checklist of steps
+        covers it honestly (no need for named modules/areas); "nested" when it genuinely breaks
+        into distinct major areas that each deserve their own expansion. Most small, narrow goals
+        are flat; most "learn X" or "become able to Y" goals spanning weeks/months are nested.
+
+      Hard rules:
+      - Be honest and specific, not deferential — a goal that is actually small gets a low
+        complexity and "flat", even if the wording sounds ambitious.
+      - Output ONLY strict JSON, no prose around it:
+        {"complexity": 3, "estimatedTotalHours": 40, "domain": "...", "priorLevel": "...", "shape": "nested"}
+      """;
+
+  static String assessUser(String goal, String clarifications, String profileContext,
+      String groundingContext) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Goal: ").append(goal == null ? "" : goal.trim()).append('\n');
+    if (clarifications != null && !clarifications.isBlank()) {
+      sb.append("What they told you:\n").append(clarifications.trim()).append('\n');
+    }
+    appendProfile(sb, profileContext);
+    if (groundingContext != null && !groundingContext.isBlank()) {
+      sb.append("Real search context (for scale/scope only):\n")
+          .append(groundingContext.trim()).append('\n');
+    }
+    sb.append("Write the assessment as JSON.");
+    return sb.toString();
+  }
+
+  /**
+   * System prompt for a FLAT roadmap (Phase 18) — used when the assessment judges the goal small
+   * enough that a single ordered checklist covers it honestly, no named modules needed. Same step
+   * shape as {@link #EXPAND_MODULE_SYSTEM}, but for the whole goal in one pass.
+   */
+  static final String FLAT_PROPOSE_SYSTEM = """
+      The user gave a goal small enough to cover with a single ordered checklist, not a multi-area
+      roadmap. Draft that ordered, step-by-step list directly — ONE flat list, no modules.
+
+      Size the number of steps to the assessed scope given below — don't apply a fixed count
+      regardless of scale. A genuinely small goal should get as few steps as it honestly needs;
+      never pad to look more thorough than it is.
+
+      If a profile of what they already know is given, use it: SKIP or condense topics the
+      profile shows they already have. State every such skip plainly in a "skipped" list, each
+      with the reason grounded in their profile. Never skip silently. If nothing is skipped,
+      return an empty "skipped" list.
+
+      If real search results (official docs, established curricula) are given as grounding, use
+      them to shape and correct the list's structure and sequence — prefer how authoritative
+      sources actually order this material over your own memory. Do not invent sources.
+
+      If the goal could reasonably mean more than one thing, include an "interpretation" field:
+      one plain line stating which reading you're running with, so it can be corrected. Omit or
+      null it when the goal is already unambiguous. If little or nothing was clarified, state your
+      key assumptions there instead of silently guessing.
+
+      Each step is an object with these fields:
+      - text: one concrete, checkable action or milestone — plain, direct, imperative. No
+        numbering, no "Step 1:", no motivational language, no emoji.
+      - kind: "concept" for learning/understanding something, or "project" for building/applying
+        it. Mix them when the goal allows it.
+      - weight: an honest relative size — "small", "medium", or "large". Don't make everything the
+        same.
+      - dependsOnIndex: the 0-based index of the ONE earlier step that is a genuine prerequisite
+        for this one (lower index than this step), or null.
+      - rationale: one short plain line saying why this step is here — and if a dependency is set,
+        why that step must come first.
+
+      Hard rules:
+      - Order steps so each builds on the ones before it. Never more than 10 steps in one call —
+        if it genuinely needs more than that, it isn't actually flat (a parsing/UX safety rail,
+        not the primary sizing mechanism).
+      - Fit the scope to their stated time and starting point. Don't pad.
+      - Give the roadmap a short, plain title (a few words) naming what they'll be able to do.
+      - Output ONLY strict JSON, no prose around it:
+        {"title": "...", "interpretation": "..." or null, "steps": [{"text": "...", "kind": "concept", "weight": "medium", "dependsOnIndex": null, "rationale": "..."}], "skipped": ["..."]}
+      """;
+
+  static String flatProposeUser(String goal, String clarifications, String profileContext,
+      String groundingContext, String assessmentContext) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Goal: ").append(goal == null ? "" : goal.trim()).append('\n');
+    if (clarifications != null && !clarifications.isBlank()) {
+      sb.append("What they told you:\n").append(clarifications.trim()).append('\n');
+    } else {
+      sb.append("(No clarification given — state your key assumptions plainly.)\n");
+    }
+    appendProfile(sb, profileContext);
+    if (assessmentContext != null && !assessmentContext.isBlank()) {
+      sb.append("Assessed scope: ").append(assessmentContext.trim()).append('\n');
+    }
+    if (groundingContext != null && !groundingContext.isBlank()) {
+      sb.append("Real search results to ground this in:\n")
+          .append(groundingContext.trim()).append('\n');
+    }
+    sb.append("Write the roadmap as JSON.");
+    return sb.toString();
+  }
+
+  /**
    * System prompt for the top-level MODULE OUTLINE of a big goal (Phase 13). Instead of one
    * giant flat step list, draft the few big areas the goal breaks into; each module's own steps
    * are generated later, on demand, when the user expands it.
@@ -248,8 +369,10 @@ final class PromptTemplates {
         voice, not a course blurb. No praise, no hype.
 
       Hard rules:
-      - Between 2 and 8 modules, ordered so each builds on the ones before it. A genuinely small
-        goal should get as few modules as it honestly needs — don't pad to look bigger.
+      - Size the number of modules to the assessed scope given below — don't apply a fixed count
+        regardless of scale. A genuinely small goal should get as few modules as it honestly
+        needs; a large one should get enough to actually cover it. Never more than 10 modules in
+        one call (a parsing/UX safety rail, not the primary sizing mechanism).
       - Fit the scope to their stated time and starting point. Don't pad.
       - Give the whole roadmap a short, plain title (a few words) naming what they'll be able to do.
       - Output ONLY strict JSON, no prose around it:
@@ -257,7 +380,7 @@ final class PromptTemplates {
       """;
 
   static String outlineUser(String goal, String clarifications, String profileContext,
-      String groundingContext) {
+      String groundingContext, String assessmentContext) {
     StringBuilder sb = new StringBuilder();
     sb.append("Goal: ").append(goal == null ? "" : goal.trim()).append('\n');
     if (clarifications != null && !clarifications.isBlank()) {
@@ -266,6 +389,9 @@ final class PromptTemplates {
       sb.append("(No clarification given — state your key assumptions plainly.)\n");
     }
     appendProfile(sb, profileContext);
+    if (assessmentContext != null && !assessmentContext.isBlank()) {
+      sb.append("Assessed scope: ").append(assessmentContext.trim()).append('\n');
+    }
     if (groundingContext != null && !groundingContext.isBlank()) {
       sb.append("Real search results to ground the structure in:\n")
           .append(groundingContext.trim()).append('\n');
@@ -275,9 +401,9 @@ final class PromptTemplates {
   }
 
   /**
-   * System prompt for expanding ONE module of a roadmap into its ordered steps (Phase 13). Same
-   * step shape as {@link #PROPOSE_SYSTEM}, but scoped to a single module so depth grows only
-   * where the user asks for it.
+   * System prompt for expanding ONE module of a roadmap into its ordered steps (Phase 13,
+   * cross-module dependencies added Phase 18). Same step shape as {@link #FLAT_PROPOSE_SYSTEM},
+   * but scoped to a single module so depth grows only where the user asks for it.
    */
   static final String EXPAND_MODULE_SYSTEM = """
       The user is expanding ONE module of a larger roadmap into its steps. Draft the ordered,
@@ -299,21 +425,28 @@ final class PromptTemplates {
       - kind: "concept" for learning something, or "project" for building/applying it. Mix them —
         include real project steps, not only things to read.
       - weight: an honest relative size — "small", "medium", or "large". Don't make everything equal.
-      - dependsOn: the 0-based index of the ONE earlier step in THIS module that is a genuine
+      - dependsOnIndex: the 0-based index of the ONE earlier step in THIS module that is a genuine
         prerequisite (lower index than this step), or null. A real prerequisite, not just "the
         previous step".
-      - rationale: one short plain line saying why this step is here — and if dependsOn is set,
+      - dependsOnEntryId: ONLY if the real prerequisite is a step from an EARLIER module (given
+        below with real ids) rather than this module — the literal id number of that step. Set at
+        most one of dependsOnIndex / dependsOnEntryId, never both, and only when it's a genuine
+        prerequisite, not just "comes before it in the roadmap".
+      - rationale: one short plain line saying why this step is here — and if a dependency is set,
         why that step comes first. No praise, no filler.
 
       Hard rules:
-      - Between 3 and 8 steps for this module, ordered so each builds on the ones before it.
+      - Size the number of steps to the assessed scope given below and this module's own scope —
+        don't apply a fixed count. Never more than 10 steps in one call (a parsing/UX safety rail,
+        not the primary sizing mechanism).
       - Stay inside this module's scope — don't wander into other modules' territory.
       - Output ONLY strict JSON, no prose around it:
-        {"steps": [{"text": "...", "kind": "concept", "weight": "medium", "dependsOn": null, "rationale": "..."}]}
+        {"steps": [{"text": "...", "kind": "concept", "weight": "medium", "dependsOnIndex": null, "dependsOnEntryId": null, "rationale": "..."}]}
       """;
 
   static String expandModuleUser(String roadmapTitle, String moduleTitle, String moduleScope,
-      String profileContext, String groundingContext) {
+      String profileContext, String groundingContext, String assessmentContext,
+      List<RoadmapAiService.PriorStep> priorSteps) {
     StringBuilder sb = new StringBuilder();
     sb.append("Roadmap: ").append(roadmapTitle == null ? "" : roadmapTitle.trim()).append('\n');
     sb.append("Module to expand: ").append(moduleTitle == null ? "" : moduleTitle.trim()).append('\n');
@@ -321,6 +454,16 @@ final class PromptTemplates {
       sb.append("What this module covers: ").append(moduleScope.trim()).append('\n');
     }
     appendProfile(sb, profileContext);
+    if (assessmentContext != null && !assessmentContext.isBlank()) {
+      sb.append("Assessed scope: ").append(assessmentContext.trim()).append('\n');
+    }
+    if (priorSteps != null && !priorSteps.isEmpty()) {
+      sb.append("Steps already drafted in EARLIER modules (real ids — use dependsOnEntryId if one ")
+          .append("of these is a genuine prerequisite for a step here):\n");
+      for (RoadmapAiService.PriorStep p : priorSteps) {
+        sb.append("[id=").append(p.id()).append("] ").append(p.text()).append('\n');
+      }
+    }
     if (groundingContext != null && !groundingContext.isBlank()) {
       sb.append("Real search results to ground this module in:\n")
           .append(groundingContext.trim()).append('\n');
@@ -392,6 +535,72 @@ final class PromptTemplates {
     }
     sb.append("The stalled step: ").append(stepText == null ? "" : stepText.trim()).append('\n');
     sb.append("Write the prerequisite proposal as JSON.");
+    return sb.toString();
+  }
+
+  /**
+   * System prompt for redrafting one module's title/scope in place (Phase 18) — "regenerate this
+   * module" when the outline is right but one area isn't. Given the roadmap's other modules as
+   * context so the new version doesn't wander into their territory.
+   */
+  static final String REGENERATE_MODULE_SYSTEM = """
+      Redraft ONE module of an existing roadmap — a new title and scope for it — given the
+      roadmap's other modules as context so the new version doesn't duplicate or contradict them.
+      The user asked for this because the current version isn't right; give a genuinely different
+      or better take, not a reworded copy of the same thing.
+
+      Hard rules:
+      - title: a few plain words naming the area. No numbering, no "Module N", no emoji.
+      - scope: one plain line saying what falls under it — the user's own clear-headed inner
+        voice, not a course blurb. No praise, no hype.
+      - Stay distinct from the roadmap's other modules — don't re-cover their territory.
+      - Output ONLY strict JSON, no prose around it: {"title": "...", "scope": "..."}
+      """;
+
+  static String regenerateModuleUser(String roadmapTitle, String moduleTitle, String currentScope,
+      String siblingModulesContext) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Roadmap: ").append(roadmapTitle == null ? "" : roadmapTitle.trim()).append('\n');
+    sb.append("Module to redraft: ").append(moduleTitle == null ? "" : moduleTitle.trim()).append('\n');
+    if (currentScope != null && !currentScope.isBlank()) {
+      sb.append("Its current scope: ").append(currentScope.trim()).append('\n');
+    }
+    if (siblingModulesContext != null && !siblingModulesContext.isBlank()) {
+      sb.append("The roadmap's other modules (don't duplicate these):\n")
+          .append(siblingModulesContext.trim()).append('\n');
+    }
+    sb.append("Write the redrafted module as JSON.");
+    return sb.toString();
+  }
+
+  /**
+   * System prompt for drafting one new module to insert into an existing outline (Phase 18) —
+   * "insert a module here" when the user notices a real gap the outline missed.
+   */
+  static final String INSERT_MODULE_SYSTEM = """
+      Draft ONE new module to insert into an existing roadmap, given its other modules as
+      context — it must add real, distinct coverage the existing modules don't already have.
+
+      Hard rules:
+      - title: a few plain words naming the area. No numbering, no "Module N", no emoji.
+      - scope: one plain line saying what falls under it — the user's own clear-headed inner voice.
+      - Must be genuinely distinct from every existing module listed — don't re-cover their
+        territory.
+      - Output ONLY strict JSON, no prose around it: {"title": "...", "scope": "..."}
+      """;
+
+  static String insertModuleUser(String roadmapTitle, String existingModulesContext,
+      String assessmentContext) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Roadmap: ").append(roadmapTitle == null ? "" : roadmapTitle.trim()).append('\n');
+    if (existingModulesContext != null && !existingModulesContext.isBlank()) {
+      sb.append("Existing modules (don't duplicate these):\n")
+          .append(existingModulesContext.trim()).append('\n');
+    }
+    if (assessmentContext != null && !assessmentContext.isBlank()) {
+      sb.append("Assessed scope: ").append(assessmentContext.trim()).append('\n');
+    }
+    sb.append("Write the new module as JSON.");
     return sb.toString();
   }
 

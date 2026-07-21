@@ -6,9 +6,11 @@ import com.compass.app.roadmap.dto.ArchiveRoadmapRequest;
 import com.compass.app.roadmap.dto.CreateRoadmapRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapResponse;
+import com.compass.app.roadmap.dto.InsertModuleRequest;
 import com.compass.app.roadmap.dto.InsertStepRequest;
 import com.compass.app.roadmap.dto.ReorderStepsRequest;
 import com.compass.app.roadmap.dto.RoadmapResponse;
+import com.compass.app.roadmap.dto.UpdateModuleRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -129,6 +131,44 @@ public class RoadmapController {
     public ResponseEntity<RoadmapResponse> addModuleSteps(@PathVariable Long id, @PathVariable Long moduleId,
                                                            @RequestBody AddModuleStepsRequest request) {
         service.addStepsToModule(id, moduleId, request.draftSteps());
+        Entry roadmap = service.getRoadmap(id);
+        RoadmapResponse body = RoadmapResponse.of(roadmap, service::stepsOf);
+        return ResponseEntity.status(HttpStatus.CREATED).body(body);
+    }
+
+    /**
+     * Redraft one module's title/scope (Phase 18) — "regenerate this module" when the outline is
+     * right but one area isn't. Nothing changes yet; accept via {@link #updateModule}.
+     */
+    @PostMapping("/{id}/modules/{moduleId}/regenerate-scope")
+    public GenerateRoadmapResponse.ProposedModule regenerateModuleScope(@PathVariable Long id,
+                                                                          @PathVariable Long moduleId) {
+        return service.regenerateModuleScope(id, moduleId);
+    }
+
+    /** Apply an edited module title/scope. Body is {title, scope}. */
+    @PutMapping("/{id}/modules/{moduleId}")
+    public RoadmapResponse updateModule(@PathVariable Long id, @PathVariable Long moduleId,
+                                         @RequestBody UpdateModuleRequest request) {
+        service.updateModule(id, moduleId, request.title(), request.scope());
+        Entry roadmap = service.getRoadmap(id);
+        return RoadmapResponse.of(roadmap, service::stepsOf);
+    }
+
+    /**
+     * Draft one new module to insert into this roadmap (Phase 18) — "insert a module here" when
+     * the user notices a real gap. Nothing changes yet; accept via {@link #insertModule}.
+     */
+    @PostMapping("/{id}/modules/insert-proposal")
+    public GenerateRoadmapResponse.ProposedModule proposeNewModule(@PathVariable Long id) {
+        return service.proposeNewModule(id);
+    }
+
+    /** Insert an accepted new module. Body is {title, scope, position?} — appended if omitted. */
+    @PostMapping("/{id}/modules")
+    public ResponseEntity<RoadmapResponse> insertModule(@PathVariable Long id,
+                                                          @RequestBody InsertModuleRequest request) {
+        service.insertModule(id, request.title(), request.scope(), request.position());
         Entry roadmap = service.getRoadmap(id);
         RoadmapResponse body = RoadmapResponse.of(roadmap, service::stepsOf);
         return ResponseEntity.status(HttpStatus.CREATED).body(body);

@@ -4,12 +4,17 @@ import {
   deleteRoadmapStep,
   getRoadmap,
   insertRoadmapStep,
+  insertModule,
   patchEntry,
+  proposeNewModule,
+  regenerateModuleScope,
   reorderRoadmapSteps,
   setRoadmapArchived,
+  updateModule,
 } from '../api'
 import ExpandModuleModal from './ExpandModuleModal'
 import LearningPathView from './LearningPathView'
+import ModuleProposalModal from './ModuleProposalModal'
 import ProgressBar from './ProgressBar'
 import StepDeepView from './StepDeepView'
 import VerifyModal from './VerifyModal'
@@ -45,6 +50,16 @@ function textByIdOf(nodes, map = new Map()) {
   return map
 }
 
+// The estimated-time rollup (Phase 18) is minutes; render it the way the resource estimates
+// that feed it are already written ("~1h 30 min", "~45 min").
+function formatMinutes(total) {
+  const hours = Math.floor(total / 60)
+  const minutes = total % 60
+  if (hours === 0) return `${minutes} min`
+  if (minutes === 0) return `${hours}h`
+  return `${hours}h ${minutes} min`
+}
+
 export default function RoadmapDetail({ id, onBack, onGone }) {
   const [roadmap, setRoadmap] = useState(null)
   const [error, setError] = useState(null)
@@ -69,6 +84,10 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   const [showCompleted, setShowCompleted] = useState(false)
   // The module currently being expanded into steps (Phase 13), or null.
   const [expandingModuleId, setExpandingModuleId] = useState(null)
+  // The module currently being redrafted (Phase 18: "regenerate this module"), or null.
+  const [regeneratingModuleId, setRegeneratingModuleId] = useState(null)
+  // Whether a new module is being drafted to insert (Phase 18), or null.
+  const [insertingModule, setInsertingModule] = useState(false)
   // Structural tree vs. the ordered "what's next" learning path (Phase 13).
   const [view, setView] = useState('tree')
 
@@ -300,6 +319,9 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   const currentId = progress.currentStepId
   // Long-list anchoring only applies to a flat roadmap (nested ones chunk via modules).
   const isFlat = children.every((c) => !(c.children && c.children.length > 0))
+  // Whether this roadmap's top level is modules rather than plain steps (Phase 18: gates the
+  // "insert a module" affordance, distinct from "+ Add step").
+  const hasModules = children.some((c) => c.type === 'roadmap')
   const currentIdx = children.findIndex((c) => c.id === currentId)
   const completedAbove = isFlat && currentIdx > 0 ? currentIdx : 0
   const collapseCompleted = isFlat && !reorderMode && !showCompleted && completedAbove > 4
@@ -437,6 +459,9 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           {nodeText(node)}
           {node.content?.scope && <span className="node-group-scope"> — {node.content.scope}</span>}
         </span>
+        <Button variant="ghost" onClick={() => setRegeneratingModuleId(node.id)}>
+          Regenerate scope
+        </Button>
         <Button variant="ghost" onClick={() => setExpandingModuleId(node.id)}>
           Expand this module
         </Button>
@@ -467,6 +492,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           {progress.currentStepId === null
             ? `All ${progress.total} done.`
             : `${progress.done} of ${progress.total} done`}
+          {progress.estimatedTotalMinutes > 0 && ` · ~${formatMinutes(progress.estimatedTotalMinutes)}`}
         </span>
       </div>
 
@@ -563,9 +589,15 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           })}
           {renderInsertInput(children.length)}
           <li className="step-insert-row">
-            <button className="step-insert-btn" onClick={() => startInsert(children.length)}>
-              + Add step
-            </button>
+            {hasModules ? (
+              <button className="step-insert-btn" onClick={() => setInsertingModule(true)}>
+                + Insert a module
+              </button>
+            ) : (
+              <button className="step-insert-btn" onClick={() => startInsert(children.length)}>
+                + Add step
+              </button>
+            )}
           </li>
         </ol>
       )}
@@ -602,6 +634,34 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           onClose={() => setExpandingModuleId(null)}
           onApplied={async () => {
             setExpandingModuleId(null)
+            await load()
+          }}
+        />
+      )}
+
+      {regeneratingModuleId && (
+        <ModuleProposalModal
+          title="Regenerate this module"
+          roadmapId={id}
+          draft={() => regenerateModuleScope(id, regeneratingModuleId)}
+          accept={(roadmapId, moduleTitle, scope) => updateModule(roadmapId, regeneratingModuleId, moduleTitle, scope)}
+          onClose={() => setRegeneratingModuleId(null)}
+          onApplied={async () => {
+            setRegeneratingModuleId(null)
+            await load()
+          }}
+        />
+      )}
+
+      {insertingModule && (
+        <ModuleProposalModal
+          title="Insert a module"
+          roadmapId={id}
+          draft={proposeNewModule}
+          accept={(roadmapId, moduleTitle, scope) => insertModule(roadmapId, moduleTitle, scope, null)}
+          onClose={() => setInsertingModule(false)}
+          onApplied={async () => {
+            setInsertingModule(false)
             await load()
           }}
         />

@@ -17,9 +17,11 @@ public class AiProperties {
     private long timeoutSeconds = 6;
     private int maxTokens = 64;
     // Roadmap generation/restructuring returns a multi-step payload, so it needs a bigger
-    // token budget and a longer timeout than a one-line acknowledgment.
+    // token budget and a longer timeout than a one-line acknowledgment. A genuinely large,
+    // assessed-as-complex goal (Phase 18) can need close to the old fixed 8-module cap's worth of
+    // title+scope text in one response; 1200 truncated that JSON mid-array under real testing.
     private long generationTimeoutSeconds = 30;
-    private int generationMaxTokens = 1200;
+    private int generationMaxTokens = 2200;
     private Provider primary = new Provider();
     private Provider backup = new Provider();
     // A third, independent quota pool (e.g. NVIDIA's build.nvidia.com free NIM catalog) tried

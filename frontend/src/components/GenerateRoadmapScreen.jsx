@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { createRoadmap, generateRoadmap } from '../api'
 import { Button } from './ui'
+import StepProposalEditor, { fromProposedSteps, toDraftSteps } from './StepProposalEditor'
 import './NewRoadmapScreen.css'
 import './GenerateRoadmapScreen.css'
 
@@ -19,7 +20,7 @@ function nextCid() {
 // the outline; a founder in a hurry can always skip ahead and let the system state its
 // assumptions instead (see `skipAndDraft`).
 export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual, onCancel }) {
-  const [phase, setPhase] = useState('goal') // goal | questions | outline
+  const [phase, setPhase] = useState('goal') // goal | questions | outline | flat
   const [goal, setGoal] = useState(initialGoal || '')
   const [questions, setQuestions] = useState([])
   const [answers, setAnswers] = useState([])
@@ -30,8 +31,14 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
   const [title, setTitle] = useState('')
   const [interpretation, setInterpretation] = useState(null)
   const [modules, setModules] = useState([])
+  // Populated instead of `modules` when the assessment (Phase 18) judges the goal small enough
+  // for one flat step list rather than named modules — same shape/editor as a module's own steps.
+  const [flatSteps, setFlatSteps] = useState([])
   const [skipped, setSkipped] = useState([])
   const [sources, setSources] = useState([])
+  // The shared goal-scope read (Phase 18) that sized this draft — round-tripped on create so a
+  // later module-expand call reads the same numbers instead of re-guessing.
+  const [assessment, setAssessment] = useState(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   // 503 = drafting unavailable; offer the manual form instead of a dead end.
@@ -49,8 +56,8 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
     setError(null)
     try {
       const res = await generateRoadmap({ goal: goal.trim(), clarifications: null, skipFollowUp: false })
-      if (res.status === 'outline') {
-        showOutline(res)
+      if (res.status === 'outline' || res.status === 'proposal') {
+        showResult(res)
       } else {
         setPriorClarifications([])
         setIsFollowUpRound(false)
@@ -72,7 +79,7 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
     setError(null)
     try {
       const res = await generateRoadmap({ goal: goal.trim(), clarifications: [], skipFollowUp: true })
-      showOutline(res)
+      showResult(res)
     } catch (err) {
       fail(err)
     }
@@ -99,36 +106,52 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
         setAnswers((res.questions || []).map(() => ''))
         setBusy(false)
       } else {
-        showOutline(res)
+        showResult(res)
       }
     } catch (err) {
       fail(err)
     }
   }
 
-  function showOutline(res) {
+  // The assessment (Phase 18) gates the shape: "proposal" means the goal was small enough for
+  // one flat step list (reusing the same editor a module's own expand uses); "outline" means it
+  // genuinely breaks into modules, drafted and expanded one at a time as before.
+  function showResult(res) {
     setTitle(res.title || '')
     setInterpretation(res.interpretation || null)
-    const raw = res.modules && res.modules.length ? res.modules : [{ title: '', scope: '' }]
-    setModules(raw.map((m) => ({ cid: nextCid(), title: m.title || '', scope: m.scope || '' })))
     setSkipped(res.skipped || [])
     setSources(res.sources || [])
-    setPhase('outline')
+    setAssessment(res.assessment || null)
+    if (res.status === 'proposal') {
+      setFlatSteps(fromProposedSteps(res.steps))
+      setPhase('flat')
+    } else {
+      const raw = res.modules && res.modules.length ? res.modules : [{ title: '', scope: '' }]
+      setModules(raw.map((m) => ({ cid: nextCid(), title: m.title || '', scope: m.scope || '' })))
+      setPhase('outline')
+    }
     setBusy(false)
   }
 
   const cleanModules = modules.filter((m) => m.title.trim())
-  const canCreate = title.trim().length > 0 && cleanModules.length > 0 && !busy
+  const cleanFlatSteps = flatSteps.filter((s) => s.text.trim())
+  const canCreate = title.trim().length > 0 && !busy
+    && (phase === 'flat' ? cleanFlatSteps.length > 0 : cleanModules.length > 0)
 
   async function accept() {
     if (!canCreate) return
     setBusy(true)
     setError(null)
     try {
-      const roadmap = await createRoadmap({
-        title: title.trim(),
-        modules: cleanModules.map((m) => ({ title: m.title.trim(), scope: m.scope.trim() || null })),
-      })
+      const roadmap = await createRoadmap(
+        phase === 'flat'
+          ? { title: title.trim(), draftSteps: toDraftSteps(flatSteps), assessment }
+          : {
+              title: title.trim(),
+              modules: cleanModules.map((m) => ({ title: m.title.trim(), scope: m.scope.trim() || null })),
+              assessment,
+            }
+      )
       onCreated?.(roadmap.id)
     } catch (err) {
       setError(err.message)
@@ -283,6 +306,36 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
               </ul>
             </div>
           )}
+          <div className="roadmap-actions">
+            {error && <span className="roadmap-error">{error}</span>}
+            <Button variant="ghost" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={accept} disabled={!canCreate}>
+              {busy ? 'Creating…' : 'Create roadmap'}
+            </Button>
+          </div>
+        </>
+      )}
+
+      {phase === 'flat' && (
+        <>
+          <p className="gen-lead">
+            A step list, not a full plan yet. Change anything before keeping it.
+          </p>
+          {interpretation && <p className="gen-interpretation">{interpretation}</p>}
+          <input
+            className="roadmap-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Roadmap title"
+          />
+          <StepProposalEditor
+            steps={flatSteps}
+            onChange={setFlatSteps}
+            skipped={skipped}
+            sources={sources}
+          />
           <div className="roadmap-actions">
             {error && <span className="roadmap-error">{error}</span>}
             <Button variant="ghost" onClick={onCancel}>

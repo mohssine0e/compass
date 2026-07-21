@@ -88,6 +88,10 @@
   color: var(--faint);
 }
 
+.gen-depends-cross {
+  font-style: italic;
+}
+
 .gen-rationale {
   margin: 0 0 4px;
   padding-left: 32px;

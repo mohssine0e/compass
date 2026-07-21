@@ -24,6 +24,10 @@ export function fromProposedSteps(rawSteps) {
     weight: s.weight || 'medium',
     rationale: s.rationale || null,
     dependsOnCid: s.dependsOn != null && withIds[s.dependsOn] ? withIds[s.dependsOn].cid : null,
+    // A prerequisite from an EARLIER module (Phase 18) — a real id outside this batch, so it
+    // isn't re-linkable via dependsOnCid; shown read-only instead.
+    crossModuleDependsOnId: s.dependsOnEntryId ?? null,
+    crossModuleDependsOnText: s.dependsOnEntryText || null,
     resources: (s.resources || []).map((r) => ({ rcid: nextCid(), ...r })),
   }))
 }
@@ -39,6 +43,7 @@ export function toDraftSteps(steps) {
     dependsOn: s.dependsOnCid != null && indexOfCid.has(s.dependsOnCid)
       ? indexOfCid.get(s.dependsOnCid)
       : null,
+    dependsOnEntryId: s.crossModuleDependsOnId ?? null,
     resources: (s.resources || []).map((r) => ({
       title: r.title,
       url: r.url,
@@ -150,6 +155,11 @@ export default function StepProposalEditor({ steps, onChange, skipped = [], sour
               {step.weight && <Badge>{step.weight}</Badge>}
               {step.dependsOnCid != null && textByCid.get(step.dependsOnCid) && (
                 <span className="gen-depends">needs: {textByCid.get(step.dependsOnCid)}</span>
+              )}
+              {step.crossModuleDependsOnText && (
+                <span className="gen-depends gen-depends-cross">
+                  needs (earlier module): {step.crossModuleDependsOnText}
+                </span>
               )}
             </div>
             {step.rationale && <p className="gen-rationale">{step.rationale}</p>}

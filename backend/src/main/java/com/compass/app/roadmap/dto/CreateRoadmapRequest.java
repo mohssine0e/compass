@@ -13,21 +13,29 @@ import java.util.List;
  *       child roadmap, expanded into its own steps later via the module-expand flow. Independent
  *       of the other two — a roadmap accepted from an outline sends only this.</li>
  * </ul>
+ * {@code assessment} (Phase 18, optional) carries the shared goal-scope read computed when this
+ * roadmap was drafted, stored on the roadmap so a later module-expand call reads the same numbers
+ * instead of re-guessing scope from scratch.
  */
 public record CreateRoadmapRequest(
         String title,
         String notes,
         List<String> steps,
         List<DraftStepInput> draftSteps,
-        List<ModuleInput> modules
+        List<ModuleInput> modules,
+        AssessmentInput assessment
 ) {
     /**
      * One accepted step. {@code dependsOn} is the 0-based index (within this list) of the
      * prerequisite step, or null — mapped to the real step id once the steps are created.
-     * {@code resources} are the curated learning resources to attach.
+     * {@code dependsOnEntryId} (Phase 18) is a real, already-existing step id instead — used when
+     * a module's step depends on something from an earlier module, resolved directly with no
+     * index translation needed. At most one of the two is ever set. {@code resources} are the
+     * curated learning resources to attach.
      */
     public record DraftStepInput(String text, String kind, String weight, Integer dependsOn,
-                                 String rationale, List<ResourceInput> resources) {
+                                 Long dependsOnEntryId, String rationale,
+                                 List<ResourceInput> resources) {
     }
 
     /** One curated resource on a step. {@code id} is assigned on save if the client didn't send one. */
@@ -37,5 +45,10 @@ public record CreateRoadmapRequest(
 
     /** One accepted module from an outline (Phase 13): a title and its one-line scope. */
     public record ModuleInput(String title, String scope) {
+    }
+
+    /** The goal-scope read (Phase 18) computed when this roadmap was drafted. */
+    public record AssessmentInput(int complexity, Integer estimatedTotalHours, String domain,
+                                  String priorLevel, String shape) {
     }
 }
