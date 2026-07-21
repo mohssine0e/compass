@@ -289,7 +289,14 @@ public class RoadmapService {
 
         String groundingQuery = moduleScope != null && !moduleScope.isBlank()
                 ? moduleTitle + ": " + moduleScope : moduleTitle;
-        SearchGroundingService.Grounding grounding = searchGrounding.ground(groundingQuery);
+        // A few differently-framed queries about the same module (Phase 20) surface a broader,
+        // more varied set of real sources than one query alone — official docs, hands-on ideas,
+        // and common beginner pitfalls each tend to turn up different results. Each query is
+        // still cheap via the existing TTL cache; groundMulti just dedupes the merged results.
+        SearchGroundingService.Grounding grounding = searchGrounding.groundMulti(List.of(
+                groundingQuery,
+                moduleTitle + " official documentation",
+                moduleTitle + " common mistakes beginners make"));
         String groundingContext = grounding == null ? null : grounding.contextTop(maxGroundingSnippets);
         List<String> sources = grounding == null ? List.of() : grounding.sources();
 

@@ -1241,13 +1241,23 @@ separate systems.
     profile save endpoint, and that `/profile/inference` runs cleanly with zero real session data
     (returns an honest "nothing to go on" basis rather than erroring). Test data cleaned up
     afterward — the synthetic sessions and the test profile save were both reverted.
-- [ ] Add multi-query grounding per module.
+- [x] Add multi-query grounding per module.
   - In `RoadmapService.expandModule`, replace the single `searchGrounding.ground(groundingQuery)`
     call with 2–3 calls using varied query framings (e.g. `"{module} official documentation"`,
     `"{module} project ideas"`, `"{module} common mistakes beginners make"`), merge the results
     (dedup by URL), and pass the merged set into both `roadmapAi.expandModule` and
     `roadmapAi.suggestResources`. The existing `SearchGroundingService` TTL cache already makes
     repeated/similar queries cheap, so this doesn't need new caching infra — just more calls.
+  - New `SearchGroundingService.groundMulti(List<String> queries)`: calls the existing (still
+    individually cached) `ground(query)` per query, merges every query's real results deduped by
+    url, and rebuilds one `Grounding` from the merged set — reused by `RoadmapService` with the
+    module's own scope query plus "official documentation" and "common mistakes beginners make"
+    framings, feeding both `expandModule` and `suggestResources` the same broader set.
+  - Live-verified: expanding a real module returned 24 merged, deduped sources spanning clearly
+    distinct clusters (official docs like `docs.ansible.com`/`docs.docker.com`, practical
+    project/course results, and dedicated "common mistakes" articles) — versus ~8 similar,
+    overlapping results from the single-query version tested earlier this session on the same
+    module.
 - [ ] Add a self-consistency/self-critique pass, with severity levels and accept/dismiss.
   - After a module outline or module expansion is generated, add one more cheap AI call (route to
     the "fast" tier from Phase 19 for a lightweight pass; escalate to the "heavy" tier only for a

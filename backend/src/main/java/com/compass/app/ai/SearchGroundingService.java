@@ -133,6 +133,33 @@ public class SearchGroundingService {
     }
 
     /**
+     * Grounding merged across several differently-framed queries about the same topic (Phase
+     * 20) — e.g. official docs, project ideas, common beginner mistakes — deduped by url, so a
+     * module's expansion sees a broader, more varied set of real sources than one query alone
+     * would surface. Each individual query still goes through {@link #ground}, so it's no more
+     * expensive per-query than today, and repeats are still cheap via the same TTL cache.
+     * {@code null} when nothing came back from any query.
+     */
+    public Grounding groundMulti(List<String> queries) {
+        if (!isEnabled() || queries == null || queries.isEmpty()) {
+            return null;
+        }
+        Map<String, Result> merged = new java.util.LinkedHashMap<>();
+        for (String query : queries) {
+            Grounding g = ground(query);
+            if (g == null) {
+                continue;
+            }
+            for (Result r : g.results()) {
+                if (r.url() != null && !r.url().isBlank()) {
+                    merged.putIfAbsent(r.url(), r);
+                }
+            }
+        }
+        return merged.isEmpty() ? null : toGrounding(new ArrayList<>(merged.values()));
+    }
+
+    /**
      * Exa → Tavily, moving on when one errors or comes back empty (each
      * logs its own).
      */
