@@ -33,7 +33,7 @@ public class ProfileAiService {
      * confidence themselves); experience/education are small {field: value} maps.
      */
     public Map<String, Object> extractResume(String resumeText) {
-        JsonNode json = ai.generate("resume extraction",
+        JsonNode json = ai.generate(AiTier.HEAVY, "resume extraction",
                 PromptTemplates.RESUME_EXTRACT_SYSTEM, PromptTemplates.resumeExtractUser(resumeText));
         if (json == null) {
             return null;
@@ -53,7 +53,7 @@ public class ProfileAiService {
      * {@code null} when unavailable / unusable. These are shown back for confirmation.
      */
     public List<String> interpretSelfDescription(String text) {
-        JsonNode json = ai.generate("self-description interpretation",
+        JsonNode json = ai.generate(AiTier.FAST, "self-description interpretation",
                 PromptTemplates.SELF_DESCRIPTION_SYSTEM, PromptTemplates.selfDescriptionUser(text));
         if (json == null) {
             return null;

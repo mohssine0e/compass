@@ -25,14 +25,14 @@ public class ReviewAiService {
 
   /** Recurring patterns across ideas/roadmaps/stalled steps — empty list when none / unavailable. */
   public List<String> findThreads(String ideas, String roadmaps, String stalled) {
-    JsonNode json = ai.generate("cross-thread patterns",
+    JsonNode json = ai.generate(AiTier.FAST, "cross-thread patterns",
         PromptTemplates.THREADS_SYSTEM, PromptTemplates.threadsUser(ideas, roadmaps, stalled));
     return json == null ? List.of() : AiJsonGenerator.strings(json.get("threads"));
   }
 
   /** A self-talk-voice review of where things stand, or {@code null} when unavailable. */
   public String weeklyReview(String roadmaps, String ideas) {
-    JsonNode json = ai.generate("weekly review",
+    JsonNode json = ai.generate(AiTier.FAST, "weekly review",
         PromptTemplates.REVIEW_SYSTEM, PromptTemplates.reviewUser(roadmaps, ideas));
     if (json == null) {
       return null;
@@ -50,7 +50,7 @@ public class ReviewAiService {
     if (ideaTexts == null || ideaTexts.size() < 2) {
       return List.of();
     }
-    JsonNode json = ai.generate("idea clustering",
+    JsonNode json = ai.generate(AiTier.FAST, "idea clustering",
         PromptTemplates.CLUSTER_SYSTEM, PromptTemplates.clusterUser(ideaTexts));
     if (json == null || json.get("themes") == null || !json.get("themes").isArray()) {
       return List.of();

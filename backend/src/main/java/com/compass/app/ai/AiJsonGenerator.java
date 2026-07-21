@@ -13,9 +13,10 @@ import java.util.List;
 
 /**
  * Shared plumbing for the AI calls that expect a JSON reply (roadmap drafting, resume
- * extraction, self-description interpretation). One place for failover (primary → backup with
- * the larger generation budget), lenient parsing, and brief event logging on failure — so each
- * feature service only writes its prompt and reads the fields it wants.
+ * extraction, self-description interpretation). One place for tiered failover (Phase 19: each
+ * {@link AiTier} fails over across its own two providers, fast tier with a smaller budget than
+ * heavy), lenient parsing, and brief event logging on failure — so each feature service only
+ * writes its prompt, names its tier, and reads the fields it wants.
  *
  * <p>Like the rest of the AI layer these calls are best-effort: {@code generate} returns
  * {@code null} when no provider is configured or the reply can't be used, and the caller
@@ -42,24 +43,24 @@ public class AiJsonGenerator {
         this.events = events;
     }
 
-    /** True when at least one provider could serve a generation request. */
+    /** True when at least one provider in either tier could serve a generation request. */
     public boolean isAvailable() {
-        return props.getPrimary().isConfigured() || props.getBackup().isConfigured()
-                || props.getTertiary().isConfigured();
+        return props.anyConfigured();
     }
 
     /**
-     * Try primary, then backup, then tertiary, with the generation budget; parse the reply as
-     * JSON. Returns {@code null} on any failure, logging a brief event ({@code feature} names
-     * which call degraded) when every configured provider fails or the reply won't parse.
+     * Try every configured provider in {@code tier}'s failover chain in order, with that tier's
+     * budget; parse the first reply as JSON. Returns {@code null} on any failure, logging a
+     * brief event ({@code feature} names which call degraded) when every configured provider in
+     * the tier fails or the reply won't parse.
      */
-    public JsonNode generate(String feature, String system, String user) {
-        String raw = complete(props.getPrimary(), system, user);
-        if (raw == null) {
-            raw = complete(props.getBackup(), system, user);
-        }
-        if (raw == null) {
-            raw = complete(props.getTertiary(), system, user);
+    public JsonNode generate(AiTier tier, String feature, String system, String user) {
+        String raw = null;
+        for (AiProperties.Provider provider : props.providersFor(tier)) {
+            raw = complete(tier, provider, system, user);
+            if (raw != null) {
+                break;
+            }
         }
         if (raw == null) {
             if (isAvailable()) {
@@ -74,14 +75,48 @@ public class AiJsonGenerator {
         return json;
     }
 
-    private String complete(AiProperties.Provider provider, String system, String user) {
+    /**
+     * The emergency skeleton path (Phase 19): a much smaller ask (titles only) tried against the
+     * FAST tier when the HEAVY tier's whole chain has already failed for a generation call — a
+     * cheap, quick provider may still have quota even when the strong ones don't. {@code null}
+     * on failure; callers use this to produce a bare-bones result rather than nothing at all.
+     */
+    public JsonNode generateSkeleton(String feature, String system, String user) {
+        String raw = null;
+        for (AiProperties.Provider provider : props.providersFor(AiTier.FAST)) {
+            try {
+                long timeout = provider.getTimeoutSecondsOverride() != null
+                        ? provider.getTimeoutSecondsOverride() : props.getSkeletonTimeoutSeconds();
+                raw = chat.complete(provider, timeout, props.getSkeletonMaxTokens(), system, user);
+                if (raw != null && !raw.isBlank()) {
+                    break;
+                }
+                raw = null;
+            } catch (RuntimeException ex) {
+                log.warn("AI skeleton provider ({}) failed: {}", provider.getModel(), ex.getMessage());
+                events.aiWarning(AiFailures.category(ex),
+                        provider.getModel() + " failed: " + AiFailures.reason(ex), null);
+            }
+        }
+        if (raw == null) {
+            events.aiWarning("provider_error", "Skeleton fallback also failed for " + feature + ".", null);
+            return null;
+        }
+        return parse(raw);
+    }
+
+    private String complete(AiTier tier, AiProperties.Provider provider, String system, String user) {
         if (!provider.isConfigured()) {
             return null;
         }
         try {
+            long defaultTimeout = tier == AiTier.FAST
+                    ? props.getFastJsonTimeoutSeconds() : props.getGenerationTimeoutSeconds();
+            int maxTokens = tier == AiTier.FAST
+                    ? props.getFastJsonMaxTokens() : props.getGenerationMaxTokens();
             long timeout = provider.getTimeoutSecondsOverride() != null
-                    ? provider.getTimeoutSecondsOverride() : props.getGenerationTimeoutSeconds();
-            String out = chat.complete(provider, timeout, props.getGenerationMaxTokens(), system, user);
+                    ? provider.getTimeoutSecondsOverride() : defaultTimeout;
+            String out = chat.complete(provider, timeout, maxTokens, system, user);
             return out == null || out.isBlank() ? null : out;
         } catch (RuntimeException ex) {
             log.warn("AI JSON provider ({}) failed: {}", provider.getModel(), ex.getMessage());

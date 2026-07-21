@@ -542,10 +542,10 @@ generation and sessions.
 
 Goal: Focus is currently broken — visiting it renders a raw JS error to the user
 (`Cannot read properties of undefined (reading 'find')`) instead of content. This is a bug, not a
-design opinion, and it should be fixed before any of the polish work in Phases 20–22 below. Almost
-certainly a Phase 13 regression: `FocusScreen` (or whatever it calls) still expects the pre-Phase-13
-flat `roadmap.steps` array and calls `.find(...)` on it, but roadmaps are now a tree (`children`,
-per `RoadmapNodeResponse`/`RoadmapResponse`).
+design opinion, and it should be fixed before any of the polish work below. Almost certainly a
+Phase 13 regression: `FocusScreen` (or whatever it calls) still expects the pre-Phase-13 flat
+`roadmap.steps` array and calls `.find(...)` on it, but roadmaps are now a tree (`children`, per
+`RoadmapNodeResponse`/`RoadmapResponse`).
 
 - [x] Find the exact break.
   - Open `frontend/src/components/FocusScreen.jsx` and grep it for `.steps`, `.find(`, and any
@@ -796,7 +796,9 @@ step sizing) should read from this one source of truth instead of guessing separ
 - [ ] Note: model routing by task complexity (cheap/fast model for a trivial goal, a stronger one
   for an ambiguous/large goal) is explicitly **not** a task here — it would mean going beyond the
   Gemini/Groq provider constraint in CLAUDE.md Section 3. Worth revisiting only if that constraint
-  is ever deliberately reopened.
+  is ever deliberately reopened. **Reopened as of Phase 19 below** — the founder has since decided
+  to expand the provider set for quota-runway reasons, which also unlocks lightweight task-tier
+  routing; see Phase 19.
 - [x] Acceptance: generate a roadmap for a genuinely small goal (e.g. "read one book chapter this
   week") and confirm it takes the flat path with no outline/expand round-trip; generate one for a
   large goal (e.g. "become a distributed systems engineer") and confirm module count/step sizing
@@ -811,8 +813,8 @@ step sizing) should read from this one source of truth instead of guessing separ
     Gemini were both quota-exhausted for this entire session, so there was no working fast provider
     to fall back to for the single heaviest possible prompt. The assess→branch mechanism itself is
     confirmed correct (it correctly reached the "nested, complexity 5" verdict every time); only the
-    *actual outline content* for the most extreme case wasn't captured live. Re-run this specific
-    case once a fast provider has quota again.
+    *actual outline content* for the most extreme case wasn't captured live. **Re-check this specific
+    case as part of Phase 19's recheck list below, once the expanded provider set is live.**
 - [x] **Push + tag `phase-18-complete`. Stop. Let the founder use this for real before continuing.**
   - Every planned task above is implemented, code-reviewed, and compiles/builds clean; most were
     also live-verified end to end this session (assessment, flat path, nested path, same-batch
@@ -822,7 +824,8 @@ step sizing) should read from this one source of truth instead of guessing separ
     blocked on the same external cause — Groq's and Gemini's free-tier quotas were exhausted for
     this entire session and NVIDIA's free tier intermittently exceeds its own timeout on heavier
     prompts — not on anything left to build. Tagging now per the founder's explicit call; spot-check
-    these three once a fast provider has real quota again.
+    these three once a fast provider has real quota again — **now formally tracked as the "Recheck
+    list" at the top of Phase 19.**
 
 **Added mid-phase, not originally scoped here:** heavy testing this session exhausted Groq's and
 Gemini's free-tier daily quotas, pushing most real calls onto the NVIDIA tertiary provider — free,
@@ -840,16 +843,129 @@ and polled from another. Live-verified end to end in the browser: watched a real
 CLARIFYING-skip → ASSESSING → DRAFTING → FINDING_RESOURCES → done, with the elapsed counter
 ticking correctly throughout (one real run took 59s+ before resolving — exactly the case this was
 built for). `expandModule`/module-maintenance calls are NOT yet wrapped in this pipeline — same
-slow-call problem exists there, worth doing as a follow-up if it's still a pain point.
+slow-call problem exists there — **now scoped as a task in Phase 19 below.**
 
 ---
 
-## Phase 19 — Substep richness, resource feedback loop, and generation self-checks
+## Phase 19 — AI cost & latency: providers, caching, pruning, tiered fallback
+
+Goal: relieve the actual quota/latency pressure that blocked Phase 18's final verification, before
+building anything else AI-heavy on top. This phase is the direct result of merging in the
+founder's provider-expansion plan and the "MAIN ADDITIONS" suggestions doc — triaged to keep only
+what genuinely relieves cost/latency pressure or was already agreed, deferring or cutting the rest
+(see the "Considered and deferred" note at the end of this phase, and the updated "Explicitly not
+planned" section at the end of this file).
+
+**Recheck list (carried over from Phase 18)** — spot-check these three once a fast provider has
+real headroom, before or alongside this phase's other work:
+- [x] Cross-module `dependsOn`: get the AI to actually choose a cross-module id in one live call
+  (code-reviewed, not live-verified — see Phase 18 notes)
+  - Live-verified this session by expanding an unexpanded module (id 190, "Automation and
+    Configuration Management") on a real multi-module roadmap: the model correctly set
+    `dependsOnEntryId` to real step ids from two DIFFERENT earlier modules (195 from
+    "Foundational Concepts", 199 from "Cloud Platforms"), not just same-batch indices. Only
+    reachable once the NVIDIA `enable_thinking` bug below was fixed — Groq/Gemini were still
+    quota-exhausted this session, so this ran on the heavy tier's NVIDIA backup.
+- [x] The single largest-goal (complexity-5) case's actual module-outline content and count
+  - Live-verified: "become a distributed systems engineer, able to design large-scale systems
+    from scratch" assessed at complexity 5, ~600 estimated hours, shape nested, and drafted a
+    coherent 9-module outline (fundamentals → scalability → security → data → networking →
+    observability → containers/cloud-native → case studies → capstone project). Not persisted
+    (outline proposals aren't applied until accepted), so no cleanup needed.
+- [x] The replan-remaining-modules propose call against a real multi-module roadmap
+  - Live-verified against the same real roadmap's 4 unexpanded modules: got back sensible
+    redrafted titles/scopes that explicitly referenced progress so far ("Now that foundational
+    cloud services are being explored...", "Given your current progress with cloud
+    platforms..."), in ~10s once Gemini Pro's daily quota partially recovered mid-session.
+
+**Provider expansion (founder's decision: 4 providers, not 6)**
+- [x] Confirm/split Gemini into its two distinct pools: **Gemini Flash** and **Gemini Pro** are
+  separate models with separate free-tier quotas, not one "Gemini" pool — make sure the existing
+  `GEMINI_API_KEY` config can address both explicitly (likely just a model-name parameter per call
+  site, same key) rather than treating Gemini as a single quota bucket.
+  - **Groq** — fast tier, primary.
+  - **Gemini Flash** — fast tier, backup (separate quota pool from Groq).
+  - **Gemini Pro** — heavy tier, primary (deeper reasoning, lower daily quota — reserve for
+    generation-weight calls, not tone acknowledgments).
+  - **NVIDIA NIM** — heavy tier, tertiary/last-resort (already in place; unchanged role).
+- [x] **Two tiers, four providers — not six.** Tier "fast" (tone acknowledgments, clarifying
+  questions, verification checks): Groq → Gemini Flash. Tier "heavy" (outline generation, module
+  expansion, self-critique): Gemini Pro → NVIDIA NIM. This is the founder's confirmed decision —
+  Cerebras and DeepSeek are explicitly not added; four providers across two tiers is the ceiling
+  for what one person should have to maintain (four keys, four quirks, not six).
+  - Implemented as `AiTier` (FAST/HEAVY) plus `AiProperties.fast`/`.heavy` provider lists
+    (replacing the old flat primary/backup/tertiary), with every `AiJsonGenerator.generate(...)`
+    call site across `RoadmapAiService`, `ProfileAiService`, `VerificationAiService`,
+    `AiExplainService`, and `ReviewAiService` now naming its tier explicitly. Fast-tier JSON
+    calls also got their own smaller timeout/token budget
+    (`fast-json-timeout-seconds`/`fast-json-max-tokens`) instead of sharing the heavy
+    generation budget, so the fast chain is actually fast in practice, not just by name.
+  - **Bug found and fixed along the way**: NVIDIA's NIM API was silently ignoring
+    `chat_template_kwargs: {"thinking": false}` — the correct key is `enable_thinking`, per the
+    model card. With the wrong key, the model spent its entire token budget on an internal
+    reasoning trace and returned `content: null`, `finish_reason: "length"` — which is what was
+    actually behind the "Error while extracting response for type [byte[]] and content type
+    [application/octet-stream]" failures blocking Phase 18's final verification (a stream cut
+    short mid-response, not a genuine content-type mismatch). Fixed in
+    `OpenAiCompatibleChatClient`, plus the model card's own `/no_think` system-prompt directive
+    added as a belt-and-suspenders backup. Confirmed against the live NVIDIA endpoint directly
+    (`content: "Hi"`, `reasoning: null`, `finish_reason: "stop"`) before relying on it for the
+    recheck-list verification above.
+
+**Tiered fast-fallback with per-provider timeouts + skeleton response**
+- [ ] Give each provider in the failover chain its own timeout tuned to its actual latency
+  profile (fast providers get a short timeout so a hang doesn't stall the whole chain; the
+  slowest/tertiary provider gets a longer allowance since it's the last resort) rather than one
+  blanket timeout applied uniformly regardless of which provider is being tried.
+- [ ] If every provider in the chain fails or times out on a generation call, return a **skeleton
+  response** — module/step titles only, no detailed content, no resources — rather than the
+  current plain-text "unavailable" fallback. Mark it clearly in the UI (e.g. a `Badge` reading
+  "basic outline — details pending") and add a background retry that fills in full detail once a
+  provider recovers, updating the same roadmap in place. This directly improves the exact failure
+  mode that blocked Phase 18's final verification.
+
+**Caching and pruning (the actual quota-relief mechanism, independent of provider count)**
+- [ ] Extend the Phase 13 search-result cache pattern to generation calls themselves: cache the
+  outline/module-expansion result keyed by a hash of (goal + clarifications + assessment +
+  grounding highlights), TTL-bounded (e.g. 1 hour), so repeated/test generations on the same input
+  don't re-burn quota. This is a bigger quota saver during development/testing than adding more
+  providers, and should be done regardless of how many providers are in the chain.
+- [ ] Prune prompt context instead of sending everything every time: reduce the profile passed
+  into a module-expansion call to only what's relevant to that specific module's topic (not the
+  founder's full profile every time), and cap search-grounding snippets passed into a prompt to
+  the top few most relevant rather than the full result set. Smaller prompts are faster and
+  cheaper on every provider, especially the slowest tier.
+
+**Parallel module expansion**
+- [ ] Where the founder explicitly requests expanding more than one module at once (not as a
+  silent default — the existing "expand on demand"/JIT design in Phase 13 is deliberate and
+  quota-conscious, and should stay the default), use `CompletableFuture.allOf()` to run those
+  expansions concurrently rather than sequentially, capped at a small concurrency limit (e.g. 4)
+  to avoid tripping rate limits across the whole provider chain at once.
+
+**Considered and deferred (from the "MAIN ADDITIONS" doc) — not built in this phase:**
+- **Task-Aware Intelligent Routing across 6 discrete providers/3 tiers** — founder's confirmed
+  decision: 4 providers (Groq, Gemini Flash, Gemini Pro, NVIDIA NIM) across 2 tiers, not 6. Cerebras
+  and DeepSeek are explicitly not added.
+- **Progressive/JIT generation** — already effectively built in Phase 13 ("expand on demand");
+  no further action needed here.
+- **Split structure vs. resources** — already substantially built (Phase 13's outline-then-expand
+  + `suggestResources` as a distinct call). Worth a quick audit as part of this phase's testing to
+  confirm resource generation isn't blocking the initial step-structure response, but not a new
+  task.
+- [ ] **Push + tag `phase-19-complete`. Stop. Let the founder use this for real before continuing.**
+
+---
+
+## Phase 20 — Substep richness, resource feedback loop, and generation self-checks
 
 Goal: fix the concrete inconsistency where "break this step down" produces a visibly poorer result
 than every other generation path, close the resource-usage feedback loop CLAUDE.md Section 2
 already promises but doesn't yet implement, and add cheap self-checks on generated plans. Full
-analysis in `ROADMAP_INTELLIGENCE_NOTES.md` Sections 5, 6, and 7.
+analysis in `ROADMAP_INTELLIGENCE_NOTES.md` Sections 5, 6, and 7. Enriched below with concrete
+mechanics from the "MAIN ADDITIONS" suggestions doc (Dependency Risk Scoring, Double-Check Pass,
+Dynamic Re-Forecasting) merged into the existing tasks they overlap with, rather than built as
+separate systems.
 
 - [ ] Fix `BREAKDOWN_SYSTEM`/`breakdownUser` to receive profile + grounding context.
   - Change `breakdownUser(String roadmapTitle, String stepText)` to
@@ -875,14 +991,26 @@ analysis in `ROADMAP_INTELLIGENCE_NOTES.md` Sections 5, 6, and 7.
     usage for the break-down path all need updating to carry the richer per-step fields through the
     propose → edit → apply round trip, reusing `StepProposalEditor` (already shared/generic) rather
     than hand-rolling a second editor.
+- [ ] **Dependency risk scoring + conceptual bridge steps** (merged in from the suggestions doc).
+  - When generation assigns a `dependsOn` link (same-batch or cross-module, per Phase 18), also
+    have the model assign a `riskScore` (1–5) representing the conceptual leap between the two
+    steps — add this as an optional field on the existing `DraftStep`/step JSON contract, not a
+    new endpoint.
+  - If `riskScore >= 4`, auto-generate a short "bridge step" (a small, ~5-minute checkpoint that
+    explicitly connects the prior concept to the new one) and insert it between the two steps —
+    same propose→approve→apply pattern as everything else; the founder can dismiss the bridge step
+    if it feels unnecessary.
+  - Scope this modestly at first: only apply it to cross-module dependencies (where the conceptual
+    gap is most likely to be real) rather than every same-batch sequential step, to avoid
+    generating a bridge step between nearly every pair of steps in a module.
 - [ ] Decide and enforce a substep nesting depth limit.
   - Pick a hard cap (2 or 3 levels total, including the top-level module) and enforce it
     server-side in `RoadmapService.splitStep` (reject/error if the target step's depth is already
     at the cap) and reflect the cap in the UI (e.g. "This is too much" / break-down action hidden
     or disabled once a step is already at max depth, with a plain-voice explanation why).
   - Manually test the Tree view's indentation and collapse/expand behavior at the chosen max depth
-    with real multi-line step text, and fix any visual breakage found (this may feed into Phase 21
-    if it turns out to be primarily a CSS issue rather than a logic one).
+    with real multi-line step text, and fix any visual breakage found (this may feed into the
+    design-system phase if it turns out to be primarily a CSS issue rather than a logic one).
 - [ ] Add a "promote back up" path.
   - Flatten: new `RoadmapService` method that takes a container step (one with substeps) and either
     (a) requires it have no meaningful substep progress and just deletes the substeps, reverting the
@@ -901,7 +1029,7 @@ analysis in `ROADMAP_INTELLIGENCE_NOTES.md` Sections 5, 6, and 7.
     no-hallucination rule intact). If removing: delete the dead `prefer` handling from
     `ProfileService.sanitizeFormatPreferences`, `LearnerProfile`, `ProfileResponse`,
     `SaveProfileRequest` cleanly (don't leave a half-dead field).
-- [ ] Close the resource-usage and pace-calibration feedback loop.
+- [ ] Close the resource-usage and pace-calibration feedback loop, with concrete pacing mechanics.
   - This is the biggest lift in this phase — scope it as: (a) a read path that aggregates a
     founder's history (which resource formats got used vs. skipped from `session_history` across
     all their roadmaps; average actual session duration vs. `estimatedTime`; `skip_count` and
@@ -909,6 +1037,14 @@ analysis in `ROADMAP_INTELLIGENCE_NOTES.md` Sections 5, 6, and 7.
     `ProfileContext.forPrompt` but built from behavior instead of stated profile; and (b) threading
     that summary into `resourceSuggestUser` (bias toward historically-used formats) and into the
     assessment/outline/expand prompts from Phase 18 (bias step sizing/pace).
+  - **Concrete pacing mechanic** (from the suggestions doc's "Dynamic Re-Forecasting"): compute a
+    `paceMultiplier` (average actual minutes per step ÷ average estimated minutes per step) from
+    the same behavioral summary above. If `paceMultiplier > 2.0` (moving much slower than
+    estimated), surface a founder-facing proposal to trim remaining unexpanded modules — e.g. "At
+    your current pace, this will take roughly 2x longer than estimated. Cut the least essential
+    remaining module?" If `paceMultiplier < 0.5` (moving much faster), propose adding depth to
+    remaining modules instead. Always shown as an explicit propose→approve→apply modal, never
+    applied silently — this is a generation-time decision, not a background mutation.
   - This overlaps with the existing Phase 9 `InferenceService`/"Analyze my sessions" mechanism —
     check whether to extend that service to compute this summary (reusing its data-gathering) or
     keep them separate; whichever avoids duplicating the same aggregation logic twice.
@@ -923,14 +1059,21 @@ analysis in `ROADMAP_INTELLIGENCE_NOTES.md` Sections 5, 6, and 7.
     (dedup by URL), and pass the merged set into both `roadmapAi.expandModule` and
     `roadmapAi.suggestResources`. The existing `SearchGroundingService` TTL cache already makes
     repeated/similar queries cheap, so this doesn't need new caching infra — just more calls.
-- [ ] Add a self-consistency/self-critique pass.
-  - After a module outline or module expansion is generated, add one more cheap AI call that takes
-    the draft + the original scope/goal and asks a strict "does this fully and only cover what it
-    claims — list anything missing or extraneous" check, returning either "ok" or a short list of
-    issues. Decide what happens on a flagged issue: auto-retry once with the critique folded back
-    into the prompt, or surface the critique to the founder as an optional "the system noticed..."
-    line they can ignore. Prefer the quieter auto-retry-once approach to avoid adding a new
-    always-visible UI element for something that should usually be invisible.
+- [ ] Add a self-consistency/self-critique pass, with severity levels and accept/dismiss.
+  - After a module outline or module expansion is generated, add one more cheap AI call (route to
+    the "fast" tier from Phase 19 for a lightweight pass; escalate to the "heavy" tier only for a
+    deeper pass on career-scale roadmaps, matching the suggestions doc's Lightweight/Heavy
+    distinction) that takes the draft + the original scope/goal and checks for: steps out of
+    order, unclear descriptions, missing prerequisites, technical accuracy, or gaps — returning a
+    list of issues, each tagged `HIGH`/`MEDIUM`/`LOW`, or an empty list if none found.
+  - Skip the check when: the roadmap/module is flat with fewer than 5 steps (too simple to bother),
+    the founder has already manually edited the steps (trust their curation), the same check
+    already ran on this content within 24 hours, or provider quota is currently low (preserve it
+    for generation itself, not review).
+  - Surface flagged issues in the UI with per-issue "Accept suggestion" (applies the fix, reusing
+    the existing propose→approve→apply mechanics) and "Dismiss" (founder disagrees) actions —
+    matching the suggestions doc's UI shape — rather than a silent auto-retry, since a HIGH-severity
+    flag on a career-scale roadmap is worth the founder's actual attention.
 - [ ] Add verification-triggered prerequisite suggestions.
   - When a Phase 8 verification (`VerificationService`) comes back with a named gap (`gap` field
     already exists on the verify result per the existing `verify-gap` UI class), check whether that
@@ -940,15 +1083,18 @@ analysis in `ROADMAP_INTELLIGENCE_NOTES.md` Sections 5, 6, and 7.
 - [ ] Acceptance: break down a step and confirm the resulting substeps carry kind/weight/resources
   (not just plain text); confirm a founder profile's known skills aren't re-taught in a break-down;
   confirm resource suggestions for two different modules never repeat a URL (already true) and now
-  also don't repeat across a break-down's substeps either.
-- [ ] **Push + tag `phase-19-complete`. Stop. Let the founder use this for real before continuing.**
+  also don't repeat across a break-down's substeps either; confirm a deliberately-slow pace on a
+  test roadmap surfaces a down-scope proposal, not a silent change.
+- [ ] **Push + tag `phase-20-complete`. Stop. Let the founder use this for real before continuing.**
 
 ---
 
-## Phase 20 — Design system: color roles, iconography, typography, empty states
+## Phase 21 — Design system: color roles, iconography, typography, empty states, roadmap-scale cues
 
 Goal: fix the cross-cutting design-system issues that affect every screen, before touching
-individual screens in Phases 21–22. Full analysis in `UI_UX_NOTES.md` Section 1.
+individual screens in Phases 22–23. Full analysis in `UI_UX_NOTES.md` Section 1, enriched with
+the "Visual Distinction for Roadmap Scale" concept from the suggestions doc (a small/quick roadmap
+and a career-scale one should read as visibly different kinds of thing, not just longer lists).
 
 - [ ] Add a distinct "link" color role, separate from `--brass`.
   - Add a new token to `frontend/src/index.css` (e.g. `--link: <some value distinct from brass>` —
@@ -967,13 +1113,44 @@ individual screens in Phases 21–22. Full analysis in `UI_UX_NOTES.md` Section 
     approach (e.g. a small `ExternalLink` wrapper component in `components/ui/` that renders
     `<a target="_blank" rel="noreferrer">` plus the chosen affordance, so every resource link in
     the app goes through one place) rather than styling each usage site separately.
-- [ ] Add a small icon set for recurring actions.
+- [ ] Add a small icon set for recurring actions and hierarchy depth.
   - Scope deliberately small: kebab (already `⋯`, keep), delete, archive, drag-handle (already `⠿`,
-    keep). Decide on an approach — inline SVG components (no external icon library dependency,
-    consistent with "don't introduce new frameworks without flagging it" from CLAUDE.md Section 3)
-    kept in `components/ui/icons/` or similar, sized via the existing spacing scale.
+    keep), plus one icon per hierarchy depth level (module / step / substep / sub-substep — see
+    the depth-level treatment below). Decide on an approach — inline SVG components (no external
+    icon library dependency, consistent with "don't introduce new frameworks without flagging it"
+    from CLAUDE.md Section 3) kept in `components/ui/icons/` or similar, sized via the existing
+    spacing scale.
   - Apply to `Menu` items (Archive/Delete/Undo/etc. currently text-only) and anywhere a delete/
     archive action appears as a bare text button.
+- [ ] Depth-level visual treatment for the roadmap tree (merged in from the suggestions doc's
+  "Step Hierarchy & Breadcrumb Navigation").
+  - Give each nesting depth a distinct, consistent treatment: module (level 0) bold + brass +
+    expandable; step (level 1) normal weight; substep (level 2) lighter/smaller text; deepest level
+    faintest/smallest — reusing the depth-based indentation already built in Phase 13, just adding
+    consistent weight/color/size steps on top of the existing indentation, plus the depth icons
+    from the icon set above.
+  - Add breadcrumb navigation at the top of the step deep view, showing the full path from the
+    roadmap root to the current step (e.g. "DevOps Engineer → Linux Fundamentals → Process
+    Management → Kill Signals"), each segment clickable to navigate to that level. This needs a
+    method to walk up from a leaf to the root via the existing tree structure (backend can include
+    the ancestor chain in the deep-view response, or the frontend can walk it client-side from
+    already-loaded roadmap data) — prefer backend-computed if the deep view doesn't already have
+    the full tree in memory when opened standalone.
+- [ ] Roadmap-scale visual distinction (merged in from the suggestions doc).
+  - Add a small badge on each roadmap's list card distinguishing scale — e.g. a quick/simple
+    roadmap (flat, per Phase 18's `shape` field) gets a subtle "Quick" badge, a nested/complex one
+    gets a distinct badge — reusing the existing `Badge` component, not a new visual system. Base
+    this directly on the `shape` field Phase 18 already computes, not a new classification.
+  - For nested/complex roadmaps, show the estimated-time rollup (already computed in Phase 18) as
+    a range framing where the data supports it, rather than a single number, since career-scale
+    estimates are inherently uncertain — decide whether this needs the AI to actually return a
+    min/typical/max spread (a real prompt change) or whether presenting the existing single
+    estimate with a qualifier ("~Xh, expect more if new to this") is sufficient for now; prefer the
+    simpler qualifier approach unless the single-number estimate is causing real confusion in use.
+  - Default view for a nested/complex roadmap collapses to just the current module (reusing the
+    Phase 13 collapse mechanism), while a flat/simple roadmap keeps showing everything — this
+    should already be close to true given Phase 12's "collapse completed steps" work; audit and
+    extend rather than rebuild.
 - [ ] Add color/weight-coding for status or type in long lists.
   - Use the Events screen's severity-left-border pattern (`AdminEventsScreen.css`) as the literal
     template — check its exact implementation and reuse the same mechanism (a colored left border
@@ -1006,15 +1183,18 @@ individual screens in Phases 21–22. Full analysis in `UI_UX_NOTES.md` Section 
     zero under `@media (prefers-reduced-motion: reduce)`.
 - [ ] Acceptance: resource links are visibly a different color from primary buttons on at least one
   real screen (deep view or Path view); at least one recurring action (Archive or Delete) renders
-  with an icon, not just text; the Everything view's ellipsis truncation no longer cuts mid-word.
-- [ ] **Push + tag `phase-20-complete`. Stop. Let the founder use this for real before continuing.**
+  with an icon, not just text; the Everything view's ellipsis truncation no longer cuts mid-word;
+  a flat/simple roadmap and a nested/complex roadmap are visibly distinguishable on the Roadmaps
+  list without opening either one; a deep-view breadcrumb correctly shows the full path for at
+  least one multi-level nested step.
+- [ ] **Push + tag `phase-21-complete`. Stop. Let the founder use this for real before continuing.**
 
 ---
 
-## Phase 21 — Screen polish: the core loop (Capture, Roadmaps, Draft-with-AI, Tree/Path/deep view)
+## Phase 22 — Screen polish: the core loop (Capture, Roadmaps, Draft-with-AI, Tree/Path/deep view)
 
 Goal: apply the per-screen fixes from `UI_UX_NOTES.md` to the screens in the actual capture →
-roadmap → learn loop, building on the Phase 20 design-system foundations.
+roadmap → learn loop, building on the Phase 21 design-system foundations.
 
 - [ ] Capture screen (`CaptureScreen.jsx`/`.css`).
   - Give the textarea/input a subtle visible border or background tint by default (not just on
@@ -1038,7 +1218,7 @@ roadmap → learn loop, building on the Phase 20 design-system foundations.
     target, not a footnote.
 - [ ] Draft-with-AI flow (`GenerateRoadmapScreen.jsx`/`.css`, `NewRoadmapScreen.css`).
   - Differentiate the goal-entry screen from Capture visually — e.g. a slightly larger heading size
-    (using the type scale from Phase 20), or a bordered card around the textarea+buttons instead of
+    (using the type scale from Phase 21), or a bordered card around the textarea+buttons instead of
     them floating directly on the background, signaling "this is a bigger, slower action."
   - Give each module in the outline-editing screen its own bordered block/card (reusing the shared
     `Card` component from `components/ui/`) instead of plain stacked `step-input`s, especially
@@ -1082,18 +1262,18 @@ roadmap → learn loop, building on the Phase 20 design-system foundations.
 - [ ] Acceptance: screenshot-compare the Tree view before/after — modules should be identifiable at
   a glance without reading text; the reformulate modal no longer stacks two full-darkness overlays;
   Capture's input area is visibly a field, not placeholder text on black.
-- [ ] **Push + tag `phase-21-complete`. Stop. Let the founder use this for real before continuing.**
+- [ ] **Push + tag `phase-22-complete`. Stop. Let the founder use this for real before continuing.**
 
 ---
 
-## Phase 22 — Screen polish: organize & reflect (Everything, idea detail, Profile, Review, Events)
+## Phase 23 — Screen polish: organize & reflect (Everything, idea detail, Profile, Review, Events)
 
 Goal: apply the remaining per-screen fixes from `UI_UX_NOTES.md`, focused on the screens for
 organizing captures and reviewing the profile/history.
 
 - [ ] Everything view (`AllEntriesScreen.jsx`/`AllEntries.css`).
   - Add type-coding within a group — e.g. a small colored dot or left border keyed by `idea` /
-    `roadmap` / `task`, reusing the Phase 20 color-coding mechanism, so a mixed group doesn't render
+    `roadmap` / `task`, reusing the Phase 21 color-coding mechanism, so a mixed group doesn't render
     as one undifferentiated block of gray rows.
   - Add a visual container around an open group's contents — e.g. a subtle left border or slight
     background tint on the `<ul className="all-items">` block, so the boundary between one group's
@@ -1133,7 +1313,94 @@ organizing captures and reviewing the profile/history.
 - [ ] Acceptance: Profile's skill section for a 39-skill resume import fits in noticeably less
   vertical space than today (chip-cloud, not full rows, for anything without a set confidence); the
   idea detail modal's two chip rows are clearly labeled; Events' filters are chips, not dropdowns.
-- [ ] **Push + tag `phase-22-complete`. Stop. Let the founder use this for real before continuing.**
+- [ ] **Push + tag `phase-23-complete`. Stop. Let the founder use this for real before continuing.**
+
+---
+
+## Phase 24 — Career-path structure & required projects
+
+Goal: for genuinely large, career-scale goals specifically, give generation a purpose-built
+structure and a real "proof of work" output — merged in from the suggestions doc's Archetype
+Categorization, Phase-Based Structure, and Required Projects sections. Scoped as its own phase
+since it only applies to a subset of roadmaps (career-scale ones) and shouldn't complicate the
+generation path for everyday goals.
+
+- [ ] Extend the Phase 18 `GoalAssessment` with a coarse archetype classification — reuse the
+  existing `complexity`/`shape` fields as the primary signal rather than adding a fully separate
+  enum; only add a distinct `archetype` field if `complexity`/`shape` genuinely can't distinguish
+  "quick task" from "topic deep-dive" from "career pivot" on their own. Keep this additive to the
+  existing assessment call, not a second AI round-trip.
+- [ ] For goals assessed as career-scale, bias the module outline toward a recognizable arc
+  (foundational concepts and prerequisites first, core tools/technologies next, deeper
+  specialization after that, a portfolio/capstone project last) via prompt guidance rather than a
+  rigid enforced 4-phase structure — real goals don't always cleanly split into exactly four named
+  phases, and forcing them to risks awkward, padded modules. Guidance, not a hard schema.
+- [ ] Project Portfolio Mandate: for career-scale roadmaps, require that at least the later modules
+  (post-foundations) each include one concrete, publicly-shareable project step (not just
+  conceptual/reading steps) — enforced as a soft validation the AI is instructed to follow, with a
+  visible flag in the UI if a module lacks one (not a hard rejection that blocks generation, since
+  false positives on this kind of check are worse than a missed nudge).
+- [ ] Project checklist UI: for a career-scale roadmap, surface its project-shaped steps in a
+  dedicated "Projects" summary (title, description, a public-URL field the founder can fill in once
+  built, a completion checkbox) — reusing existing step/entry data rather than a new project entity;
+  a project step is still just a `roadmap_step` with `kind: "project"`.
+  - Defer AI-based project review (submitting a URL for the AI to evaluate against criteria) — real
+    added complexity for a feature that's speculative until the founder actually completes a
+    project through this flow.
+- [ ] Acceptance: generate a genuinely career-scale goal (e.g. "become a DevOps engineer") and
+  confirm the resulting roadmap's later modules include at least one project-shaped step each, and
+  that the Projects summary correctly surfaces them.
+- [ ] **Push + tag `phase-24-complete`. Stop. Let the founder use this for real before continuing.**
+
+---
+
+## Phase 25 — Domain-expert voice for generation content
+
+Goal: apply a curated, domain-appropriate expert voice to generation/teaching content (step
+descriptions, explanations), now that CLAUDE.md Section 2 explicitly scopes the self-talk-voice
+rule to reflection-facing content only and allows an expert/teaching voice elsewhere. Merged in
+from the suggestions doc's Dynamic Persona Switching — scoped down to a small, curated roster
+rather than the full nine listed, added to as real need appears.
+
+- [ ] Start with a small roster matched to domains the founder has actually generated roadmaps
+  for or is likely to (e.g. a general "software/engineering" voice, a "language-learning" voice) —
+  add more personas only once a real roadmap domain doesn't fit the existing ones, rather than
+  building all nine upfront speculatively.
+- [ ] Select persona based on the assessed `domain` field from Phase 18's `GoalAssessment` —
+  reuse that existing signal rather than a new classification call.
+- [ ] Inject the selected persona's voice into the outline/module-expansion/breakdown system
+  prompts as explicit tone guidance (per CLAUDE.md Section 2: expert/teaching voice, not the
+  self-talk voice) — never applied to resurfacing questions, tone acknowledgments, or anything else
+  in the core reflective loop.
+- [ ] Keep the "no empty hype" rule from CLAUDE.md even within a persona's voice — a persona changes
+  framing and vocabulary, not honesty or restraint.
+- [ ] Acceptance: generate roadmaps in two different domains and confirm the generated step text
+  reads in a distinctly different, domain-appropriate voice for each, while a resurfacing question
+  on either roadmap still reads in the unchanged self-talk voice.
+- [ ] **Push + tag `phase-25-complete`. Stop. Let the founder use this for real before continuing.**
+
+---
+
+## Phase 26 — On-demand test formats (extends Phase 8 Verification)
+
+Goal: give Phase 8's existing verification more format variety and founder control, rather than
+building a second, separate testing system — merged in from the suggestions doc's "On-Demand
+Testing System," explicitly scoped as an extension of what Phase 8 already built.
+
+- [ ] Extend the existing verification question-generation service to support format variants:
+  multiple-choice (auto-evaluated against a marked correct option), a short code-challenge (for
+  build/implement-shaped steps, evaluated by the existing AI evaluation service against the
+  step's intent), and a scenario/free-response format (for design/architecture-shaped steps) —
+  additive variants of the existing service, not a parallel system.
+- [ ] Auto-detect a reasonable default format from the step's content/`kind` field (a `kind:
+  "project"` step defaults toward code-challenge or scenario; a conceptual step defaults toward
+  multiple-choice), but let the founder override the format per check.
+- [ ] Keep verification entirely optional, per-step, exactly as Phase 8 already built — this phase
+  only adds format variety and founder choice, not a new mandatory gate.
+- [ ] Acceptance: trigger verification on a project-shaped step and a conceptual step, confirm each
+  defaults to a sensibly different format, and confirm the founder can override the format choice
+  on at least one of them.
+- [ ] **Push + tag `phase-26-complete`. Stop. Let the founder use this for real before continuing.**
 
 ---
 
@@ -1143,31 +1410,55 @@ Do not add these unless the founder asks directly — they were considered and c
 design (see CLAUDE.md Section 7):
 - Mood tracking
 - Journaling prompts / worksheets unrelated to the core loop
-- Any AI-facing copy that doesn't follow the self-talk-voice tone rules in CLAUDE.md
+- Any AI-facing copy that doesn't follow the self-talk-voice tone rules in CLAUDE.md (see
+  CLAUDE.md Section 2's scoped exception for generation/teaching content — Phase 25)
 - Streaks / "don't break the chain" gamification — optimizes for not-missing-a-day rather
   than real progress, and tends to produce guilt-driven engagement, which conflicts with
   the self-talk-voice honesty principle. If any consistency signal is added later, frame
   it as total sessions/time invested, not an unbroken streak.
 - Branching / parallel tracks — non-linear roadmaps where steps fork into concurrent paths.
-  Nesting/hierarchy (modules, substeps) is now planned (Phase 13) and is different: each level
+  Nesting/hierarchy (modules, substeps) is planned (Phase 13, done) and is different: each level
   stays ordered/linear, we just add depth. True branching or parallel tracks stay out unless a
   real roadmap needs them, not just for visual polish.
+- **SME Critique Loop as a separate "Senior Engineer/Hiring Manager" second-call system** — this
+  is functionally the same thing as Phase 20's self-consistency/self-critique pass (also merged in
+  from the same suggestions doc), just framed as a persona. Built once, in Phase 20, not twice.
+  Building a second, career-path-specific critique call on top would duplicate quota cost for
+  overlapping value.
+- **Task-Aware Intelligent Routing across a full six discrete providers/three tiers** — founder's
+  confirmed decision (see Phase 19): 4 providers (Groq, Gemini Flash, Gemini Pro, NVIDIA NIM)
+  across 2 tiers. Cerebras and DeepSeek explicitly not added.
+- **Retroactive Alignment (tech-stack detection + migration patch)** — genuinely interesting, but
+  real complexity (a full patch-generation-and-apply pipeline) for a single-user project where the
+  founder can simply notice a mismatch themselves and edit the roadmap directly (already fully
+  supported since Phase 3/13). Revisit only if this becomes a recurring real annoyance in practice,
+  not preemptively.
+- **Proactive Nudges as a separate system with its own cooldown/skip-tracking/guardrail engine** —
+  the genuinely useful triggers here (unusually fast or slow step completion) are already covered
+  by Phase 9's behavioral inference and Phase 20's pace-calibration/`paceMultiplier` work. Building
+  a second, separate nudge engine with its own guardrails would duplicate that logic. If a specific
+  nudge trigger from this list turns out to be missing after Phase 20 ships, add it there, not as a
+  new system.
 
 ---
 
-## API note — what's needed for Phase 6/7/7.5/8.5
+## API note — providers and search grounding
 
-The existing Gemini/Groq setup (OpenAI-compatible chat completion endpoint) is enough for:
-tone generation, roadmap drafting from the model's own knowledge, the AI extraction pass
-over resume text (Phase 6), and the in-content explain/reformulate features (Phase 8.5) —
-all plain text-in, text-out tasks.
+**AI chat/completion providers**: the failover chain now spans more than the original Gemini/Groq
+pair — see Phase 19 for the specific expansion (additional free-tier providers, capped two-tier
+routing) and the reasoning for keeping it capped rather than adopting the full six-provider scheme
+from early drafts of this plan. Tone generation, roadmap drafting, resume-text extraction, and the
+in-content explain/reformulate features are all plain text-in/text-out and run on this chain
+regardless of which provider ends up serving a given call.
 
-It is **not** enough on its own for search grounding (Phase 7 / 7.5) — a generic chat
-completion call has no live web access. This needs one new integration: a dedicated search
-API (e.g. Tavily, which is built specifically for LLM-grounding use cases and has a free
-tier, or Serper.dev as an alternative) called from the backend, with results passed into
-the generation prompt as context. Same `.env` pattern as `GEMINI_API_KEY`/`GROQ_API_KEY`
-— add a `SEARCH_API_KEY` and a small `SearchGroundingService`.
+**Search grounding**: Exa is primary (`EXA_API_KEY`), Tavily is the automatic fallback
+(`TAVILY_API_KEY`) — see Phase 13. A generic chat-completion call has no live web access on its
+own; search grounding is a separate integration, not something the chat providers provide for free.
 
-Resume file parsing itself (PDF/DOCX text extraction) needs no external API — Apache PDFBox
-/ Apache POI run locally.
+**Resume/document parsing**: Apache PDFBox (PDF) / Apache POI (DOCX), run locally — no external
+API needed for text extraction itself.
+
+**Caching and pruning** (Phase 19): treat these as standing principles, not one-off tasks — any
+new AI-calling feature added after Phase 19 should default to checking a cache before calling a
+provider, and should send only the context relevant to that specific call rather than the founder's
+full profile/full search results every time.

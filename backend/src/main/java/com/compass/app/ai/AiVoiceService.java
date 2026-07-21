@@ -34,22 +34,19 @@ public class AiVoiceService {
 
     @PostConstruct
     void logConfig() {
-        String primary = props.getPrimary().isConfigured()
-                ? props.getPrimary().getModel() : "not configured";
-        String backup = props.getBackup().isConfigured()
-                ? props.getBackup().getModel() : "not configured";
-        String tertiary = props.getTertiary().isConfigured()
-                ? props.getTertiary().getModel() : "not configured";
         if (anyConfigured()) {
-            log.info("AI acknowledgments: primary={}, backup={}, tertiary={}.", primary, backup, tertiary);
+            String chain = props.providersFor(AiTier.FAST).stream()
+                    .map(AiProperties.Provider::getModel)
+                    .reduce((a, b) -> a + " -> " + b)
+                    .orElse("none");
+            log.info("AI acknowledgments (fast tier): {}.", chain);
         } else {
-            log.info("AI acknowledgments disabled (no provider key set) — capture still works.");
+            log.info("AI acknowledgments disabled (no fast-tier provider key set) — capture still works.");
         }
     }
 
     private boolean anyConfigured() {
-        return props.getPrimary().isConfigured() || props.getBackup().isConfigured()
-                || props.getTertiary().isConfigured();
+        return !props.providersFor(AiTier.FAST).isEmpty();
     }
 
     /**
@@ -105,22 +102,16 @@ public class AiVoiceService {
     }
 
     /**
-     * Try primary, then backup, then tertiary; null if none is configured or all fail. Each
-     * provider failure records a brief event; if all fail (with at least one configured),
+     * Try each configured fast-tier provider in order; null if none is configured or all fail.
+     * Each provider failure records a brief event; if all fail (with at least one configured),
      * records the feature-level fall-back to the plain path too.
      */
     private String generate(String feature, String system, String user) {
-        String line = tryProvider(props.getPrimary(), system, user);
-        if (line != null) {
-            return line;
-        }
-        line = tryProvider(props.getBackup(), system, user);
-        if (line != null) {
-            return line;
-        }
-        line = tryProvider(props.getTertiary(), system, user);
-        if (line != null) {
-            return line;
+        for (AiProperties.Provider provider : props.providersFor(AiTier.FAST)) {
+            String line = tryProvider(provider, system, user);
+            if (line != null) {
+                return line;
+            }
         }
         if (anyConfigured()) {
             events.aiWarning("fallback",

@@ -37,17 +37,25 @@ class OpenAiCompatibleChatClient {
                 .requestFactory(timeoutFactory(timeoutSeconds))
                 .build();
 
+        // NIM reasoning models (e.g. NVIDIA's Nemotron Super) spend a chunk of max_tokens on an
+        // internal "thinking" trace before the real answer; skip it since only the final JSON
+        // matters here, not the reasoning that produced it. Observed live: the flag alone can be
+        // silently ignored (reasoning still fills the whole budget, leaving `content` null and
+        // `finish_reason: length`) — so the model card's own "/no_think" system-prompt directive
+        // is added too, belt-and-suspenders, not just the API kwarg.
+        String effectiveSystem = provider.isDisableThinking() ? system + "\n/no_think" : system;
+
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("model", provider.getModel());
         body.put("max_tokens", maxTokens);
         body.put("messages", List.of(
-                Map.of("role", "system", "content", system),
+                Map.of("role", "system", "content", effectiveSystem),
                 Map.of("role", "user", "content", user)));
-        // NIM reasoning models (e.g. NVIDIA's Nemotron Super) spend a chunk of max_tokens on an
-        // internal "thinking" trace before the real answer; skip it since only the final JSON
-        // matters here, not the reasoning that produced it.
         if (provider.isDisableThinking()) {
-            body.put("chat_template_kwargs", Map.of("thinking", false));
+            // The correct key is "enable_thinking", not "thinking" — the wrong key name was
+            // silently ignored by the API (no error, just thinking left on), which is why this
+            // went unnoticed until a live module-expansion call came back with content: null.
+            body.put("chat_template_kwargs", Map.of("enable_thinking", false));
         }
 
         byte[] rawBytes;

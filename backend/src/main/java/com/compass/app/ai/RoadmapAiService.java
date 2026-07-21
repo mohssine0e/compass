@@ -42,7 +42,7 @@ public class RoadmapAiService {
      * {@code null} only when unavailable / both providers fail.
      */
     public List<String> clarifyingQuestions(String goal, String profileContext) {
-        JsonNode json = ai.generate("roadmap clarifying questions",
+        JsonNode json = ai.generate(AiTier.FAST, "roadmap clarifying questions",
                 PromptTemplates.CLARIFY_SYSTEM, PromptTemplates.clarifyUser(goal, profileContext));
         if (json == null) {
             return null;
@@ -57,7 +57,7 @@ public class RoadmapAiService {
      * up; {@code null} only when unavailable / both providers fail.
      */
     public List<String> followUpQuestions(String goal, String firstRoundQa, String profileContext) {
-        JsonNode json = ai.generate("roadmap follow-up questions", PromptTemplates.FOLLOWUP_CLARIFY_SYSTEM,
+        JsonNode json = ai.generate(AiTier.FAST, "roadmap follow-up questions", PromptTemplates.FOLLOWUP_CLARIFY_SYSTEM,
                 PromptTemplates.followUpClarifyUser(goal, firstRoundQa, profileContext));
         if (json == null) {
             return null;
@@ -75,7 +75,7 @@ public class RoadmapAiService {
      */
     public GoalAssessment assessGoal(String goal, String clarifications, String profileContext,
                                      String groundingContext) {
-        JsonNode json = ai.generate("goal assessment", PromptTemplates.ASSESS_SYSTEM,
+        JsonNode json = ai.generate(AiTier.FAST, "goal assessment", PromptTemplates.ASSESS_SYSTEM,
                 PromptTemplates.assessUser(goal, clarifications, profileContext, groundingContext));
         if (json == null) {
             return null;
@@ -116,7 +116,7 @@ public class RoadmapAiService {
      */
     public RoadmapOutline moduleOutline(String goal, String clarifications, String profileContext,
                                         String groundingContext, String assessmentContext) {
-        JsonNode json = ai.generate("roadmap outline", PromptTemplates.OUTLINE_SYSTEM,
+        JsonNode json = ai.generate(AiTier.HEAVY, "roadmap outline", PromptTemplates.OUTLINE_SYSTEM,
                 PromptTemplates.outlineUser(goal, clarifications, profileContext, groundingContext,
                         assessmentContext));
         if (json == null) {
@@ -139,7 +139,7 @@ public class RoadmapAiService {
      */
     public FlatProposal proposeFlat(String goal, String clarifications, String profileContext,
                                     String groundingContext, String assessmentContext) {
-        JsonNode json = ai.generate("flat roadmap", PromptTemplates.FLAT_PROPOSE_SYSTEM,
+        JsonNode json = ai.generate(AiTier.HEAVY, "flat roadmap", PromptTemplates.FLAT_PROPOSE_SYSTEM,
                 PromptTemplates.flatProposeUser(goal, clarifications, profileContext,
                         groundingContext, assessmentContext));
         if (json == null) {
@@ -164,7 +164,7 @@ public class RoadmapAiService {
     public List<DraftStep> expandModule(String roadmapTitle, String moduleTitle, String moduleScope,
                                         String profileContext, String groundingContext,
                                         String assessmentContext, List<PriorStep> priorSteps) {
-        JsonNode json = ai.generate("module expansion", PromptTemplates.EXPAND_MODULE_SYSTEM,
+        JsonNode json = ai.generate(AiTier.HEAVY, "module expansion", PromptTemplates.EXPAND_MODULE_SYSTEM,
                 PromptTemplates.expandModuleUser(roadmapTitle, moduleTitle, moduleScope,
                         profileContext, groundingContext, assessmentContext, priorSteps));
         if (json == null) {
@@ -182,7 +182,7 @@ public class RoadmapAiService {
      */
     public OutlineModule regenerateModuleScope(String roadmapTitle, String moduleTitle,
                                                String currentScope, String siblingModulesContext) {
-        JsonNode json = ai.generate("module scope regeneration", PromptTemplates.REGENERATE_MODULE_SYSTEM,
+        JsonNode json = ai.generate(AiTier.HEAVY, "module scope regeneration", PromptTemplates.REGENERATE_MODULE_SYSTEM,
                 PromptTemplates.regenerateModuleUser(roadmapTitle, moduleTitle, currentScope,
                         siblingModulesContext));
         return oneModule(json);
@@ -194,7 +194,7 @@ public class RoadmapAiService {
      */
     public OutlineModule proposeModule(String roadmapTitle, String existingModulesContext,
                                        String assessmentContext) {
-        JsonNode json = ai.generate("module insertion", PromptTemplates.INSERT_MODULE_SYSTEM,
+        JsonNode json = ai.generate(AiTier.HEAVY, "module insertion", PromptTemplates.INSERT_MODULE_SYSTEM,
                 PromptTemplates.insertModuleUser(roadmapTitle, existingModulesContext, assessmentContext));
         return oneModule(json);
     }
@@ -208,7 +208,7 @@ public class RoadmapAiService {
     public List<OutlineModule> replanModules(String roadmapTitle, String doneModulesContext,
                                              String remainingModulesContext, String assessmentContext,
                                              int expectedCount) {
-        JsonNode json = ai.generate("outline replan", PromptTemplates.REPLAN_SYSTEM,
+        JsonNode json = ai.generate(AiTier.HEAVY, "outline replan", PromptTemplates.REPLAN_SYSTEM,
                 PromptTemplates.replanUser(roadmapTitle, doneModulesContext, remainingModulesContext,
                         assessmentContext));
         if (json == null) {
@@ -289,7 +289,7 @@ public class RoadmapAiService {
 
         Set<String> avoid = avoidFormats == null ? Set.of() : new HashSet<>(avoidFormats);
         Set<String> used = excludeUrls == null ? new HashSet<>() : new HashSet<>(excludeUrls);
-        JsonNode json = ai.generate("resource suggestions", PromptTemplates.RESOURCE_SUGGEST_SYSTEM,
+        JsonNode json = ai.generate(AiTier.HEAVY, "resource suggestions", PromptTemplates.RESOURCE_SUGGEST_SYSTEM,
                 PromptTemplates.resourceSuggestUser(goal, stepTexts, results.toString(), avoidFormats,
                         List.copyOf(used)));
         if (json == null || json.get("steps") == null || !json.get("steps").isArray()) {
@@ -344,7 +344,7 @@ public class RoadmapAiService {
 
     /** 2–4 short bullets of what a roadmap step covers, or {@code null} on failure (Phase 7.5). */
     public List<String> stepCovers(String roadmapTitle, String stepText) {
-        JsonNode json = ai.generate("step covers",
+        JsonNode json = ai.generate(AiTier.FAST, "step covers",
                 PromptTemplates.COVERS_SYSTEM, PromptTemplates.coversUser(roadmapTitle, stepText));
         if (json == null) {
             return null;
@@ -405,7 +405,7 @@ public class RoadmapAiService {
 
     /** Smaller sub-steps that replace one stalled step, or {@code null} on failure. */
     public List<String> breakDownStep(String roadmapTitle, String stepText) {
-        JsonNode json = ai.generate("step breakdown", PromptTemplates.BREAKDOWN_SYSTEM,
+        JsonNode json = ai.generate(AiTier.HEAVY, "step breakdown", PromptTemplates.BREAKDOWN_SYSTEM,
                 PromptTemplates.breakdownUser(roadmapTitle, stepText));
         if (json == null) {
             return null;
@@ -419,7 +419,7 @@ public class RoadmapAiService {
      * unavailable, both providers fail, or the model judges nothing is genuinely missing.
      */
     public Prerequisite proposePrerequisite(String roadmapTitle, String stepText, String priorSteps) {
-        JsonNode json = ai.generate("prerequisite proposal", PromptTemplates.PREREQUISITE_SYSTEM,
+        JsonNode json = ai.generate(AiTier.HEAVY, "prerequisite proposal", PromptTemplates.PREREQUISITE_SYSTEM,
                 PromptTemplates.prerequisiteUser(roadmapTitle, stepText, priorSteps));
         if (json == null) {
             return null;

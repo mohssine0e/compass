@@ -32,7 +32,7 @@ public class AiExplainService {
   public String help(String action, String selectedText, String stepText,
       String profileContext, String depth, String language) {
     String act = ACTIONS.contains(action) ? action : "explain";
-    JsonNode json = ai.generate("in-content " + act, PromptTemplates.EXPLAIN_SYSTEM,
+    JsonNode json = ai.generate(AiTier.FAST, "in-content " + act, PromptTemplates.EXPLAIN_SYSTEM,
         PromptTemplates.explainUser(act, selectedText, stepText, profileContext, depth, language));
     if (json == null) {
       return null;

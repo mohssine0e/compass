@@ -24,7 +24,7 @@ public class VerificationAiService {
 
   /** A fair check for a step at the given rigor ("light"/"full"), or {@code null} on failure. */
   public String generateCheck(String roadmapTitle, String stepText, String rigor) {
-    JsonNode json = ai.generate("verification check",
+    JsonNode json = ai.generate(AiTier.FAST, "verification check",
         PromptTemplates.CHECK_SYSTEM, PromptTemplates.checkUser(roadmapTitle, stepText, rigor));
     if (json == null) {
       return null;
@@ -35,7 +35,7 @@ public class VerificationAiService {
 
   /** Judge an answer to a check, or {@code null} on failure. */
   public Evaluation evaluate(String stepText, String question, String answer) {
-    JsonNode json = ai.generate("verification evaluation",
+    JsonNode json = ai.generate(AiTier.FAST, "verification evaluation",
         PromptTemplates.EVALUATE_SYSTEM, PromptTemplates.evaluateUser(stepText, question, answer));
     if (json == null) {
       return null;
