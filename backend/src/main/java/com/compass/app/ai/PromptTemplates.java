@@ -509,27 +509,45 @@ final class PromptTemplates {
   }
 
   /**
-   * System prompt for breaking one stalled step into smaller steps. Used when the
-   * user, on a
-   * resurfaced stalled roadmap, chooses to restructure rather than just answer a
-   * question.
+   * System prompt for breaking one stalled step into smaller steps (Phase 20: same richer step
+   * shape {@link #EXPAND_MODULE_SYSTEM} uses, not plain text, so a break-down no longer reads as
+   * a visibly poorer result than every other generation path). Used when the user, on a
+   * resurfaced stalled roadmap, chooses to restructure rather than just answer a question.
    */
   static final String BREAKDOWN_SYSTEM = """
       One step of the user's roadmap has stalled. Break just that step into 2–4 smaller,
       concrete sub-steps that make the first move obvious. These replace the stalled step.
 
+      If a profile of what they already know is given, skip or condense what they already have,
+      and don't re-teach it. If real search results are given, prefer how authoritative sources
+      order this material.
+
+      Each step is an object with these fields:
+      - text: one concrete, checkable action — smaller than the original step. Plain, direct,
+        imperative. No numbering, no "Step 1:", no encouragement, no emoji.
+      - kind: "concept" for learning something, or "project" for building/applying it.
+      - weight: an honest relative size — "small", "medium", or "large".
+      - dependsOnIndex: the 0-based index of the ONE earlier sub-step here that is a genuine
+        prerequisite (lower index than this step), or null.
+      - rationale: one short plain line saying why this sub-step is here — and if a dependency is
+        set, why that one comes first. No praise, no filler.
+
       Hard rules:
-      - 2 to 4 steps. Each is one concrete, checkable action — smaller than the original.
-      - Together they must fully cover the original step, nothing more, nothing less.
-      - Plain, direct, imperative lines. No numbering, no "Step 1:", no encouragement, no emoji.
-      - Output ONLY strict JSON, no prose around it: {"steps": ["...", "..."]}
+      - 2 to 4 steps. Together they must fully cover the original step, nothing more, nothing less.
+      - Output ONLY strict JSON, no prose around it:
+        {"steps": [{"text": "...", "kind": "concept", "weight": "medium", "dependsOnIndex": null, "rationale": "..."}]}
       """;
 
-  static String breakdownUser(String roadmapTitle, String stepText) {
+  static String breakdownUser(String roadmapTitle, String stepText, String profileContext,
+      String groundingContext) {
     StringBuilder sb = new StringBuilder();
     sb.append("Roadmap: ").append(roadmapTitle == null ? "" : roadmapTitle.trim()).append('\n');
     sb.append("The stalled step to break down: ").append(stepText == null ? "" : stepText.trim())
         .append('\n');
+    appendProfile(sb, profileContext);
+    if (groundingContext != null && !groundingContext.isBlank()) {
+      sb.append("Real search results to ground this in:\n").append(groundingContext.trim()).append('\n');
+    }
     sb.append("Write the smaller steps as JSON.");
     return sb.toString();
   }

@@ -2,14 +2,18 @@ package com.compass.app.resurfacing;
 
 import com.compass.app.ai.AiVoiceService;
 import com.compass.app.ai.RoadmapAiService;
+import com.compass.app.ai.SearchGroundingService;
 import com.compass.app.entry.Entry;
 import com.compass.app.entry.EntryRepository;
 import com.compass.app.entry.EntryStatus;
 import com.compass.app.entry.EntryType;
+import com.compass.app.profile.ProfileContext;
+import com.compass.app.profile.ProfileService;
 import com.compass.app.resurfacing.dto.ApplyRestructureRequest;
 import com.compass.app.resurfacing.dto.RestructureProposal;
 import com.compass.app.resurfacing.dto.ResurfacingPrompt;
 import com.compass.app.roadmap.RoadmapService;
+import com.compass.app.roadmap.dto.GenerateRoadmapResponse;
 import com.compass.app.verification.VerificationService;
 import com.compass.app.verification.dto.VerifyResult;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,12 +42,15 @@ public class ResurfacingService {
     private final RoadmapAiService roadmapAi;
     private final RoadmapService roadmapService;
     private final VerificationService verificationService;
+    private final ProfileService profileService;
+    private final SearchGroundingService searchGrounding;
     private final int staleDays;
     private final int snoozeDays;
 
     public ResurfacingService(EntryRepository repository, AiVoiceService aiVoice,
                               RoadmapAiService roadmapAi, RoadmapService roadmapService,
                               VerificationService verificationService,
+                              ProfileService profileService, SearchGroundingService searchGrounding,
                               @Value("${compass.resurfacing.stale-days:3}") int staleDays,
                               @Value("${compass.resurfacing.snooze-days:1}") int snoozeDays) {
         this.repository = repository;
@@ -51,6 +58,8 @@ public class ResurfacingService {
         this.roadmapAi = roadmapAi;
         this.roadmapService = roadmapService;
         this.verificationService = verificationService;
+        this.profileService = profileService;
+        this.searchGrounding = searchGrounding;
         this.staleDays = staleDays;
         this.snoozeDays = snoozeDays;
     }
@@ -216,11 +225,25 @@ public class ResurfacingService {
 
         return switch (kind == null ? "" : kind) {
             case "break_down" -> {
-                List<String> smaller = roadmapAi.breakDownStep(title, stepText);
+                String profileContext = profileService.confirmedProfile()
+                        .map(p -> ProfileContext.forModulePrompt(p, title, stepText))
+                        .orElse(null);
+                SearchGroundingService.Grounding grounding = searchGrounding.ground(stepText);
+                String groundingContext = grounding == null ? null : grounding.context();
+
+                List<RoadmapAiService.DraftStep> smaller =
+                        roadmapAi.breakDownStep(title, stepText, profileContext, groundingContext);
                 if (smaller == null) {
                     throw new IllegalStateException("Couldn't draft smaller steps right now.");
                 }
-                yield RestructureProposal.breakDown(roadmap.getId(), step.getId(), stepText, smaller);
+                List<String> smallerTexts = smaller.stream().map(RoadmapAiService.DraftStep::text).toList();
+                List<List<RoadmapAiService.Resource>> resources = roadmapAi.suggestResources(
+                        stepText, smallerTexts, grounding == null ? null : grounding.results(),
+                        roadmapService.avoidedFormats(), roadmapService.usedResourceUrls(roadmap.getId()));
+                List<GenerateRoadmapResponse.ProposedStep> proposedSteps = GenerateRoadmapResponse.proposal(
+                                null, null, smaller, resources, List.of(), List.of(), null, Map.of())
+                        .steps();
+                yield RestructureProposal.breakDown(roadmap.getId(), step.getId(), stepText, proposedSteps);
             }
             case "add_prerequisite" -> {
                 RoadmapAiService.Prerequisite p =
@@ -245,7 +268,7 @@ public class ResurfacingService {
         Entry roadmap = requireRoadmap(id);
 
         switch (req.kind() == null ? "" : req.kind()) {
-            case "break_down" -> roadmapService.splitStep(id, req.targetStepId(), req.steps());
+            case "break_down" -> roadmapService.splitStep(id, req.targetStepId(), req.draftSteps());
             case "add_prerequisite" -> roadmapService.addPrerequisite(id, req.targetStepId(), req.prerequisite());
             default -> throw new IllegalArgumentException("Unknown restructuring: " + req.kind());
         }

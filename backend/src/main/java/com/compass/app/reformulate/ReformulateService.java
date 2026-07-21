@@ -5,10 +5,12 @@ import com.compass.app.ai.SearchGroundingService;
 import com.compass.app.entry.Entry;
 import com.compass.app.entry.EntryRepository;
 import com.compass.app.entry.EntryType;
+import com.compass.app.profile.ProfileContext;
 import com.compass.app.profile.ProfileService;
 import com.compass.app.reformulate.dto.ApplyReformulateRequest;
 import com.compass.app.reformulate.dto.ReformulateProposal;
 import com.compass.app.roadmap.RoadmapService;
+import com.compass.app.roadmap.dto.GenerateRoadmapResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,11 +62,27 @@ public class ReformulateService {
 
     return switch (kind == null ? "" : kind) {
       case "break_down" -> {
-        List<String> smaller = roadmapAi.breakDownStep(roadmapTitle, stepText);
+        String profileContext = profileService.confirmedProfile()
+            .map(p -> ProfileContext.forModulePrompt(p, roadmapTitle, stepText))
+            .orElse(null);
+        SearchGroundingService.Grounding grounding = searchGrounding.ground(stepText);
+        String groundingContext = grounding == null ? null : grounding.context();
+
+        List<RoadmapAiService.DraftStep> smaller =
+            roadmapAi.breakDownStep(roadmapTitle, stepText, profileContext, groundingContext);
         if (smaller == null) {
           throw new IllegalStateException("Couldn't break this down right now.");
         }
-        yield ReformulateProposal.breakDown(roadmapId, stepId, stepText, smaller, note);
+        List<String> smallerTexts = smaller.stream().map(RoadmapAiService.DraftStep::text).toList();
+        List<List<RoadmapAiService.Resource>> resources = roadmapAi.suggestResources(
+            stepText, smallerTexts, grounding == null ? null : grounding.results(),
+            avoidedFormats(), roadmapService.usedResourceUrls(roadmapId));
+        // Reuses GenerateRoadmapResponse's own step-building logic rather than duplicating it —
+        // a break-down proposal is really just a same-batch (no cross-module) module expansion.
+        List<GenerateRoadmapResponse.ProposedStep> proposedSteps = GenerateRoadmapResponse.proposal(
+                null, null, smaller, resources, List.of(), List.of(), null, Map.of())
+            .steps();
+        yield ReformulateProposal.breakDown(roadmapId, stepId, stepText, proposedSteps, note);
       }
       case "add_prerequisite" -> {
         RoadmapAiService.Prerequisite p =
@@ -92,7 +110,7 @@ public class ReformulateService {
     Long roadmapId = step.getParentId();
 
     switch (req.kind() == null ? "" : req.kind()) {
-      case "break_down" -> roadmapService.splitStep(roadmapId, stepId, req.steps());
+      case "break_down" -> roadmapService.splitStep(roadmapId, stepId, req.draftSteps());
       case "add_prerequisite" -> roadmapService.addPrerequisite(roadmapId, stepId, req.prerequisite());
       case "easier_resources" -> replaceResources(stepId, req.resources());
       default -> throw new IllegalArgumentException("Unknown reformulation: " + req.kind());
@@ -163,22 +181,7 @@ public class ReformulateService {
   }
 
   private List<String> avoidedFormats() {
-    return profileService.confirmedProfile()
-        .map(p -> p.getFormatPreferences())
-        .map(prefs -> prefs.get("avoid"))
-        .filter(a -> a instanceof List)
-        .map(a -> castStrings((List<?>) a))
-        .orElseGet(List::of);
-  }
-
-  private static List<String> castStrings(List<?> list) {
-    List<String> out = new ArrayList<>();
-    for (Object o : list) {
-      if (o instanceof String s) {
-        out.add(s);
-      }
-    }
-    return out;
+    return roadmapService.avoidedFormats();
   }
 
   private String priorStepsText(Long roadmapId, Entry step) {

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { applyReformulate, proposeReformulate } from '../api'
+import StepProposalEditor, { fromProposedSteps, toDraftSteps } from './StepProposalEditor'
 import { Badge, Button, Modal } from './ui'
 import './ReformulatePanel.css'
 
@@ -24,7 +25,7 @@ export default function ReformulatePanel({ step, onClose, onApplied }) {
     setProposal({ loading: true })
     try {
       const p = await proposeReformulate(step.id, kind)
-      setSteps(p.steps || [''])
+      setSteps(kind === 'break_down' ? fromProposedSteps(p.steps) : [])
       setPrerequisite(p.prerequisite || '')
       setResources(p.resources || [])
       setProposal(p)
@@ -39,7 +40,7 @@ export default function ReformulatePanel({ step, onClose, onApplied }) {
     setBusy(true)
     setError(null)
     const body = { kind: proposal.kind }
-    if (proposal.kind === 'break_down') body.steps = steps.map((s) => s.trim()).filter(Boolean)
+    if (proposal.kind === 'break_down') body.draftSteps = toDraftSteps(steps)
     if (proposal.kind === 'add_prerequisite') body.prerequisite = prerequisite.trim()
     if (proposal.kind === 'easier_resources') body.resources = resources
     try {
@@ -75,23 +76,7 @@ export default function ReformulatePanel({ step, onClose, onApplied }) {
             {proposal.kind === 'break_down' && (
               <>
                 <p className="reformulate-lead">Replace it with these — edit before you keep them.</p>
-                {steps.map((s, i) => (
-                  <div className="step-row" key={i}>
-                    <span className="step-index">{i + 1}</span>
-                    <input
-                      className="step-input"
-                      value={s}
-                      onChange={(e) => setSteps((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))}
-                    />
-                    <button
-                      className="step-remove"
-                      onClick={() => setSteps((prev) => (prev.length > 1 ? prev.filter((_, j) => j !== i) : prev))}
-                      aria-label="Remove"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
+                <StepProposalEditor steps={steps} onChange={setSteps} />
               </>
             )}
 

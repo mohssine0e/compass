@@ -450,14 +450,20 @@ public class RoadmapAiService {
         return titles.isEmpty() ? null : titles;
     }
 
-    /** Smaller sub-steps that replace one stalled step, or {@code null} on failure. */
-    public List<String> breakDownStep(String roadmapTitle, String stepText) {
+    /**
+     * Smaller sub-steps that replace one stalled step (Phase 20) — same richer shape as
+     * {@link #expandModule}, not plain text, so kind/weight/rationale/resources survive a
+     * break-down instead of it reading as a visibly poorer result than every other generation
+     * path. {@code null} on failure.
+     */
+    public List<DraftStep> breakDownStep(String roadmapTitle, String stepText, String profileContext,
+                                         String groundingContext) {
         JsonNode json = ai.generate(AiTier.HEAVY, "step breakdown", PromptTemplates.BREAKDOWN_SYSTEM,
-                PromptTemplates.breakdownUser(roadmapTitle, stepText));
+                PromptTemplates.breakdownUser(roadmapTitle, stepText, profileContext, groundingContext));
         if (json == null) {
             return null;
         }
-        List<String> steps = AiJsonGenerator.strings(json.get("steps"));
+        List<DraftStep> steps = parseSteps(json.get("steps"), Set.of());
         return steps.isEmpty() ? null : steps;
     }
 

@@ -1,5 +1,7 @@
 package com.compass.app.reformulate.dto;
 
+import com.compass.app.roadmap.dto.GenerateRoadmapResponse;
+
 import java.util.List;
 import java.util.Map;
 
@@ -7,7 +9,8 @@ import java.util.Map;
  * A proposed reformulation of one step the user found too hard/big/abstract (Phase 8.5) — not
  * applied until approved. Which fields are set depends on {@code kind}:
  * <ul>
- *   <li>{@code break_down} → {@code steps} (smaller sub-steps);</li>
+ *   <li>{@code break_down} → {@code steps} (smaller sub-steps, same richer shape a module
+ *   expansion proposes — kind/weight/rationale/resources, Phase 20 — not just plain text);</li>
  *   <li>{@code add_prerequisite} → {@code prerequisite} + {@code why} (revisit this first);</li>
  *   <li>{@code easier_resources} → {@code resources} (gentler learning resources).</li>
  * </ul>
@@ -18,14 +21,15 @@ public record ReformulateProposal(
         Long roadmapId,
         Long targetStepId,
         String targetStepText,
-        List<String> steps,
+        List<GenerateRoadmapResponse.ProposedStep> steps,
         String prerequisite,
         String why,
         List<Map<String, Object>> resources,
         String note
 ) {
     public static ReformulateProposal breakDown(Long roadmapId, Long stepId, String stepText,
-                                                List<String> steps, String note) {
+                                                List<GenerateRoadmapResponse.ProposedStep> steps,
+                                                String note) {
         return new ReformulateProposal("break_down", roadmapId, stepId, stepText, steps,
                 null, null, null, note);
     }

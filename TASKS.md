@@ -1032,7 +1032,7 @@ mechanics from the "MAIN ADDITIONS" suggestions doc (Dependency Risk Scoring, Do
 Dynamic Re-Forecasting) merged into the existing tasks they overlap with, rather than built as
 separate systems.
 
-- [ ] Fix `BREAKDOWN_SYSTEM`/`breakdownUser` to receive profile + grounding context.
+- [x] Fix `BREAKDOWN_SYSTEM`/`breakdownUser` to receive profile + grounding context.
   - Change `breakdownUser(String roadmapTitle, String stepText)` to
     `breakdownUser(String roadmapTitle, String stepText, String profileContext, String
     groundingContext)`, appending both the same way `outlineUser`/`expandModuleUser` already do
@@ -1041,7 +1041,9 @@ separate systems.
     (the only caller) needs to fetch `profileContext` (same `profileService.confirmedProfile()` +
     `ProfileContext.forPrompt` pattern used in `RoadmapService`) and ground the stalled step's text
     via `SearchGroundingService.ground(stepText)` before calling it.
-- [ ] Change `breakDownStep`'s return shape to match module-expansion steps.
+  - Also fixed the same gap in `ResurfacingService.proposeRestructure`'s `break_down` case — the
+    resurfacing-triggered restructuring path shares the same AI call and had the identical issue.
+- [x] Change `breakDownStep`'s return shape to match module-expansion steps.
   - Update `BREAKDOWN_SYSTEM`'s JSON contract from `{"steps": ["...", "..."]}` to the same shape
     `EXPAND_MODULE_SYSTEM` uses: `{"steps": [{"text", "kind", "weight", "dependsOn", "rationale"}]}`
     (resources can be added in the same call via the existing `suggestResources` pipeline, reusing
@@ -1056,6 +1058,25 @@ separate systems.
     usage for the break-down path all need updating to carry the richer per-step fields through the
     propose → edit → apply round trip, reusing `StepProposalEditor` (already shared/generic) rather
     than hand-rolling a second editor.
+  - Implemented as: `RoadmapAiService.breakDownStep` now calls the shared `parseSteps` helper and
+    returns `List<DraftStep>`; `ReformulateService.propose`'s `break_down` case also calls
+    `suggestResources` (deduped against `roadmapService.usedResourceUrls`) and reuses
+    `GenerateRoadmapResponse.proposal(...)`'s own step-building logic to get a
+    `List<GenerateRoadmapResponse.ProposedStep>` rather than duplicating that mapping;
+    `ReformulateProposal`/`ApplyReformulateRequest` now carry `steps`/`draftSteps` in that same
+    shape. `RoadmapService.splitStep` takes `List<CreateRoadmapRequest.DraftStepInput>` and calls
+    the existing `createDraftSteps` instead of a separate plain-text path. Applied the identical
+    fix to the resurfacing-triggered restructuring path (`RestructureProposal`,
+    `ApplyRestructureRequest`, `ResurfacingService`) since it shares the same underlying calls.
+    `avoidedFormats()` promoted to a public `RoadmapService` method so all three callers
+    (`RoadmapService`, `ReformulateService`, `ResurfacingService`) share one implementation
+    instead of three copies. Frontend: `ReformulatePanel` and `ResurfacingScreen`'s break-down
+    editors now both reuse `StepProposalEditor`/`fromProposedSteps`/`toDraftSteps` instead of a
+    hand-rolled plain-text list, per Section 5's "don't rebuild the confirmation flow" principle.
+  - Live-verified: broke down a real "large" project step on the DevOps test roadmap — got back 4
+    substeps with real `kind`/`weight`/`rationale` and 1-2 real resources each (grounded, no
+    duplicate URLs), applied, and confirmed persisted correctly as real child entries with
+    `progress: {total: 4, done: 0}` on the parent step.
 - [ ] **Dependency risk scoring + conceptual bridge steps** (merged in from the suggestions doc).
   - When generation assigns a `dependsOn` link (same-batch or cross-module, per Phase 18), also
     have the model assign a `riskScore` (1–5) representing the conceptual leap between the two

@@ -6,6 +6,7 @@ import {
   respondResurfacing,
 } from '../api'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
+import StepProposalEditor, { fromProposedSteps, toDraftSteps } from './StepProposalEditor'
 import { Button } from './ui'
 import './ResurfacingScreen.css'
 
@@ -61,7 +62,7 @@ function ResurfaceView({ prompt, onDone }) {
           kind,
           targetStepId: p.targetStepId,
           targetStepText: p.targetStepText,
-          steps: p.steps && p.steps.length ? p.steps : [''],
+          steps: fromProposedSteps(p.steps),
         })
       } else {
         setRestructure({
@@ -88,7 +89,7 @@ function ResurfaceView({ prompt, onDone }) {
           ? {
               kind: 'break_down',
               targetStepId: restructure.targetStepId,
-              steps: restructure.steps.map((s) => s.trim()).filter(Boolean),
+              draftSteps: toDraftSteps(restructure.steps),
             }
           : {
               kind: 'add_prerequisite',
@@ -234,26 +235,10 @@ function RestructureReview({
   }
 
   const isBreakDown = restructure.kind === 'break_down'
-  const cleanSteps = (restructure.steps || []).map((s) => s.trim()).filter(Boolean)
+  const cleanSteps = (restructure.steps || []).filter((s) => s.text.trim())
   const canApply = isBreakDown
     ? cleanSteps.length > 0 && !busy
     : (restructure.prerequisite || '').trim().length > 0 && !busy
-
-  function setStep(i, value) {
-    setRestructure((prev) => ({
-      ...prev,
-      steps: prev.steps.map((s, j) => (j === i ? value : s)),
-    }))
-  }
-  function addStep() {
-    setRestructure((prev) => ({ ...prev, steps: [...prev.steps, ''] }))
-  }
-  function removeStep(i) {
-    setRestructure((prev) => ({
-      ...prev,
-      steps: prev.steps.length > 1 ? prev.steps.filter((_, j) => j !== i) : prev.steps,
-    }))
-  }
 
   return (
     <div className="resurface resurface-restructure">
@@ -265,31 +250,10 @@ function RestructureReview({
           <p className="resurface-restructure-lead">
             Break it into smaller steps. Edit anything before you keep it.
           </p>
-          <div className="resurface-steps">
-            {restructure.steps.map((step, i) => (
-              <div className="step-row" key={i}>
-                <span className="step-index">{i + 1}</span>
-                <input
-                  className="step-input"
-                  value={step}
-                  onChange={(e) => setStep(i, e.target.value)}
-                  placeholder={`Step ${i + 1}`}
-                />
-                <button
-                  type="button"
-                  className="step-remove"
-                  onClick={() => removeStep(i)}
-                  aria-label={`Remove step ${i + 1}`}
-                  disabled={restructure.steps.length <= 1}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-            <Button type="button" variant="ghost" className="step-add" onClick={addStep}>
-              + Add step
-            </Button>
-          </div>
+          <StepProposalEditor
+            steps={restructure.steps}
+            onChange={(next) => setRestructure((prev) => ({ ...prev, steps: next }))}
+          />
         </>
       ) : (
         <>

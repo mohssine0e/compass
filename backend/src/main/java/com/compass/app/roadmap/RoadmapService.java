@@ -629,7 +629,8 @@ public class RoadmapService {
 
     /** The formats the founder marked to avoid (confirmed profile only), or empty. */
     @SuppressWarnings("unchecked")
-    private List<String> avoidedFormats() {
+    /** The founder's stated avoided resource formats, or empty if none/no confirmed profile. */
+    public List<String> avoidedFormats() {
         return profileService.confirmedProfile()
                 .map(p -> p.getFormatPreferences())
                 .map(prefs -> prefs.get("avoid"))
@@ -959,14 +960,15 @@ public class RoadmapService {
      * Break one step into smaller SUBSTEPS underneath it (Phase 4, reshaped by Phase 13's tree
      * model) — the "break this step down" restructuring. The original step stays (now a
      * container, like a module); the substeps are what's actually worked through. Anywhere in
-     * the tree, not just directly under the root.
+     * the tree, not just directly under the root. Substeps carry kind/weight/rationale/resources
+     * (Phase 20), same as any other accepted draft — reuses {@link #createDraftSteps} rather than
+     * a separate plain-text path.
      */
     @Transactional
-    public void splitStep(Long roadmapId, Long stepId, List<String> replacements) {
-        List<String> clean = replacements == null ? List.<String>of()
-                : replacements.stream()
-                        .map(s -> s == null ? "" : s.trim())
-                        .filter(s -> !s.isEmpty())
+    public void splitStep(Long roadmapId, Long stepId, List<CreateRoadmapRequest.DraftStepInput> draftSteps) {
+        List<CreateRoadmapRequest.DraftStepInput> clean = draftSteps == null ? List.of()
+                : draftSteps.stream()
+                        .filter(d -> d != null && d.text() != null && !d.text().isBlank())
                         .toList();
         if (clean.isEmpty()) {
             throw new IllegalArgumentException("Give at least one step to replace it with.");
@@ -977,8 +979,7 @@ public class RoadmapService {
                 .orElseThrow(() -> new java.util.NoSuchElementException(
                         "No step " + stepId + " on roadmap " + roadmapId));
 
-        List<Entry> substeps = clean.stream().map(text -> newStep(original.getId(), text)).toList();
-        reindexAndSave(substeps);
+        createDraftSteps(original.getId(), clean);
         repository.touchUpdatedAt(roadmapId, Instant.now());
     }
 
