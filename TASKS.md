@@ -1258,7 +1258,7 @@ separate systems.
     project/course results, and dedicated "common mistakes" articles) — versus ~8 similar,
     overlapping results from the single-query version tested earlier this session on the same
     module.
-- [ ] Add a self-consistency/self-critique pass, with severity levels and accept/dismiss.
+- [x] Add a self-consistency/self-critique pass, with severity levels and accept/dismiss.
   - After a module outline or module expansion is generated, add one more cheap AI call (route to
     the "fast" tier from Phase 19 for a lightweight pass; escalate to the "heavy" tier only for a
     deeper pass on career-scale roadmaps, matching the suggestions doc's Lightweight/Heavy
@@ -1273,6 +1273,35 @@ separate systems.
     the existing propose→approve→apply mechanics) and "Dismiss" (founder disagrees) actions —
     matching the suggestions doc's UI shape — rather than a silent auto-retry, since a HIGH-severity
     flag on a career-scale roadmap is worth the founder's actual attention.
+  - Scoped to step-list proposals only (flat + module expansion), not module outlines — outlines
+    are just titles/one-line scopes, too little content for ordering/clarity/gap findings to mean
+    much; the task's own issue types (steps out of order, unclear descriptions, missing
+    prerequisites) are inherently step-level concerns.
+  - `RoadmapAiService.critique` (new `CRITIQUE_SYSTEM` prompt) returns `CritiqueIssue(severity,
+    message, stepIndex, suggestedFix)` — `suggestedFix` deliberately only ever set for a
+    wording/clarity issue pinned to one step (an unambiguous, safe auto-edit); ordering/missing-
+    prerequisite/gap issues are named but never given an auto-fix, since there's no single safe
+    structural edit for "insert a step" or "reorder these" — matching this same phase's honest
+    scoping choice on the pacing mechanic. `RoadmapService.critiqueIfWarranted` implements the
+    skip conditions that make sense at propose time (fewer than 5 steps, AI unavailable) — the
+    "already manually edited"/"ran within 24h" conditions don't apply to a fresh in-memory draft
+    that's never been persisted or reviewed before, so they're naturally moot here rather than
+    skipped for a different reason.
+  - Frontend: `StepProposalEditor` gained an `issues` prop and `attachIssueCids` helper (maps the
+    critique's `stepIndex` onto the editor's stable per-step `cid`s once, at load time, so it
+    survives later edits/removals shifting array positions) — wired into the three screens that
+    review a step-list proposal (`GenerateRoadmapScreen`'s flat path, `ExpandModuleModal`,
+    `ExpandModulesBatchModal`). "Accept" on an issue with a `suggestedFix` replaces that step's
+    text the same way a founder's own edit would; without one, it just acknowledges/dismisses —
+    there's nothing else safe to auto-apply.
+  - Live-verified in two parts: confirmed against a real module expansion that the critique call
+    genuinely executes (not silently skipped) and correctly returns an empty list when nothing's
+    actually wrong — the designed-for common case; then confirmed against a deliberately-flawed
+    synthetic step list (a scope-mismatched step, a genuinely vague step, two structural gaps)
+    via a direct provider call that the critique correctly flags all four with accurate
+    severities, a real usable `suggestedFix` only for the one genuine wording issue, and
+    `stepIndex: null`/`suggestedFix: null` for the three issues with no single safe step to pin
+    or fix.
 - [ ] Add verification-triggered prerequisite suggestions.
   - When a Phase 8 verification (`VerificationService`) comes back with a named gap (`gap` field
     already exists on the verify result per the existing `verify-gap` UI class), check whether that

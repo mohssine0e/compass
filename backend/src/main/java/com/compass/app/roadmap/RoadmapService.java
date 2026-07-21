@@ -166,8 +166,10 @@ public class RoadmapService {
             List<List<RoadmapAiService.Resource>> resources = roadmapAi.suggestResources(
                     goal, stepTexts, grounding == null ? null : grounding.results(),
                     avoidedFormats(), preferredFormats(), Set.of());
+            List<RoadmapAiService.CritiqueIssue> issues =
+                    critiqueIfWarranted(goal, null, stepTexts, assessment.complexity());
             return GenerateRoadmapResponse.proposal(flat.title(), flat.interpretation(), flat.steps(),
-                    resources, flat.skipped(), sources, assessment, Map.of());
+                    resources, flat.skipped(), sources, assessment, Map.of(), false, issues);
         }
 
         onStage.accept(GenerationStage.DRAFTING);
@@ -310,8 +312,10 @@ public class RoadmapService {
         List<List<RoadmapAiService.Resource>> resources = roadmapAi.suggestResources(
                 moduleTitle, stepTexts, grounding == null ? null : grounding.results(),
                 avoidedFormats(), preferredFormats(), usedResourceUrls(roadmapId));
+        List<RoadmapAiService.CritiqueIssue> issues = critiqueIfWarranted(
+                roadmapTitle, moduleScope, stepTexts, storedComplexity(roadmap));
         return GenerateRoadmapResponse.proposal(moduleTitle, null, steps, resources, List.of(),
-                sources, null, priorStepTextById);
+                sources, null, priorStepTextById, false, issues);
     }
 
     // A cross-module dependency scored this risky or higher gets an auto-generated bridge step
@@ -421,6 +425,32 @@ public class RoadmapService {
         String shape = map.get("shape") instanceof String s ? s : "nested";
         return RoadmapAiService.assessmentContext(
                 new RoadmapAiService.GoalAssessment(complexity, hours, domain, priorLevel, shape));
+    }
+
+    /** The roadmap's stored assessed complexity (1-5), or the mid-range default if none stored. */
+    private static int storedComplexity(Entry roadmap) {
+        Object raw = roadmap.getContent() != null ? roadmap.getContent().get("assessment") : null;
+        return raw instanceof Map<?, ?> map && map.get("complexity") instanceof Number n ? n.intValue() : 3;
+    }
+
+    // Below this many steps, a self-critique pass isn't worth the call — too little content for
+    // ordering/gap issues to mean anything (Phase 20).
+    private static final int MIN_STEPS_FOR_CRITIQUE = 5;
+    // Career-scale goals (Phase 18's complexity scale) get the deeper heavy-tier pass; everything
+    // else gets the cheap fast-tier one, per the suggestions doc's Lightweight/Heavy split.
+    private static final int HEAVY_CRITIQUE_COMPLEXITY = 4;
+
+    /**
+     * Self-critique a just-drafted step list (Phase 20), or skip and return no issues when it's
+     * not worth the call: too few steps to say anything meaningful, or the AI is unavailable
+     * (best-effort — a failed/skipped critique never blocks the draft it would have reviewed).
+     */
+    private List<RoadmapAiService.CritiqueIssue> critiqueIfWarranted(
+            String goal, String scope, List<String> stepTexts, int complexity) {
+        if (stepTexts.size() < MIN_STEPS_FOR_CRITIQUE || !roadmapAi.isAvailable()) {
+            return List.of();
+        }
+        return roadmapAi.critique(goal, scope, stepTexts, complexity >= HEAVY_CRITIQUE_COMPLEXITY);
     }
 
     /** Accept a module's expanded steps (Phase 13) — same shape and validation as roadmap steps. */

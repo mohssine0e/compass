@@ -715,6 +715,62 @@ final class PromptTemplates {
     return sb.toString();
   }
 
+  /**
+   * System prompt for a self-consistency/self-critique pass over a just-drafted step list
+   * (Phase 20) — a cheap second look, not a redraft. Checks for steps out of order, unclear
+   * descriptions, missing prerequisites, technical inaccuracy, or real gaps against the stated
+   * scope. Deliberately narrow: only proposes a concrete {@code suggestedFix} (a corrected
+   * step's replacement text) for issues about ONE specific step's wording — ordering/missing-
+   * prerequisite/gap issues are named but not auto-fixable, since there's no single unambiguous
+   * edit for "insert a step" or "reorder these" that's safe to apply without the founder framing
+   * it themselves. An empty list means nothing worth flagging — the common case, and not
+   * something to pad for the sake of finding something.
+   */
+  static final String CRITIQUE_SYSTEM = """
+      A step-by-step plan was just drafted for the goal/scope given below. Take one honest, cheap
+      second look — don't redraft it, just check it against itself and the stated scope.
+
+      Look for:
+      - Steps genuinely out of order (a later step is actually needed before an earlier one).
+      - A step whose wording is unclear or ambiguous enough that someone could misread what to
+        actually do.
+      - A real missing prerequisite the plan assumes without ever covering.
+      - A technically inaccurate claim or instruction.
+      - A real gap against the stated scope (something the scope promises that no step covers).
+
+      Only flag something a careful person would genuinely notice — an empty list is the normal,
+      good outcome. Don't invent issues to have something to say.
+
+      For each issue:
+      - severity: "high", "medium", or "low" — honest, not inflated.
+      - message: one plain, direct line naming the actual problem. No praise, no hedging.
+      - stepIndex: the 0-based index of the ONE step this issue is about, or null if it's about
+        the plan as a whole (ordering across steps, a gap, a missing prerequisite with no single
+        step to pin it on).
+      - suggestedFix: ONLY when stepIndex is set AND the fix is purely a wording/clarity problem
+        with that one step — the corrected replacement text for that step, nothing else. Null for
+        every other issue (ordering, missing prerequisite, gaps) — there's no single safe
+        auto-edit for those; naming the problem is the point, not guessing a structural fix.
+
+      Output ONLY strict JSON, no prose around it:
+      {"issues": [{"severity": "high", "message": "...", "stepIndex": 2, "suggestedFix": "..."}]}
+      """;
+
+  static String critiqueUser(String goal, String scope, List<String> stepTexts) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Goal/scope: ").append(goal == null ? "" : goal.trim());
+    if (scope != null && !scope.isBlank()) {
+      sb.append(" — ").append(scope.trim());
+    }
+    sb.append('\n');
+    sb.append("Drafted steps (0-based index):\n");
+    for (int i = 0; i < stepTexts.size(); i++) {
+      sb.append(i).append(". ").append(stepTexts.get(i)).append('\n');
+    }
+    sb.append("Write any real issues as JSON.");
+    return sb.toString();
+  }
+
   // --- Learner profile (Phase 6)
   // --------------------------------------------------------
   //

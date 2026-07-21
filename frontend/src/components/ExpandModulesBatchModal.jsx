@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { addModuleSteps, expandModulesBatch } from '../api'
-import StepProposalEditor, { fromProposedSteps, toDraftSteps } from './StepProposalEditor'
+import StepProposalEditor, { attachIssueCids, fromProposedSteps, toDraftSteps } from './StepProposalEditor'
 import { Badge, Button, Modal } from './ui'
 
 // Expand several modules at once (Phase 19), only on explicit request — the backend runs them
@@ -9,6 +9,7 @@ import { Badge, Button, Modal } from './ui'
 export default function ExpandModulesBatchModal({ roadmapId, modules, onClose, onApplied }) {
   const [results, setResults] = useState(null) // null while drafting
   const [stepsByModule, setStepsByModule] = useState({})
+  const [issuesByModule, setIssuesByModule] = useState({})
   const [appliedIds, setAppliedIds] = useState(new Set())
   const [busyModuleId, setBusyModuleId] = useState(null)
   const [error, setError] = useState(null)
@@ -19,11 +20,19 @@ export default function ExpandModulesBatchModal({ roadmapId, modules, onClose, o
       .then((res) => {
         if (!alive) return
         setResults(res)
-        const next = {}
+        const nextSteps = {}
+        const nextIssues = {}
         for (const r of res) {
-          if (r.result) next[r.moduleId] = fromProposedSteps(r.result.steps)
+          if (r.result) {
+            const editorSteps = fromProposedSteps(r.result.steps)
+            nextSteps[r.moduleId] = editorSteps
+            // Computed once, right here, from the freshly-converted array — stays correct even
+            // after later edits/removals shift stepsByModule's indices.
+            nextIssues[r.moduleId] = attachIssueCids(editorSteps, r.result.issues)
+          }
         }
-        setStepsByModule(next)
+        setStepsByModule(nextSteps)
+        setIssuesByModule(nextIssues)
       })
       .catch((err) => {
         if (!alive) return
@@ -77,6 +86,7 @@ export default function ExpandModulesBatchModal({ roadmapId, modules, onClose, o
                   skipped={r.result.skipped || []}
                   sources={r.result.sources || []}
                   skeletonOnly={!!r.result.skeletonOnly}
+                  issues={issuesByModule[r.moduleId] || []}
                 />
                 <Button
                   variant="primary"

@@ -65,6 +65,18 @@ export function newBlankStep() {
 }
 
 /**
+ * Map a Phase 20 self-critique result's `stepIndex` (into the original proposal array) onto the
+ * editor's stable `cid`s — call once, right after `fromProposedSteps`, before any edits/removals
+ * can happen to `editorSteps`. Issues without a `stepIndex` (plan-wide) keep `cid: null`.
+ */
+export function attachIssueCids(editorSteps, issues) {
+  return (issues || []).map((issue) => ({
+    ...issue,
+    cid: issue.stepIndex != null ? editorSteps[issue.stepIndex]?.cid ?? null : null,
+  }))
+}
+
+/**
  * An editable list of proposed steps — text, kind/weight badges, prerequisite label, rationale,
  * and curated resources. Fully controlled: `steps` in, `onChange(nextSteps)` out. Shared by any
  * "propose → approve → apply" AI drafting flow that proposes steps (Phase 4 roadmap generation,
@@ -76,6 +88,9 @@ export function newBlankStep() {
  * @param {string[]} [sources] - grounding sources, shown below the list
  * @param {boolean} [skeletonOnly] - true when every AI provider failed and this is the
  *   emergency titles-only fallback (Phase 19) — no descriptions/resources, filled in later
+ * @param {Array} [issues] - Phase 20 self-critique issues, already cid-mapped (see
+ *   `attachIssueCids`) — {severity, message, cid, suggestedFix}. The founder accepts (applies
+ *   `suggestedFix` to that step, same as editing it by hand) or dismisses each one.
  */
 export default function StepProposalEditor({
   steps,
@@ -83,12 +98,23 @@ export default function StepProposalEditor({
   skipped = [],
   sources = [],
   skeletonOnly = false,
+  issues = [],
 }) {
+  const [dismissed, setDismissed] = useState(new Set())
   function update(updater) {
     onChange(typeof updater === 'function' ? updater(steps) : updater)
   }
   function setStepText(cid, value) {
     update((prev) => prev.map((s) => (s.cid === cid ? { ...s, text: value } : s)))
+  }
+  function acceptIssue(issue, key) {
+    if (issue.suggestedFix && issue.cid != null) {
+      setStepText(issue.cid, issue.suggestedFix)
+    }
+    setDismissed((prev) => new Set(prev).add(key))
+  }
+  function dismissIssue(key) {
+    setDismissed((prev) => new Set(prev).add(key))
   }
   function addStep() {
     update((prev) => [...prev, newBlankStep()])
@@ -147,6 +173,32 @@ export default function StepProposalEditor({
               <li key={i}>{s}</li>
             ))}
           </ul>
+        </div>
+      )}
+      {issues.some((_, i) => !dismissed.has(i)) && (
+        <div className="gen-issues">
+          <span className="gen-issues-label">The system noticed:</span>
+          {issues.map((issue, i) =>
+            dismissed.has(i) ? null : (
+              <div className="gen-issue" key={i}>
+                <Badge tone={issue.severity === 'HIGH' ? 'danger' : 'default'}>
+                  {(issue.severity || 'low').toLowerCase()}
+                </Badge>
+                <span className="gen-issue-message">{issue.message}</span>
+                {issue.suggestedFix && (
+                  <p className="gen-issue-fix">Suggested: "{issue.suggestedFix}"</p>
+                )}
+                <span className="gen-issue-actions">
+                  <button className="step-edit-btn" onClick={() => acceptIssue(issue, i)}>
+                    Accept
+                  </button>
+                  <button className="step-edit-btn" onClick={() => dismissIssue(i)}>
+                    Dismiss
+                  </button>
+                </span>
+              </div>
+            )
+          )}
         </div>
       )}
       <div className="roadmap-steps">

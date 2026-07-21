@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createRoadmap, generateRoadmap } from '../api'
 import { Button } from './ui'
-import StepProposalEditor, { fromProposedSteps, toDraftSteps } from './StepProposalEditor'
+import StepProposalEditor, { attachIssueCids, fromProposedSteps, toDraftSteps } from './StepProposalEditor'
 import './NewRoadmapScreen.css'
 import './GenerateRoadmapScreen.css'
 
@@ -49,6 +49,7 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
   // Populated instead of `modules` when the assessment (Phase 18) judges the goal small enough
   // for one flat step list rather than named modules — same shape/editor as a module's own steps.
   const [flatSteps, setFlatSteps] = useState([])
+  const [issues, setIssues] = useState([])
   const [skipped, setSkipped] = useState([])
   const [sources, setSources] = useState([])
   // The shared goal-scope read (Phase 18) that sized this draft — round-tripped on create so a
@@ -160,7 +161,9 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
     setSources(res.sources || [])
     setAssessment(res.assessment || null)
     if (res.status === 'proposal') {
-      setFlatSteps(fromProposedSteps(res.steps))
+      const editorSteps = fromProposedSteps(res.steps)
+      setFlatSteps(editorSteps)
+      setIssues(attachIssueCids(editorSteps, res.issues))
       setPhase('flat')
     } else {
       const raw = res.modules && res.modules.length ? res.modules : [{ title: '', scope: '' }]
@@ -382,6 +385,7 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
             onChange={setFlatSteps}
             skipped={skipped}
             sources={sources}
+            issues={issues}
           />
           <div className="roadmap-actions">
             {error && <span className="roadmap-error">{error}</span>}

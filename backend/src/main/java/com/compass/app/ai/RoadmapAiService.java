@@ -507,6 +507,50 @@ public class RoadmapAiService {
     }
 
     /**
+     * A cheap self-consistency pass over a just-drafted step list (Phase 20) — ordering, clarity,
+     * missing prerequisites, technical accuracy, gaps against scope. {@code heavy} routes to the
+     * heavy tier for a deeper pass on career-scale roadmaps; otherwise the fast tier, since this
+     * is a lightweight second look, not a redraft. Empty list on failure or when nothing's
+     * flagged — best-effort and never blocks the draft it's reviewing.
+     */
+    public List<CritiqueIssue> critique(String goal, String scope, List<String> stepTexts, boolean heavy) {
+        AiTier tier = heavy ? AiTier.HEAVY : AiTier.FAST;
+        JsonNode json = ai.generate(tier, "self-critique", PromptTemplates.CRITIQUE_SYSTEM,
+                PromptTemplates.critiqueUser(goal, scope, stepTexts));
+        if (json == null || json.get("issues") == null || !json.get("issues").isArray()) {
+            return List.of();
+        }
+        List<CritiqueIssue> issues = new ArrayList<>();
+        for (JsonNode node : json.get("issues")) {
+            String message = AiJsonGenerator.text(node.get("message"));
+            if (message == null || message.isBlank()) {
+                continue;
+            }
+            String severity = valueIn(AiJsonGenerator.text(node.get("severity")), SEVERITIES, "low")
+                    .toUpperCase(java.util.Locale.ROOT);
+            JsonNode indexNode = node.get("stepIndex");
+            Integer stepIndex = indexNode != null && indexNode.isInt()
+                    && indexNode.asInt() >= 0 && indexNode.asInt() < stepTexts.size()
+                    ? indexNode.asInt() : null;
+            String suggestedFix = stepIndex == null ? null : AiJsonGenerator.text(node.get("suggestedFix"));
+            issues.add(new CritiqueIssue(severity, message.trim(),
+                    stepIndex, suggestedFix == null || suggestedFix.isBlank() ? null : suggestedFix.trim()));
+        }
+        return issues;
+    }
+
+    private static final Set<String> SEVERITIES = Set.of("high", "medium", "low");
+
+    /**
+     * One flagged issue from a self-critique pass (Phase 20). {@code stepIndex} is the 0-based
+     * index (into the same batch) the issue is about, or null for a plan-wide issue.
+     * {@code suggestedFix} is a concrete replacement for that step's text — set only for a
+     * wording/clarity issue with an unambiguous fix, null otherwise.
+     */
+    public record CritiqueIssue(String severity, String message, Integer stepIndex, String suggestedFix) {
+    }
+
+    /**
      * One proposed step. {@code kind} is concept|project, {@code weight} is small|medium|large,
      * {@code dependsOn} is the 0-based index of an earlier prerequisite step in this same batch
      * (or null), {@code dependsOnEntryId} (Phase 18) is the real id of a prerequisite step from an

@@ -68,6 +68,47 @@
   line-height: 1.5;
 }
 
+/* Phase 20 self-critique flags — a quiet second look, not a blocking gate. */
+.gen-issues {
+  border-left: 2px solid var(--line);
+  padding: 4px 0 4px 14px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gen-issues-label {
+  color: var(--faint);
+  font-size: 0.85rem;
+}
+
+.gen-issue {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.gen-issue-message {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.gen-issue-fix {
+  flex-basis: 100%;
+  margin: 0;
+  padding-left: 2px;
+  color: var(--text);
+  font-size: 0.88rem;
+  font-style: italic;
+}
+
+.gen-issue-actions {
+  display: flex;
+  gap: 6px;
+}
+
 .gen-step {
   display: flex;
   flex-direction: column;

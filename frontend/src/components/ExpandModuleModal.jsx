@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { addModuleSteps, expandModule } from '../api'
-import StepProposalEditor, { fromProposedSteps, toDraftSteps } from './StepProposalEditor'
+import StepProposalEditor, { attachIssueCids, fromProposedSteps, toDraftSteps } from './StepProposalEditor'
 import { Button, Modal } from './ui'
 
 // Expand one module of a roadmap into its own steps, on demand (Phase 13). Drafts once on open
@@ -11,6 +11,7 @@ export default function ExpandModuleModal({ roadmapId, module, onClose, onApplie
   const [steps, setSteps] = useState(null) // null while drafting
   const [skipped, setSkipped] = useState([])
   const [sources, setSources] = useState([])
+  const [issues, setIssues] = useState([])
   const [skeletonOnly, setSkeletonOnly] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -21,9 +22,11 @@ export default function ExpandModuleModal({ roadmapId, module, onClose, onApplie
     expandModule(roadmapId, module.id)
       .then((res) => {
         if (!alive) return
-        setSteps(fromProposedSteps(res.steps))
+        const editorSteps = fromProposedSteps(res.steps)
+        setSteps(editorSteps)
         setSkipped(res.skipped || [])
         setSources(res.sources || [])
+        setIssues(attachIssueCids(editorSteps, res.issues))
         setSkeletonOnly(!!res.skeletonOnly)
         setLoading(false)
       })
@@ -65,6 +68,7 @@ export default function ExpandModuleModal({ roadmapId, module, onClose, onApplie
           skipped={skipped}
           sources={sources}
           skeletonOnly={skeletonOnly}
+          issues={issues}
         />
       )}
       <div className="roadmap-actions">

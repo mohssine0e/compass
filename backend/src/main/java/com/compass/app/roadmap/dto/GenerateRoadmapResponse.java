@@ -40,8 +40,22 @@ public record GenerateRoadmapResponse(
         List<String> skipped,
         List<String> sources,
         ProposedAssessment assessment,
-        boolean skeletonOnly
+        boolean skeletonOnly,
+        List<ProposedIssue> issues
 ) {
+    /**
+     * One flagged issue from the Phase 20 self-critique pass over a step-list proposal —
+     * ordering, clarity, missing prerequisites, technical accuracy, or a gap against scope.
+     * {@code stepIndex} names the one step it's about (or null for a plan-wide issue);
+     * {@code suggestedFix} is a concrete replacement for that step's text, set only for an
+     * unambiguous wording fix. The founder accepts (applies the fix to the draft, same as
+     * editing it by hand) or dismisses each one; nothing is ever applied silently.
+     */
+    public record ProposedIssue(String severity, String message, Integer stepIndex, String suggestedFix) {
+        static ProposedIssue from(RoadmapAiService.CritiqueIssue i) {
+            return new ProposedIssue(i.severity(), i.message(), i.stepIndex(), i.suggestedFix());
+        }
+    }
     /** A proposed top-level module (Phase 13): a short title and its one-line scope. */
     public record ProposedModule(String title, String scope) {
         public static ProposedModule from(RoadmapAiService.OutlineModule m) {
@@ -85,7 +99,7 @@ public record GenerateRoadmapResponse(
 
     public static GenerateRoadmapResponse needsClarification(List<String> questions) {
         return new GenerateRoadmapResponse(
-                "needs_clarification", questions, null, null, null, null, null, null, null, false);
+                "needs_clarification", questions, null, null, null, null, null, null, null, false, List.of());
     }
 
     /** A top-level module outline (Phase 13) — no steps yet; each module is expanded on demand. */
@@ -95,7 +109,7 @@ public record GenerateRoadmapResponse(
                                                    RoadmapAiService.GoalAssessment assessment) {
         List<ProposedModule> proposedModules = modules.stream().map(ProposedModule::from).toList();
         return new GenerateRoadmapResponse("outline", null, title, interpretation, proposedModules,
-                null, skipped, sources, ProposedAssessment.from(assessment), false);
+                null, skipped, sources, ProposedAssessment.from(assessment), false, List.of());
     }
 
     /**
@@ -110,7 +124,7 @@ public record GenerateRoadmapResponse(
                                                    RoadmapAiService.GoalAssessment assessment,
                                                    Map<Long, String> priorStepTextById) {
         return proposal(title, interpretation, steps, resources, skipped, sources, assessment,
-                priorStepTextById, false);
+                priorStepTextById, false, List.of());
     }
 
     /** As above, but flagging a skeleton (titles-only) result (Phase 19) — see the class doc. */
@@ -121,6 +135,19 @@ public record GenerateRoadmapResponse(
                                                    RoadmapAiService.GoalAssessment assessment,
                                                    Map<Long, String> priorStepTextById,
                                                    boolean skeletonOnly) {
+        return proposal(title, interpretation, steps, resources, skipped, sources, assessment,
+                priorStepTextById, skeletonOnly, List.of());
+    }
+
+    /** As above, plus the Phase 20 self-critique issues flagged over this same step list. */
+    public static GenerateRoadmapResponse proposal(String title, String interpretation,
+                                                   List<RoadmapAiService.DraftStep> steps,
+                                                   List<List<RoadmapAiService.Resource>> resources,
+                                                   List<String> skipped, List<String> sources,
+                                                   RoadmapAiService.GoalAssessment assessment,
+                                                   Map<Long, String> priorStepTextById,
+                                                   boolean skeletonOnly,
+                                                   List<RoadmapAiService.CritiqueIssue> critiqueIssues) {
         List<ProposedStep> proposedSteps = new java.util.ArrayList<>();
         for (int i = 0; i < steps.size(); i++) {
             RoadmapAiService.DraftStep s = steps.get(i);
@@ -132,7 +159,9 @@ public record GenerateRoadmapResponse(
             proposedSteps.add(new ProposedStep(s.text(), s.kind(), s.weight(), s.dependsOn(),
                     s.dependsOnEntryId(), depText, s.rationale(), stepResources));
         }
+        List<ProposedIssue> issues = critiqueIssues == null ? List.of()
+                : critiqueIssues.stream().map(ProposedIssue::from).toList();
         return new GenerateRoadmapResponse("proposal", null, title, interpretation, null,
-                proposedSteps, skipped, sources, ProposedAssessment.from(assessment), skeletonOnly);
+                proposedSteps, skipped, sources, ProposedAssessment.from(assessment), skeletonOnly, issues);
     }
 }
