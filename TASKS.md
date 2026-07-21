@@ -520,12 +520,21 @@ scroll. Reuses the Phase 10 cross-thread engine to group, not just read.
 Goal: the profile captures *how* you learn with more than free text, and that richer picture feeds
 generation and sessions.
 
-- [ ] Structured learning-preference options (selectable, not just prose): pace, theory-vs-practice
-  balance, preferred session length, depth, example-first vs. principle-first.
-- [ ] Tighten the profile layout on the Phase 11 components; make the confirm/overview cleaner.
-- [ ] Feed the richer preferences into generation (step sizing, resource choice) and the
-  guided-session next-action suggestions.
-- [ ] **Push + tag `phase-15-complete`. Stop. Let the founder use this for real before continuing.**
+- [x] Structured learning-preference options (selectable, not just prose): pace, theory-vs-practice
+  balance, preferred session length, depth, example-first vs. principle-first. (New
+  `learning_preferences` jsonb column (V10) on `learner_profile`; five single-select chip groups
+  on the profile screen, validated server-side against a fixed option set per key.)
+- [x] Tighten the profile layout on the Phase 11 components; make the confirm/overview cleaner.
+  (Every profile block now uses the shared `<Section>` instead of a hand-rolled equivalent,
+  removing the duplicated CSS and matching the uppercase-label style already used elsewhere,
+  e.g. the step deep view.)
+- [x] Feed the richer preferences into generation (step sizing, resource choice) and the
+  guided-session next-action suggestions. (`ProfileContext.forPrompt` includes a "how they like
+  to learn" line read by the outline/expand-module prompts, which now explicitly instruct sizing
+  steps and choosing project-vs-concept mix from pace/session-length/theory-vs-practice, and
+  leading explanations with an example vs. the principle. The post-session next-action nudge in
+  `StepDeepView` also reads the session-length preference to shape its wording.)
+- [x] **Push + tag `phase-15-complete`. Stop. Let the founder use this for real before continuing.**
 
 ---
 

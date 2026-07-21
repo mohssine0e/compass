@@ -16,6 +16,7 @@ public record ProfileResponse(
         Map<String, Object> selfDescription,
         Map<String, Object> formatPreferences,
         List<String> inferredPreferences,
+        Map<String, Object> learningPreferences,
         boolean confirmed,
         Instant confirmedAt,
         Instant updatedAt
@@ -27,6 +28,7 @@ public record ProfileResponse(
                 p.getSelfDescription(),
                 p.getFormatPreferences(),
                 p.getInferredPreferences(),
+                p.getLearningPreferences(),
                 p.getConfirmedAt() != null,
                 p.getConfirmedAt(),
                 p.getUpdatedAt());

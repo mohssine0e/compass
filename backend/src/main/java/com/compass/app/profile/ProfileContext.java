@@ -41,7 +41,27 @@ public final class ProfileContext {
             sb.append("Noticed about how they work: ").append(String.join("; ", inferred)).append('\n');
         }
 
+        String learningPrefs = formatLearningPreferences(profile.getLearningPreferences());
+        if (!learningPrefs.isBlank()) {
+            sb.append("How they like to learn: ").append(learningPrefs).append('\n');
+        }
+
         return sb.length() == 0 ? null : sb.toString().strip();
+    }
+
+    /** Plain, comma-joined "key: value" pairs — e.g. "pace: fast, depth: working knowledge". */
+    private static String formatLearningPreferences(Map<String, Object> learningPreferences) {
+        if (learningPreferences == null || learningPreferences.isEmpty()) {
+            return "";
+        }
+        return learningPreferences.entrySet().stream()
+                .filter(e -> e.getValue() instanceof String s && !s.isBlank())
+                .map(e -> splitCamel(e.getKey()) + ": " + e.getValue().toString().replace('_', ' '))
+                .collect(Collectors.joining(", "));
+    }
+
+    private static String splitCamel(String key) {
+        return key.replaceAll("([a-z])([A-Z])", "$1 $2").toLowerCase();
     }
 
     private static String formatSkills(List<Map<String, Object>> skills) {

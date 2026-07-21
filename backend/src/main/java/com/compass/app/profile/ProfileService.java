@@ -27,6 +27,18 @@ public class ProfileService {
     /** The resource formats a founder can prefer/avoid — matches the resource format enum. */
     static final Set<String> FORMATS = Set.of("written", "video", "interactive", "repo", "book_chapter");
 
+    /**
+     * Structured learning-preference keys and their allowed values (Phase 15) — selectable, not
+     * free text, so generation can act on them deliberately. Any other key or value is dropped.
+     */
+    static final Map<String, Set<String>> LEARNING_PREFERENCE_OPTIONS = Map.of(
+            "pace", Set.of("slow", "steady", "fast"),
+            "theoryVsPractice", Set.of("theory_first", "balanced", "practice_first"),
+            "sessionLength", Set.of("short", "medium", "long"),
+            "depth", Set.of("overview", "working_knowledge", "deep_mastery"),
+            "exampleVsPrinciple", Set.of("example_first", "principle_first")
+    );
+
     private final LearnerProfileRepository repository;
     private final ResumeTextExtractor resumeText;
     private final ProfileAiService profileAi;
@@ -67,8 +79,24 @@ public class ProfileService {
         profile.setSelfDescription(req.selfDescription());
         profile.setFormatPreferences(sanitizeFormatPreferences(req.formatPreferences()));
         profile.setInferredPreferences(sanitizeStrings(req.inferredPreferences()));
+        profile.setLearningPreferences(sanitizeLearningPreferences(req.learningPreferences()));
         profile.setConfirmedAt(Instant.now());
         return repository.save(profile);
+    }
+
+    /** Keep only known preference keys with a value from that key's allowed option set. */
+    static Map<String, Object> sanitizeLearningPreferences(Map<String, Object> raw) {
+        if (raw == null) {
+            return null;
+        }
+        Map<String, Object> clean = new LinkedHashMap<>();
+        for (Map.Entry<String, Set<String>> option : LEARNING_PREFERENCE_OPTIONS.entrySet()) {
+            Object value = raw.get(option.getKey());
+            if (value instanceof String s && option.getValue().contains(s)) {
+                clean.put(option.getKey(), s);
+            }
+        }
+        return clean.isEmpty() ? null : clean;
     }
 
     /** Keep only non-blank strings, trimmed; null when empty. */

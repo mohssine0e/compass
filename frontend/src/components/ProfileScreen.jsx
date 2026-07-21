@@ -6,12 +6,11 @@ import {
   interpretSelfDescription,
   saveProfile,
 } from '../api'
-import { Button, Chip } from './ui'
+import { Button, Chip, Section } from './ui'
 import './ProfileScreen.css'
 
 // The learner profile (Phase 6): what you already know, so generation later doesn't re-teach
-// it. Everything here is reviewed and owned by you — saving is what confirms it. Grows across
-// Phase 6 tasks (skills now; resume + self-description added next).
+// it. Everything here is reviewed and owned by you — saving is what confirms it.
 const CONFIDENCE = [
   { value: '', label: '—' },
   { value: 'just_started', label: 'just started' },
@@ -28,6 +27,55 @@ const FORMATS = [
   { value: 'book_chapter', label: 'book' },
 ]
 
+// Structured how-you-learn options (Phase 15) — selectable, not just prose, so generation can
+// act on them deliberately (step sizing, resource choice) rather than guess from free text.
+const LEARNING_PREFERENCE_GROUPS = [
+  {
+    key: 'pace',
+    label: 'Pace',
+    options: [
+      { value: 'slow', label: 'slow and thorough' },
+      { value: 'steady', label: 'steady' },
+      { value: 'fast', label: 'fast, skim the basics' },
+    ],
+  },
+  {
+    key: 'theoryVsPractice',
+    label: 'Theory vs. practice',
+    options: [
+      { value: 'theory_first', label: 'theory first' },
+      { value: 'balanced', label: 'balanced' },
+      { value: 'practice_first', label: 'practice first' },
+    ],
+  },
+  {
+    key: 'sessionLength',
+    label: 'Session length',
+    options: [
+      { value: 'short', label: 'short bursts' },
+      { value: 'medium', label: 'medium' },
+      { value: 'long', label: 'long, deep sessions' },
+    ],
+  },
+  {
+    key: 'depth',
+    label: 'Depth',
+    options: [
+      { value: 'overview', label: 'overview' },
+      { value: 'working_knowledge', label: 'working knowledge' },
+      { value: 'deep_mastery', label: 'deep mastery' },
+    ],
+  },
+  {
+    key: 'exampleVsPrinciple',
+    label: 'Explanations',
+    options: [
+      { value: 'example_first', label: 'example first' },
+      { value: 'principle_first', label: 'principle first' },
+    ],
+  },
+]
+
 export default function ProfileScreen() {
   const [skills, setSkills] = useState([])
   // { experience, education } pulled from a resume; resume skills are merged into the list above.
@@ -37,6 +85,7 @@ export default function ProfileScreen() {
   const [descRaw, setDescRaw] = useState('')
   const [descTraits, setDescTraits] = useState([])
   const [avoidFormats, setAvoidFormats] = useState([])
+  const [learningPreferences, setLearningPreferences] = useState({})
   const [inferred, setInferred] = useState([])
   const [proposal, setProposal] = useState(null) // { preferences, basis } | null
   const [analyzing, setAnalyzing] = useState(false)
@@ -57,6 +106,7 @@ export default function ProfileScreen() {
         setDescRaw((p.selfDescription && p.selfDescription.raw) || '')
         setDescTraits((p.selfDescription && p.selfDescription.traits) || [])
         setAvoidFormats((p.formatPreferences && p.formatPreferences.avoid) || [])
+        setLearningPreferences(p.learningPreferences || {})
         setInferred(p.inferredPreferences || [])
         setConfirmedAt(p.confirmedAt || null)
       })
@@ -156,6 +206,17 @@ export default function ProfileScreen() {
     setSaved(false)
   }
 
+  // Single-select per group; clicking the already-selected option clears it.
+  function setLearningPreference(key, value) {
+    setLearningPreferences((prev) => {
+      const next = { ...prev }
+      if (next[key] === value) delete next[key]
+      else next[key] = value
+      return next
+    })
+    setSaved(false)
+  }
+
   async function analyze() {
     if (analyzing) return
     setAnalyzing(true)
@@ -200,6 +261,7 @@ export default function ProfileScreen() {
         selfDescription,
         formatPreferences,
         inferredPreferences: inferred,
+        learningPreferences,
       })
       setConfirmedAt(p.confirmedAt || null)
       setSaved(true)
@@ -218,8 +280,7 @@ export default function ProfileScreen() {
         Review everything below — saving is what confirms it.
       </p>
 
-      <section className="profile-section">
-        <h2 className="profile-section-title">Skills</h2>
+      <Section title="Skills">
         <div className="skill-add">
           <input
             className="skill-input"
@@ -263,14 +324,12 @@ export default function ProfileScreen() {
             ))}
           </ul>
         )}
-      </section>
+      </Section>
 
-      <section className="profile-section">
-        <h2 className="profile-section-title">Resume</h2>
-        <p className="profile-section-hint">
-          Optional. Upload a PDF or DOCX — skills join the list above, the rest stays here for
-          you to trim. The file itself isn&apos;t stored.
-        </p>
+      <Section
+        title="Resume"
+        hint="Optional. Upload a PDF or DOCX — skills join the list above, the rest stays here for you to trim. The file itself isn't stored."
+      >
         <div className="resume-upload">
           <input
             ref={fileRef}
@@ -307,13 +366,12 @@ export default function ProfileScreen() {
               </div>
             ) : null
           )}
-      </section>
+      </Section>
 
-      <section className="profile-section">
-        <h2 className="profile-section-title">How you like to learn</h2>
-        <p className="profile-section-hint">
-          In your own words. The system reads it into a few traits — you decide what stays.
-        </p>
+      <Section
+        title="How you like to learn"
+        hint="In your own words. The system reads it into a few traits — you decide what stays."
+      >
         <textarea
           className="desc-input"
           value={descRaw}
@@ -338,13 +396,38 @@ export default function ProfileScreen() {
             ))}
           </ul>
         )}
-      </section>
+      </Section>
 
-      <section className="profile-section">
-        <h2 className="profile-section-title">Learning formats</h2>
-        <p className="profile-section-hint">
-          Formats you&apos;d rather avoid — a generated roadmap won&apos;t suggest resources in these.
-        </p>
+      <Section
+        title="Learning preferences"
+        hint="Selectable, so generation can actually act on them — step sizing, resource choice. Pick what applies; skip what doesn't."
+      >
+        <div className="pref-groups">
+          {LEARNING_PREFERENCE_GROUPS.map((group) => (
+            <div className="pref-group" key={group.key}>
+              <span className="pref-group-label">{group.label}</span>
+              <div className="pref-group-options">
+                {group.options.map((o) => (
+                  <Chip
+                    key={o.value}
+                    toggle
+                    tone="brass"
+                    pressed={learningPreferences[group.key] === o.value}
+                    onClick={() => setLearningPreference(group.key, o.value)}
+                  >
+                    {o.label}
+                  </Chip>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Section>
+
+      <Section
+        title="Learning formats"
+        hint="Formats you'd rather avoid — a generated roadmap won't suggest resources in these."
+      >
         <div className="format-options">
           {FORMATS.map((f) => (
             <Chip
@@ -359,14 +442,12 @@ export default function ProfileScreen() {
             </Chip>
           ))}
         </div>
-      </section>
+      </Section>
 
-      <section className="profile-section">
-        <h2 className="profile-section-title">What the system noticed</h2>
-        <p className="profile-section-hint">
-          Guesses from how you actually work — keep the ones that ring true. Nothing is used
-          until you save.
-        </p>
+      <Section
+        title="What the system noticed"
+        hint="Guesses from how you actually work — keep the ones that ring true. Nothing is used until you save."
+      >
         <Button variant="ghost" onClick={analyze} disabled={analyzing}>
           {analyzing ? 'Looking…' : 'Analyze my sessions'}
         </Button>
@@ -400,7 +481,7 @@ export default function ProfileScreen() {
             ))}
           </ul>
         )}
-      </section>
+      </Section>
 
       <div className="profile-actions">
         {error && <span className="profile-error">{error}</span>}

@@ -55,6 +55,16 @@ public class LearnerProfile {
     @Column(name = "inferred_preferences", columnDefinition = "jsonb")
     private List<String> inferredPreferences;
 
+    /**
+     * Structured how-you-learn options (Phase 15) — selectable, not just prose: {@code pace},
+     * {@code theoryVsPractice}, {@code sessionLength}, {@code depth}, {@code exampleVsPrinciple}.
+     * Feeds generation (step sizing/resource choice) and guided-session next-action suggestions.
+     * See {@link ProfileService#LEARNING_PREFERENCE_OPTIONS} for the allowed value per key.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "learning_preferences", columnDefinition = "jsonb")
+    private Map<String, Object> learningPreferences;
+
     @Column(name = "confirmed_at")
     private Instant confirmedAt;
 
@@ -112,6 +122,14 @@ public class LearnerProfile {
 
     public void setInferredPreferences(List<String> inferredPreferences) {
         this.inferredPreferences = inferredPreferences;
+    }
+
+    public Map<String, Object> getLearningPreferences() {
+        return learningPreferences;
+    }
+
+    public void setLearningPreferences(Map<String, Object> learningPreferences) {
+        this.learningPreferences = learningPreferences;
     }
 
     public Instant getConfirmedAt() {

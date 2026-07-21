@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { endSession, explainText, getStepCovers, patchEntry, startSession } from '../api'
+import { endSession, explainText, getProfile, getStepCovers, patchEntry, startSession } from '../api'
 import ReformulatePanel from './ReformulatePanel'
 import { Badge, Button } from './ui'
 import './StepDeepView.css'
@@ -33,6 +33,18 @@ export default function StepDeepView({ step, onClose, onChanged }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const notesTimer = useRef(null)
+  // Preferred session length (Phase 15), if the profile has one — shapes the post-session nudge.
+  const [sessionLengthPref, setSessionLengthPref] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    getProfile()
+      .then((p) => alive && setSessionLengthPref(p.learningPreferences?.sessionLength || null))
+      .catch(() => {}) // best-effort; the nudge just falls back to its default wording
+    return () => {
+      alive = false
+    }
+  }, [])
 
   // Live timer while a session is running.
   useEffect(() => {
@@ -146,7 +158,7 @@ export default function StepDeepView({ step, onClose, onChanged }) {
       setSessionOpen(false)
       setEnding(false)
       setSessionStartedAt(null)
-      setPost(nextActionFor(feedback, completed))
+      setPost(nextActionFor(feedback, completed, sessionLengthPref))
       onChanged?.()
     } catch (err) {
       setError(err.message)
@@ -356,10 +368,14 @@ function formatElapsed(seconds) {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-// A plain, self-talk next-action nudge after a session — no pep talk (Phase 9).
-function nextActionFor(feedback, completed) {
+// A plain, self-talk next-action nudge after a session — no pep talk (Phase 9). Shaped by the
+// profile's preferred session length, if set (Phase 15): short-session people get pushed toward
+// the break sooner, long-session people get the option to keep going left more open.
+function nextActionFor(feedback, completed, sessionLengthPref) {
   if (completed) return 'That one holds. Next step, or stop here?'
   if (feedback === 'too_hard') return 'Too much in one go. Break it down, or come back to it fresh?'
+  if (sessionLengthPref === 'short') return 'Good chunk done. Short sessions work for you — take the break.'
+  if (sessionLengthPref === 'long') return "Good chunk done. Keep going if you're still in it, or stop here."
   return 'Good chunk done. Keep going, or take a break?'
 }
 

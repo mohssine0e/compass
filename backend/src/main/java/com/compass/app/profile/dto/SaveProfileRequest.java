@@ -14,6 +14,7 @@ public record SaveProfileRequest(
         Map<String, Object> resumeExtracted,
         Map<String, Object> selfDescription,
         Map<String, Object> formatPreferences,
-        List<String> inferredPreferences
+        List<String> inferredPreferences,
+        Map<String, Object> learningPreferences
 ) {
 }

@@ -11,17 +11,8 @@
   margin: 4px 0 28px;
 }
 
-.profile-section {
-  border-top: 1px solid var(--line);
-  padding-top: 20px;
+.profile .ui-section {
   margin-bottom: 24px;
-}
-
-.profile-section-title {
-  color: var(--text);
-  font-size: 1.05rem;
-  font-weight: 500;
-  margin: 0 0 14px;
 }
 
 .skill-add {
@@ -197,6 +188,25 @@
 }
 
 .format-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pref-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pref-group-label {
+  display: block;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+}
+
+.pref-group-options {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

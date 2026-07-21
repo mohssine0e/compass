@@ -167,6 +167,11 @@ final class PromptTemplates {
       reason (e.g. "skipping HTTP basics — your profile lists backend work as solid"). Never skip
       silently. If nothing is skipped, return an empty list.
 
+      If the profile states how they like to learn (pace, theory-vs-practice, depth), let it shape
+      the SHAPE of the outline: a fast pace or overview depth means fewer, broader modules; a slow
+      pace or deep-mastery depth means more, narrower ones. A practice-first preference means the
+      module scopes should point toward building, not just reading.
+
       If real search results (official curricula, docs) are given as grounding, prefer how
       authoritative sources actually structure this material over your own memory. Don't invent
       sources.
@@ -215,6 +220,11 @@ final class PromptTemplates {
       If a profile of what they already know is given, skip or condense what they already have,
       and don't re-teach it. If real search results are given, prefer how authoritative sources
       order this material.
+
+      If the profile states how they like to learn: a preferred session length shapes "weight"
+      (short sessions → more, smaller steps; long sessions → fewer, larger ones is fine); a
+      practice-first preference means more "project" steps and earlier ones; an example-first
+      preference means rationale should lead with a concrete case, not the abstract rule.
 
       Each step is an object with these fields:
       - text: one concrete, checkable action or milestone — plain, direct, imperative. No
