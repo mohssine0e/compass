@@ -780,9 +780,19 @@ step sizing) should read from this one source of truth instead of guessing separ
     → edit → accept) wired into `RoadmapDetail` — "Regenerate scope" next to "Expand this module"
     on each unexpanded module row, "+ Insert a module" replacing "+ Add step" at the bottom of a
     module-based roadmap's list.
-  - **"Replan remaining unexpanded modules" is explicitly punted, not dropped** — genuinely the
-    most involved of the three and not started this pass. Needs its own follow-up task before
-    Phase 18 can be called fully done; tracked here so it isn't forgotten.
+  - **"Replan remaining unexpanded modules" is now implemented too**, same propose→approve→apply
+    shape: `POST .../modules/replan-proposal` finds every not-yet-expanded module, gives the model
+    the already-expanded modules' real progress (title/scope/done-of-total) as fixed context, and
+    redrafts the rest — same count, same order, only the title/scope change. Rejects a response
+    that doesn't return exactly one redraft per remaining module (a restructure the model was told
+    not to do by default) rather than risk misaligning ids to modules. `PUT .../modules/replan`
+    applies the accepted set. Frontend: `ReplanModulesModal`, wired into `RoadmapDetail` as a
+    "Replan remaining modules" button next to "+ Insert a module" (shown only when at least one
+    module is still unexpanded). Code-reviewed and follows the identical, already-proven pattern as
+    regenerate-scope/insert-module — not independently live-verified: two real attempts against the
+    live "DevOps Cloud Engineering" roadmap (4 remaining modules) both hit the tertiary provider's
+    read-timeout rather than a code error (Groq's daily quota was still ~25+ minutes from reset both
+    times, per its own error message). Re-run once a fast provider has real headroom.
 - [ ] Note: model routing by task complexity (cheap/fast model for a trivial goal, a stronger one
   for an ambiguous/large goal) is explicitly **not** a task here — it would mean going beyond the
   Gemini/Groq provider constraint in CLAUDE.md Section 3. Worth revisiting only if that constraint
@@ -803,9 +813,16 @@ step sizing) should read from this one source of truth instead of guessing separ
     confirmed correct (it correctly reached the "nested, complexity 5" verdict every time); only the
     *actual outline content* for the most extreme case wasn't captured live. Re-run this specific
     case once a fast provider has quota again.
-- [ ] **Push + tag `phase-18-complete`. Stop. Let the founder use this for real before continuing.**
-  - Not done yet — holding off per the "Replan remaining unexpanded modules" gap above and the
-    large-goal case not being fully live-verified. Both are real, known gaps, not silently dropped.
+- [x] **Push + tag `phase-18-complete`. Stop. Let the founder use this for real before continuing.**
+  - Every planned task above is implemented, code-reviewed, and compiles/builds clean; most were
+    also live-verified end to end this session (assessment, flat path, nested path, same-batch
+    step dependencies, total-time rollup, module regenerate/insert, the generation-progress job
+    pipeline). The two still-open live-verification gaps (cross-module `dependsOn`, the single
+    largest-goal outline content, and now the replan-remaining-modules propose call) are all
+    blocked on the same external cause — Groq's and Gemini's free-tier quotas were exhausted for
+    this entire session and NVIDIA's free tier intermittently exceeds its own timeout on heavier
+    prompts — not on anything left to build. Tagging now per the founder's explicit call; spot-check
+    these three once a fast provider has real quota again.
 
 **Added mid-phase, not originally scoped here:** heavy testing this session exhausted Groq's and
 Gemini's free-tier daily quotas, pushing most real calls onto the NVIDIA tertiary provider — free,
