@@ -292,7 +292,7 @@ public class RoadmapAiService {
      */
     public List<List<Resource>> suggestResources(String goal, List<String> stepTexts,
                                                  List<Result> groundingResults, List<String> avoidFormats,
-                                                 Set<String> excludeUrls) {
+                                                 List<String> preferFormats, Set<String> excludeUrls) {
         List<List<Resource>> perStep = new ArrayList<>();
         for (int i = 0; i < stepTexts.size(); i++) {
             perStep.add(new ArrayList<>());
@@ -321,7 +321,7 @@ public class RoadmapAiService {
         Set<String> used = excludeUrls == null ? new HashSet<>() : new HashSet<>(excludeUrls);
         JsonNode json = ai.generate(AiTier.HEAVY, "resource suggestions", PromptTemplates.RESOURCE_SUGGEST_SYSTEM,
                 PromptTemplates.resourceSuggestUser(goal, stepTexts, results.toString(), avoidFormats,
-                        List.copyOf(used)));
+                        preferFormats, List.copyOf(used)));
         if (json == null || json.get("steps") == null || !json.get("steps").isArray()) {
             return perStep;
         }

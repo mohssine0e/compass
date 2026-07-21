@@ -582,6 +582,25 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
         </span>
       </div>
 
+      {hasRemainingModules && progress.paceMultiplier != null && progress.paceMultiplier > 2 && (
+        <p className="roadmap-pace-note">
+          At your current pace, this will take roughly {Math.round(progress.paceMultiplier * 10) / 10}x
+          longer than estimated.{' '}
+          <button className="roadmap-pace-action" onClick={() => setReplanning(true)}>
+            Redraft the remaining modules for where you actually are?
+          </button>
+        </p>
+      )}
+      {hasRemainingModules && progress.paceMultiplier != null && progress.paceMultiplier < 0.5 && (
+        <p className="roadmap-pace-note">
+          At your current pace, this is going roughly {Math.round((1 / progress.paceMultiplier) * 10) / 10}x
+          faster than estimated.{' '}
+          <button className="roadmap-pace-action" onClick={() => setReplanning(true)}>
+            Redraft the remaining modules for where you actually are?
+          </button>
+        </p>
+      )}
+
       <div className="roadmap-toolbar">
         {!reorderMode && (
           <label className="roadmap-verify">

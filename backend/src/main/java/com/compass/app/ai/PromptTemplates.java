@@ -794,6 +794,10 @@ final class PromptTemplates {
 
       Hard rules:
       - NEVER suggest a resource in a format the user avoids (given below). Drop it entirely.
+      - When a preferred format is given below, favor it when a real result in that format
+        genuinely fits a step — but never force it, and never invent a result that doesn't exist
+        just to satisfy the preference. A good fit in a non-preferred format beats a poor fit in
+        the preferred one.
       - NEVER reuse the same url on two different steps, and never reuse a url already listed as
         "already used elsewhere in this roadmap" (given below, if any) — pick a different result
         instead, or give that step no resource rather than repeat one.
@@ -803,8 +807,8 @@ final class PromptTemplates {
         "estimated_time": "~1h", "ai_grounding_source": "..."}]}]}
       """;
 
-  static String resourceSuggestUser(String goal, List<String> stepTexts,
-      String searchResults, List<String> avoidFormats, List<String> alreadyUsedUrls) {
+  static String resourceSuggestUser(String goal, List<String> stepTexts, String searchResults,
+      List<String> avoidFormats, List<String> preferFormats, List<String> alreadyUsedUrls) {
     StringBuilder sb = new StringBuilder();
     sb.append("Goal: ").append(goal == null ? "" : goal.trim()).append('\n');
     sb.append("Steps (0-based index):\n");
@@ -814,6 +818,11 @@ final class PromptTemplates {
     if (avoidFormats != null && !avoidFormats.isEmpty()) {
       sb.append("Formats the user AVOIDS (never suggest these): ")
           .append(String.join(", ", avoidFormats)).append('\n');
+    }
+    if (preferFormats != null && !preferFormats.isEmpty()) {
+      sb.append("Formats the user tends to prefer, based on their history (favor when a real ")
+          .append("result genuinely fits, never force it): ")
+          .append(String.join(", ", preferFormats)).append('\n');
     }
     if (alreadyUsedUrls != null && !alreadyUsedUrls.isEmpty()) {
       sb.append("Already used elsewhere in this roadmap (do not repeat these urls):\n");

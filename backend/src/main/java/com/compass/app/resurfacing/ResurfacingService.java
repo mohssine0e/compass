@@ -252,7 +252,8 @@ public class ResurfacingService {
                 List<String> smallerTexts = smaller.stream().map(RoadmapAiService.DraftStep::text).toList();
                 List<List<RoadmapAiService.Resource>> resources = roadmapAi.suggestResources(
                         stepText, smallerTexts, grounding == null ? null : grounding.results(),
-                        roadmapService.avoidedFormats(), roadmapService.usedResourceUrls(roadmap.getId()));
+                        roadmapService.avoidedFormats(), roadmapService.preferredFormats(),
+                        roadmapService.usedResourceUrls(roadmap.getId()));
                 List<GenerateRoadmapResponse.ProposedStep> proposedSteps = GenerateRoadmapResponse.proposal(
                                 null, null, smaller, resources, List.of(), List.of(), null, Map.of())
                         .steps();

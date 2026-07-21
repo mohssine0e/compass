@@ -165,7 +165,7 @@ public class RoadmapService {
             List<String> stepTexts = flat.steps().stream().map(RoadmapAiService.DraftStep::text).toList();
             List<List<RoadmapAiService.Resource>> resources = roadmapAi.suggestResources(
                     goal, stepTexts, grounding == null ? null : grounding.results(),
-                    avoidedFormats(), Set.of());
+                    avoidedFormats(), preferredFormats(), Set.of());
             return GenerateRoadmapResponse.proposal(flat.title(), flat.interpretation(), flat.steps(),
                     resources, flat.skipped(), sources, assessment, Map.of());
         }
@@ -302,7 +302,7 @@ public class RoadmapService {
         List<String> stepTexts = steps.stream().map(RoadmapAiService.DraftStep::text).toList();
         List<List<RoadmapAiService.Resource>> resources = roadmapAi.suggestResources(
                 moduleTitle, stepTexts, grounding == null ? null : grounding.results(),
-                avoidedFormats(), usedResourceUrls(roadmapId));
+                avoidedFormats(), preferredFormats(), usedResourceUrls(roadmapId));
         return GenerateRoadmapResponse.proposal(moduleTitle, null, steps, resources, List.of(),
                 sources, null, priorStepTextById);
     }
@@ -710,9 +710,23 @@ public class RoadmapService {
     @SuppressWarnings("unchecked")
     /** The founder's stated avoided resource formats, or empty if none/no confirmed profile. */
     public List<String> avoidedFormats() {
+        return formatPreferenceList("avoid");
+    }
+
+    /**
+     * The founder's confirmed behaviorally-inferred preferred formats (Phase 20) — a soft bias
+     * for {@code resourceSuggestUser}, never a hard requirement. Only ever set via confirming an
+     * {@code InferredPreference}, never stated directly.
+     */
+    public List<String> preferredFormats() {
+        return formatPreferenceList("prefer");
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> formatPreferenceList(String key) {
         return profileService.confirmedProfile()
                 .map(p -> p.getFormatPreferences())
-                .map(prefs -> prefs.get("avoid"))
+                .map(prefs -> prefs.get(key))
                 .filter(a -> a instanceof List)
                 .map(a -> (List<String>) a)
                 .orElseGet(List::of);

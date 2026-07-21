@@ -85,6 +85,9 @@ export default function ProfileScreen() {
   const [descRaw, setDescRaw] = useState('')
   const [descTraits, setDescTraits] = useState([])
   const [avoidFormats, setAvoidFormats] = useState([])
+  // Set only via confirmed behavioral inference (Phase 20) — no chips to state it directly, a
+  // soft bias in resource suggestions, never a hard requirement.
+  const [preferFormats, setPreferFormats] = useState([])
   const [learningPreferences, setLearningPreferences] = useState({})
   const [inferred, setInferred] = useState([])
   const [proposal, setProposal] = useState(null) // { preferences, basis } | null
@@ -106,6 +109,7 @@ export default function ProfileScreen() {
         setDescRaw((p.selfDescription && p.selfDescription.raw) || '')
         setDescTraits((p.selfDescription && p.selfDescription.traits) || [])
         setAvoidFormats((p.formatPreferences && p.formatPreferences.avoid) || [])
+        setPreferFormats((p.formatPreferences && p.formatPreferences.prefer) || [])
         setLearningPreferences(p.learningPreferences || {})
         setInferred(p.inferredPreferences || [])
         setConfirmedAt(p.confirmedAt || null)
@@ -235,6 +239,9 @@ export default function ProfileScreen() {
     if (pref.avoidFormat && !avoidFormats.includes(pref.avoidFormat)) {
       setAvoidFormats((prev) => [...prev, pref.avoidFormat])
     }
+    if (pref.preferFormat && !preferFormats.includes(pref.preferFormat)) {
+      setPreferFormats((prev) => [...prev, pref.preferFormat])
+    }
     setProposal((prev) =>
       prev ? { ...prev, preferences: prev.preferences.filter((p) => p.text !== pref.text) } : prev
     )
@@ -253,7 +260,10 @@ export default function ProfileScreen() {
     const selfDescription = descRaw.trim()
       ? { raw: descRaw.trim(), traits: descTraits }
       : null
-    const formatPreferences = avoidFormats.length ? { avoid: avoidFormats } : null
+    const formatPreferences = avoidFormats.length || preferFormats.length
+      ? { ...(avoidFormats.length ? { avoid: avoidFormats } : {}),
+          ...(preferFormats.length ? { prefer: preferFormats } : {}) }
+      : null
     try {
       const p = await saveProfile({
         skills,

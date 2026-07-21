@@ -79,7 +79,7 @@ public class ReformulateService {
         List<String> smallerTexts = smaller.stream().map(RoadmapAiService.DraftStep::text).toList();
         List<List<RoadmapAiService.Resource>> resources = roadmapAi.suggestResources(
             stepText, smallerTexts, grounding == null ? null : grounding.results(),
-            avoidedFormats(), roadmapService.usedResourceUrls(roadmapId));
+            avoidedFormats(), preferredFormats(), roadmapService.usedResourceUrls(roadmapId));
         // Reuses GenerateRoadmapResponse's own step-building logic rather than duplicating it —
         // a break-down proposal is really just a same-batch (no cross-module) module expansion.
         List<GenerateRoadmapResponse.ProposedStep> proposedSteps = GenerateRoadmapResponse.proposal(
@@ -134,7 +134,7 @@ public class ReformulateService {
       return List.of();
     }
     List<List<RoadmapAiService.Resource>> perStep = roadmapAi.suggestResources(
-        stepText, List.of(stepText), grounding.results(), avoidedFormats(), Set.of());
+        stepText, List.of(stepText), grounding.results(), avoidedFormats(), preferredFormats(), Set.of());
     List<Map<String, Object>> out = new ArrayList<>();
     if (!perStep.isEmpty()) {
       for (RoadmapAiService.Resource r : perStep.get(0)) {
@@ -185,6 +185,10 @@ public class ReformulateService {
 
   private List<String> avoidedFormats() {
     return roadmapService.avoidedFormats();
+  }
+
+  private List<String> preferredFormats() {
+    return roadmapService.preferredFormats();
   }
 
   private String priorStepsText(Long roadmapId, Entry step) {

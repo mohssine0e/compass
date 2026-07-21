@@ -45,7 +45,11 @@ public class LearnerProfile {
     @Column(name = "self_description", columnDefinition = "jsonb")
     private Map<String, Object> selfDescription;
 
-    /** {avoid:[...]}: resource formats to steer discovery away from (Phase 7.5). */
+    /**
+     * {avoid:[...], prefer:[...]}: resource formats to steer discovery (Phase 7.5). {@code prefer}
+     * is set only via confirmed behavioral inference (Phase 20's resource-usage feedback loop),
+     * not stated directly — a soft bias in {@code resourceSuggestUser}, never a hard requirement.
+     */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "format_preferences", columnDefinition = "jsonb")
     private Map<String, Object> formatPreferences;

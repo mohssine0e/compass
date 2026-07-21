@@ -389,6 +389,24 @@
   flex-shrink: 0;
 }
 
+/* Pace-driven nudge to reconsider the remaining plan (Phase 20) — never applied silently, just
+   a prompt into the existing replan-remaining-modules propose/approve/apply flow. */
+.roadmap-pace-note {
+  color: var(--faint);
+  font-size: 0.85rem;
+  margin: 0 0 14px;
+}
+
+.roadmap-pace-action {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--link, var(--brass));
+  font-size: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
 /* Action bar shown once 2+ modules are picked for batch expansion. */
 .roadmap-batch-bar {
   display: flex;
