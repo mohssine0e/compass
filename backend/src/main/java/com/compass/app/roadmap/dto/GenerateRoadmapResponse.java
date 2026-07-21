@@ -24,6 +24,11 @@ import java.util.Map;
  * normal way. When an accepted outline/flat proposal is turned into a real roadmap, its
  * {@code assessment} is sent back on create and stored on the roadmap so a later module-expand
  * can read the same numbers (see {@code CreateRoadmapRequest}).
+ *
+ * <p>{@code skeletonOnly} (Phase 19) is true only when the full drafting call failed across the
+ * whole heavy provider chain and this is the emergency fallback instead — titles only, no
+ * kind/weight/resources/dependencies. Carried through to accepted steps so the UI can flag them
+ * ("basic outline — details pending") and a background retry can find and fill them in later.
  */
 public record GenerateRoadmapResponse(
         String status,
@@ -34,7 +39,8 @@ public record GenerateRoadmapResponse(
         List<ProposedStep> steps,
         List<String> skipped,
         List<String> sources,
-        ProposedAssessment assessment
+        ProposedAssessment assessment,
+        boolean skeletonOnly
 ) {
     /** A proposed top-level module (Phase 13): a short title and its one-line scope. */
     public record ProposedModule(String title, String scope) {
@@ -79,7 +85,7 @@ public record GenerateRoadmapResponse(
 
     public static GenerateRoadmapResponse needsClarification(List<String> questions) {
         return new GenerateRoadmapResponse(
-                "needs_clarification", questions, null, null, null, null, null, null, null);
+                "needs_clarification", questions, null, null, null, null, null, null, null, false);
     }
 
     /** A top-level module outline (Phase 13) — no steps yet; each module is expanded on demand. */
@@ -89,7 +95,7 @@ public record GenerateRoadmapResponse(
                                                    RoadmapAiService.GoalAssessment assessment) {
         List<ProposedModule> proposedModules = modules.stream().map(ProposedModule::from).toList();
         return new GenerateRoadmapResponse("outline", null, title, interpretation, proposedModules,
-                null, skipped, sources, ProposedAssessment.from(assessment));
+                null, skipped, sources, ProposedAssessment.from(assessment), false);
     }
 
     /**
@@ -103,6 +109,18 @@ public record GenerateRoadmapResponse(
                                                    List<String> skipped, List<String> sources,
                                                    RoadmapAiService.GoalAssessment assessment,
                                                    Map<Long, String> priorStepTextById) {
+        return proposal(title, interpretation, steps, resources, skipped, sources, assessment,
+                priorStepTextById, false);
+    }
+
+    /** As above, but flagging a skeleton (titles-only) result (Phase 19) — see the class doc. */
+    public static GenerateRoadmapResponse proposal(String title, String interpretation,
+                                                   List<RoadmapAiService.DraftStep> steps,
+                                                   List<List<RoadmapAiService.Resource>> resources,
+                                                   List<String> skipped, List<String> sources,
+                                                   RoadmapAiService.GoalAssessment assessment,
+                                                   Map<Long, String> priorStepTextById,
+                                                   boolean skeletonOnly) {
         List<ProposedStep> proposedSteps = new java.util.ArrayList<>();
         for (int i = 0; i < steps.size(); i++) {
             RoadmapAiService.DraftStep s = steps.get(i);
@@ -115,6 +133,6 @@ public record GenerateRoadmapResponse(
                     s.dependsOnEntryId(), depText, s.rationale(), stepResources));
         }
         return new GenerateRoadmapResponse("proposal", null, title, interpretation, null,
-                proposedSteps, skipped, sources, ProposedAssessment.from(assessment));
+                proposedSteps, skipped, sources, ProposedAssessment.from(assessment), skeletonOnly);
     }
 }

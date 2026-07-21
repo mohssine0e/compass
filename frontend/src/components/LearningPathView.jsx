@@ -40,6 +40,9 @@ export default function LearningPathView({ roadmap, onOpenStep }) {
           <div className="path-step-body">
             <p className="path-step-text">{step.content?.text}</p>
             <div className="path-step-meta">
+              {step.content?.skeletonOnly && (
+                <Badge tone="danger">basic outline — details pending</Badge>
+              )}
               {step.content?.kind === 'project' && <Badge tone="brass">project</Badge>}
               {step.content?.weight && step.content.weight !== 'medium' && (
                 <Badge>{step.content.weight}</Badge>

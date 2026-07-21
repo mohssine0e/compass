@@ -400,8 +400,14 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
             {node.content?.text}
             {(node.content?.kind === 'project' ||
               node.content?.weight ||
+              node.content?.skeletonOnly ||
               (node.dependsOn && textById.get(node.dependsOn))) && (
               <span className="step-tags">
+                {node.content?.skeletonOnly && (
+                  <Badge tone="danger" title="Every AI provider was unavailable when this was drafted — details fill in on their own once one recovers.">
+                    basic outline — details pending
+                  </Badge>
+                )}
                 {node.content?.kind === 'project' && <Badge tone="brass">project</Badge>}
                 {node.content?.weight && node.content.weight !== 'medium' && (
                   <Badge>{node.content.weight}</Badge>

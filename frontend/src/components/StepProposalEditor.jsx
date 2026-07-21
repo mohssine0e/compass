@@ -32,8 +32,12 @@ export function fromProposedSteps(rawSteps) {
   }))
 }
 
-/** The inverse: editor steps → the flat draftSteps shape the create/accept endpoints expect. */
-export function toDraftSteps(steps) {
+/**
+ * The inverse: editor steps → the flat draftSteps shape the create/accept endpoints expect.
+ * `skeletonOnly` (Phase 19) marks steps accepted from the emergency titles-only fallback, so the
+ * backend can flag them for the background retry that fills in full detail later.
+ */
+export function toDraftSteps(steps, skeletonOnly = false) {
   const kept = steps.filter((s) => s.text.trim())
   const indexOfCid = new Map(kept.map((s, i) => [s.cid, i]))
   return kept.map((s) => ({
@@ -52,6 +56,7 @@ export function toDraftSteps(steps) {
       estimatedTime: r.estimatedTime,
       aiGroundingSource: r.aiGroundingSource,
     })),
+    skeletonOnly,
   }))
 }
 
@@ -69,8 +74,16 @@ export function newBlankStep() {
  * @param {(next: Array) => void} onChange
  * @param {string[]} [skipped] - topics skipped based on the profile, shown above the list
  * @param {string[]} [sources] - grounding sources, shown below the list
+ * @param {boolean} [skeletonOnly] - true when every AI provider failed and this is the
+ *   emergency titles-only fallback (Phase 19) — no descriptions/resources, filled in later
  */
-export default function StepProposalEditor({ steps, onChange, skipped = [], sources = [] }) {
+export default function StepProposalEditor({
+  steps,
+  onChange,
+  skipped = [],
+  sources = [],
+  skeletonOnly = false,
+}) {
   function update(updater) {
     onChange(typeof updater === 'function' ? updater(steps) : updater)
   }
@@ -119,6 +132,13 @@ export default function StepProposalEditor({ steps, onChange, skipped = [], sour
 
   return (
     <>
+      {skeletonOnly && (
+        <p className="gen-lead">
+          <Badge tone="danger">basic outline — details pending</Badge> Every AI provider was
+          unavailable, so these are titles only — no descriptions or resources yet. They'll fill
+          in on their own once a provider recovers.
+        </p>
+      )}
       {skipped.length > 0 && (
         <div className="gen-skipped">
           <span className="gen-skipped-label">Skipped, based on your profile:</span>

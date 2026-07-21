@@ -913,16 +913,29 @@ real headroom, before or alongside this phase's other work:
     recheck-list verification above.
 
 **Tiered fast-fallback with per-provider timeouts + skeleton response**
-- [ ] Give each provider in the failover chain its own timeout tuned to its actual latency
+- [x] Give each provider in the failover chain its own timeout tuned to its actual latency
   profile (fast providers get a short timeout so a hang doesn't stall the whole chain; the
   slowest/tertiary provider gets a longer allowance since it's the last resort) rather than one
   blanket timeout applied uniformly regardless of which provider is being tried.
-- [ ] If every provider in the chain fails or times out on a generation call, return a **skeleton
+  - Fast tier defaults to `fast-json-timeout-seconds` (12s); heavy tier's Gemini Pro gets a
+    40s override (deeper reasoning, still the "primary" of its tier) and NVIDIA keeps its
+    existing 75s override as the genuine last resort.
+- [x] If every provider in the chain fails or times out on a generation call, return a **skeleton
   response** — module/step titles only, no detailed content, no resources — rather than the
   current plain-text "unavailable" fallback. Mark it clearly in the UI (e.g. a `Badge` reading
   "basic outline — details pending") and add a background retry that fills in full detail once a
   provider recovers, updating the same roadmap in place. This directly improves the exact failure
   mode that blocked Phase 18's final verification.
+  - Scoped to module expansion specifically (the concrete failure mode observed) rather than
+    every generation call: `RoadmapAiService.skeletonModuleSteps` asks the FAST tier for titles
+    only when the HEAVY tier's full `expandModule` call already failed; `RoadmapService`
+    persists those with `content.skeletonOnly: true` on accept. `SkeletonRetryService` sweeps
+    every 10 minutes for modules still in that state, re-runs the full expansion, and — only if
+    every one of the module's steps is still untouched (status `captured`, still flagged
+    skeleton, so real founder progress/edits are never clobbered) — replaces them in place with
+    the fully-detailed result. Badge surfaced both on the accept screen
+    (`StepProposalEditor`) and on already-persisted skeleton steps (`RoadmapDetail`,
+    `LearningPathView`).
 
 **Caching and pruning (the actual quota-relief mechanism, independent of provider count)**
 - [ ] Extend the Phase 13 search-result cache pattern to generation calls themselves: cache the

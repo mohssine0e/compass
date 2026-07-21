@@ -403,6 +403,23 @@ public class RoadmapAiService {
         return value != null && allowed.contains(value) ? value : fallback;
     }
 
+    /**
+     * The emergency skeleton path (Phase 19): step titles only for one module, tried against the
+     * FAST tier when the HEAVY tier's whole chain has already failed a real {@link #expandModule}
+     * call. {@code null} when even this smaller ask can't be served — at that point nothing more
+     * can be done without a working provider.
+     */
+    public List<String> skeletonModuleSteps(String roadmapTitle, String moduleTitle, String moduleScope) {
+        JsonNode json = ai.generateSkeleton("module skeleton",
+                PromptTemplates.SKELETON_EXPAND_SYSTEM,
+                PromptTemplates.skeletonExpandUser(roadmapTitle, moduleTitle, moduleScope));
+        if (json == null) {
+            return null;
+        }
+        List<String> titles = AiJsonGenerator.strings(json.get("steps"));
+        return titles.isEmpty() ? null : titles;
+    }
+
     /** Smaller sub-steps that replace one stalled step, or {@code null} on failure. */
     public List<String> breakDownStep(String roadmapTitle, String stepText) {
         JsonNode json = ai.generate(AiTier.HEAVY, "step breakdown", PromptTemplates.BREAKDOWN_SYSTEM,

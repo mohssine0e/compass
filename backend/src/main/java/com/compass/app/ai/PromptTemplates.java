@@ -472,6 +472,34 @@ final class PromptTemplates {
     return sb.toString();
   }
 
+  /**
+   * System prompt for the emergency skeleton path (Phase 19): titles only, no kind/weight/
+   * resources/dependencies — used only when the full module-expansion call has already failed
+   * across the whole heavy tier, so the ask itself must be small enough for a cheap, fast
+   * provider to still have quota for. A degraded result the user can see is better than none.
+   */
+  static final String SKELETON_EXPAND_SYSTEM = """
+      The full drafting call for this module failed, so this is a minimal fallback: just the
+      ordered step TITLES for this module, nothing else — no descriptions, no resources, no
+      dependency analysis. Short, plain, direct text per step, same voice as a real roadmap step
+      (no numbering, no "Step 1:", no motivational language, no emoji).
+
+      Size the number of titles to the module's own scope; never more than 8.
+
+      Output ONLY strict JSON, no prose around it: {"steps": ["...", "..."]}
+      """;
+
+  static String skeletonExpandUser(String roadmapTitle, String moduleTitle, String moduleScope) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Roadmap: ").append(roadmapTitle == null ? "" : roadmapTitle.trim()).append('\n');
+    sb.append("Module: ").append(moduleTitle == null ? "" : moduleTitle.trim()).append('\n');
+    if (moduleScope != null && !moduleScope.isBlank()) {
+      sb.append("What this module covers: ").append(moduleScope.trim()).append('\n');
+    }
+    sb.append("Write just this module's step titles as JSON.");
+    return sb.toString();
+  }
+
   /** Append the learner-profile context block to a prompt, if there is one. */
   private static void appendProfile(StringBuilder sb, String profileContext) {
     if (profileContext != null && !profileContext.isBlank()) {

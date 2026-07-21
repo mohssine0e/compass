@@ -11,6 +11,7 @@ export default function ExpandModuleModal({ roadmapId, module, onClose, onApplie
   const [steps, setSteps] = useState(null) // null while drafting
   const [skipped, setSkipped] = useState([])
   const [sources, setSources] = useState([])
+  const [skeletonOnly, setSkeletonOnly] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -23,6 +24,7 @@ export default function ExpandModuleModal({ roadmapId, module, onClose, onApplie
         setSteps(fromProposedSteps(res.steps))
         setSkipped(res.skipped || [])
         setSources(res.sources || [])
+        setSkeletonOnly(!!res.skeletonOnly)
         setLoading(false)
       })
       .catch((err) => {
@@ -43,7 +45,7 @@ export default function ExpandModuleModal({ roadmapId, module, onClose, onApplie
     setBusy(true)
     setError(null)
     try {
-      await addModuleSteps(roadmapId, module.id, toDraftSteps(steps))
+      await addModuleSteps(roadmapId, module.id, toDraftSteps(steps, skeletonOnly))
       onApplied()
     } catch (err) {
       setError(err.message)
@@ -57,7 +59,13 @@ export default function ExpandModuleModal({ roadmapId, module, onClose, onApplie
       {loading && <p className="deep-faint">Working out the steps for this module…</p>}
       {error && <p className="roadmap-error">{error}</p>}
       {steps && !loading && (
-        <StepProposalEditor steps={steps} onChange={setSteps} skipped={skipped} sources={sources} />
+        <StepProposalEditor
+          steps={steps}
+          onChange={setSteps}
+          skipped={skipped}
+          sources={sources}
+          skeletonOnly={skeletonOnly}
+        />
       )}
       <div className="roadmap-actions">
         <Button variant="ghost" onClick={onClose} disabled={busy}>

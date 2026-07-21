@@ -31,11 +31,13 @@ public record CreateRoadmapRequest(
      * {@code dependsOnEntryId} (Phase 18) is a real, already-existing step id instead — used when
      * a module's step depends on something from an earlier module, resolved directly with no
      * index translation needed. At most one of the two is ever set. {@code resources} are the
-     * curated learning resources to attach.
+     * curated learning resources to attach. {@code skeletonOnly} (Phase 19) marks a step accepted
+     * from the emergency titles-only fallback, so it can be flagged in the UI and found later by
+     * the background retry that fills in full detail.
      */
     public record DraftStepInput(String text, String kind, String weight, Integer dependsOn,
                                  Long dependsOnEntryId, String rationale,
-                                 List<ResourceInput> resources) {
+                                 List<ResourceInput> resources, boolean skeletonOnly) {
     }
 
     /** One curated resource on a step. {@code id} is assigned on save if the client didn't send one. */

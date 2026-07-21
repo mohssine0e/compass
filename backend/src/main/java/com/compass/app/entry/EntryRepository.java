@@ -48,6 +48,18 @@ public interface EntryRepository extends JpaRepository<Entry, Long> {
     void touchUpdatedAt(@Param("id") Long id, @Param("now") Instant now);
 
     /**
+     * The distinct parent module ids currently holding any skeleton (titles-only) step (Phase
+     * 19) — the emergency fallback used when the whole heavy AI chain failed a module expansion.
+     * Read by the background retry sweep to find modules worth re-attempting now that a provider
+     * may have recovered.
+     */
+    @Query(value = """
+            SELECT DISTINCT parent_id FROM entries
+            WHERE type = 'roadmap_step' AND content->>'skeletonOnly' = 'true' AND parent_id IS NOT NULL
+            """, nativeQuery = true)
+    List<Long> findModuleIdsWithSkeletonSteps();
+
+    /**
      * A verified-done roadmap step that's due for a spaced recheck (Phase 8): its
      * {@code nextRecheckAt} has passed and it isn't snoozed. Soonest-due first. This is the same
      * resurfacing engine firing on a different trigger — completed + due — not a new system.

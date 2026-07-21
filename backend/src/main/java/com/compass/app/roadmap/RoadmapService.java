@@ -182,6 +182,37 @@ public class RoadmapService {
                     "Drafting is unavailable right now — write its steps yourself.");
         }
 
+        GenerateRoadmapResponse full = attemptFullExpand(roadmapId, roadmap, module);
+        if (full != null) {
+            return full;
+        }
+
+        // The whole heavy chain failed (Phase 19) — try the much smaller titles-only ask against
+        // the fast tier before giving up entirely. A degraded result the founder can see (and a
+        // background retry can later fill in) beats a flat "unavailable."
+        String roadmapTitle = stringOf(roadmap, "title");
+        String moduleTitle = stringOf(module, "title");
+        String moduleScope = stringOf(module, "scope");
+        List<String> skeletonTitles = roadmapAi.skeletonModuleSteps(roadmapTitle, moduleTitle, moduleScope);
+        if (skeletonTitles == null) {
+            throw new IllegalStateException(
+                    "Couldn't draft this module right now — write its steps yourself.");
+        }
+        List<RoadmapAiService.DraftStep> skeletonSteps = skeletonTitles.stream()
+                .map(text -> new RoadmapAiService.DraftStep(text, "concept", "medium", null, null, null))
+                .toList();
+        List<List<RoadmapAiService.Resource>> noResources = skeletonSteps.stream()
+                .map(s -> List.<RoadmapAiService.Resource>of()).toList();
+        return GenerateRoadmapResponse.proposal(moduleTitle, null, skeletonSteps, noResources,
+                List.of(), List.of(), null, Map.of(), true);
+    }
+
+    /**
+     * The real drafting attempt shared by {@link #expandModule} and the skeleton background
+     * retry (Phase 19): full context gathering plus the heavy-tier AI call. {@code null} means
+     * the whole heavy chain failed — the caller decides what degraded path to take next.
+     */
+    private GenerateRoadmapResponse attemptFullExpand(Long roadmapId, Entry roadmap, Entry module) {
         String roadmapTitle = stringOf(roadmap, "title");
         String moduleTitle = stringOf(module, "title");
         String moduleScope = stringOf(module, "scope");
@@ -222,17 +253,61 @@ public class RoadmapService {
         List<RoadmapAiService.DraftStep> steps = roadmapAi.expandModule(roadmapTitle, moduleTitle,
                 moduleScope, profileContext, groundingContext, assessmentContext, priorSteps);
         if (steps == null) {
-            throw new IllegalStateException(
-                    "Couldn't draft this module right now — write its steps yourself.");
+            return null;
         }
-
         List<String> stepTexts = steps.stream().map(RoadmapAiService.DraftStep::text).toList();
         List<List<RoadmapAiService.Resource>> resources = roadmapAi.suggestResources(
                 moduleTitle, stepTexts, grounding == null ? null : grounding.results(),
                 avoidedFormats(), usedResourceUrls(roadmapId));
-
         return GenerateRoadmapResponse.proposal(moduleTitle, null, steps, resources, List.of(),
                 sources, null, priorStepTextById);
+    }
+
+    /**
+     * Background retry for a module stuck with skeleton (titles-only) steps (Phase 19): re-runs
+     * the full expansion now that a provider may have recovered, and if it succeeds, replaces the
+     * skeleton steps with the fully-detailed ones in place. Returns {@code false} (try again
+     * later) when the module isn't actually in skeleton state, still has any founder progress or
+     * edits on it (never clobber real work), or the heavy chain still fails.
+     */
+    @Transactional
+    public boolean retrySkeletonModule(Long moduleId) {
+        Entry module = repository.findById(moduleId)
+                .filter(e -> e.getType() == EntryType.ROADMAP)
+                .orElse(null);
+        if (module == null || module.getParentId() == null) {
+            return false;
+        }
+        Long roadmapId = module.getParentId();
+        Entry roadmap = repository.findById(roadmapId).orElse(null);
+        if (roadmap == null) {
+            return false;
+        }
+        List<Entry> oldSteps = repository.findByParentIdOrderByOrderIndexAsc(moduleId);
+        boolean untouchedSkeleton = !oldSteps.isEmpty() && oldSteps.stream().allMatch(s ->
+                s.getStatus() == EntryStatus.CAPTURED
+                        && Boolean.TRUE.equals(s.getContent() != null ? s.getContent().get("skeletonOnly") : null));
+        if (!untouchedSkeleton) {
+            return false;
+        }
+
+        GenerateRoadmapResponse full = attemptFullExpand(roadmapId, roadmap, module);
+        if (full == null) {
+            return false;
+        }
+
+        repository.deleteAll(oldSteps);
+        List<CreateRoadmapRequest.DraftStepInput> draftInputs = full.steps().stream()
+                .map(s -> new CreateRoadmapRequest.DraftStepInput(s.text(), s.kind(), s.weight(),
+                        s.dependsOn(), s.dependsOnEntryId(), s.rationale(),
+                        s.resources().stream().map(r -> new CreateRoadmapRequest.ResourceInput(
+                                null, r.title(), r.url(), r.format(), r.sourceType(),
+                                r.estimatedTime(), r.aiGroundingSource())).toList(),
+                        false))
+                .toList();
+        createDraftSteps(moduleId, draftInputs);
+        repository.touchUpdatedAt(roadmapId, Instant.now());
+        return true;
     }
 
     /** The roadmap's stored goal-scope read (Phase 18), formatted for a prompt; null if none. */
@@ -656,6 +731,9 @@ public class RoadmapService {
             List<Map<String, Object>> resources = buildResources(draft.resources());
             if (!resources.isEmpty()) {
                 stepContent.put("resources", resources);
+            }
+            if (draft.skeletonOnly()) {
+                stepContent.put("skeletonOnly", true);
             }
             step.setContent(stepContent);
             created.add(repository.save(step));
