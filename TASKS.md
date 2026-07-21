@@ -538,6 +538,514 @@ generation and sessions.
 
 ---
 
+## Phase 16 — Fix: Focus screen crash
+
+Goal: Focus is currently broken — visiting it renders a raw JS error to the user
+(`Cannot read properties of undefined (reading 'find')`) instead of content. This is a bug, not a
+design opinion, and it should be fixed before any of the polish work in Phases 20–22 below. Almost
+certainly a Phase 13 regression: `FocusScreen` (or whatever it calls) still expects the pre-Phase-13
+flat `roadmap.steps` array and calls `.find(...)` on it, but roadmaps are now a tree (`children`,
+per `RoadmapNodeResponse`/`RoadmapResponse`).
+
+- [ ] Find the exact break.
+  - Open `frontend/src/components/FocusScreen.jsx` and grep it for `.steps`, `.find(`, and any
+    reference to `orderIndex`/`currentOrderIndex` — the pre-Phase-13 `RoadmapResponse` shape had a
+    flat `steps: EntryResponse[]` array and a `progress.currentOrderIndex`; the current shape has
+    `children: RoadmapNodeResponse[]` (a tree) and `progress.currentStepId`/`currentStepText`
+    instead (see `backend/.../roadmap/dto/RoadmapResponse.java`).
+  - Check whatever hook/API call `FocusScreen` uses to fetch roadmap summaries (likely
+    `listRoadmaps()` in `api.js`, which already returns the new tree shape) — the crash is in how
+    the component *consumes* that response, not in the API layer.
+- [ ] Rewrite the broken lookup(s) to work over the tree.
+  - If `FocusScreen` needs "the current step" for a roadmap, use `roadmap.progress.currentStepId` /
+    `currentStepText` directly (already computed server-side) instead of re-deriving it from a flat
+    array.
+  - If it needs to find a specific step by id anywhere in the tree, write (or reuse) a recursive
+    `findNode`-style helper the same way `RoadmapDetail.jsx` already has one — do not re-flatten
+    the tree with a shallow `.find()` that only checks direct children.
+- [ ] Verify against real data, not just a flat roadmap.
+  - Test Focus against a roadmap with at least one expanded module and one step that has substeps
+    (there's already a "DevOps Cloud Engineering" roadmap with modules in the dev DB to test
+    against) — both "Worth revisiting" and "Where you are" sections must render without error.
+  - Also test against a fully flat, non-nested roadmap (e.g. "Learn Rust properly") to make sure
+    the fix doesn't regress the simple case.
+- [ ] Sweep for the same latent bug elsewhere.
+  - `grep -rn "\.steps\b" frontend/src` and manually check every hit against whether it assumes
+    the pre-Phase-13 flat shape. `ReviewService.java`'s `RoadmapWithSteps`/`listRoadmapsWithSteps()`
+    (backend) has the same latent issue noted in passing during Phase 13 work — `stepsOf()` returns
+    only *direct* children, so for a nested roadmap those "steps" are actually module entries with
+    a `title` field, not `text` — check whether `ReviewService.formatRoadmaps`/`formatStalledSteps`
+    silently produce garbled text for nested roadmaps and fix if so.
+- [ ] Acceptance: navigating to Focus with the current real dev data shows no error, either
+  "Nothing right now. Clear." / an actual worth-revisiting item, and either "..." never gets stuck
+  or a real "where you are" summary, for both a flat and a nested roadmap.
+- [ ] **Push + tag `phase-16-complete`.**
+
+---
+
+## Phase 17 — Smarter goal intake & clarifying questions
+
+Goal: replace the fixed "at most two questions, usually time + experience" default with an
+adaptive, genuinely goal-specific clarifying flow — this was the founder's direct complaint
+("the question that is asked when generating a roadmap looks not enough"). Full analysis in
+`ROADMAP_INTELLIGENCE_NOTES.md` Section 1.
+
+- [ ] Rewrite `PromptTemplates.CLARIFY_SYSTEM`.
+  - Remove the sentence "usually how much time they have per week and what they already know /
+    have done" entirely — that's the line causing every goal to converge on the same two questions.
+  - Replace with instruction to identify whichever 1–4 dimensions are *most goal-specific* — give
+    the model a couple of contrasting examples in the prompt itself (without hardcoding them as the
+    only options) so it understands the kind of specificity wanted, e.g. "for a language-learning
+    goal that might be about existing languages spoken and an upcoming trip date; for an
+    infrastructure goal it might be about target scale and whether a codebase already exists" —
+    framed as *illustrative*, not as the two defaults to fall back on.
+  - Keep the existing hard rules (self-talk voice, no praise/emoji, strict JSON) unchanged.
+- [ ] Make question count adaptive.
+  - Change `{"questions": [...]}` cap from a hard "at most two" to "0 to 4, as few as truly needed."
+  - `RoadmapAiService.clarifyingQuestions` currently does
+    `questions.subList(0, Math.min(2, questions.size()))` — remove the `Math.min(2, ...)` clamp (or
+    raise it to 4) so the model's own judgment on count isn't being overridden by a hardcoded
+    subList cut.
+  - Handle the zero-questions case end to end: `GenerateRoadmapResponse.needsClarification` and
+    `GenerateRoadmapScreen`'s `questions` phase must both handle an empty `questions` list by
+    skipping straight to drafting (with the model expected to state its assumptions in the outline
+    step instead) rather than rendering an empty question form.
+- [ ] Add a second clarification round.
+  - Extend `GenerateRoadmapRequest` with a way to distinguish "first round answered, want a
+    follow-up" from "ready to draft" — e.g. add a `finalRound: boolean` flag the frontend sets once
+    it's done, or track a round counter. Keep the wire format additive so nothing existing breaks.
+  - Add a new prompt (e.g. `PromptTemplates.FOLLOWUP_CLARIFY_SYSTEM`) that takes the goal + first
+    round's Q&A and returns 0–2 follow-up questions *only if genuinely warranted* — explicitly
+    instruct the model that returning an empty list is the common/expected case, so this doesn't
+    become a de facto third hoop for every goal.
+  - In `GenerateRoadmapScreen`, after the first `questions` phase is answered, call the new
+    follow-up check; if it returns questions, show one more short round; if empty, go straight to
+    drafting. Keep total added friction to at most one extra screen.
+- [ ] Add the "here's what I understood" paraphrase for ambiguous goals.
+  - Decide the ambiguity signal: either have the clarify call itself flag `ambiguous: true` plus a
+    `interpretation` string when it detects a goal with genuinely different possible meanings, or
+    do this as part of the outline call (simpler — outline generation already runs once
+    clarifications are answered, so it could return `{interpretation, title, modules, ...}` and the
+    frontend shows the interpretation line above the outline for a quick confirm/edit before the
+    founder starts editing modules).
+  - Prefer folding this into the existing outline response rather than adding a whole extra network
+    round-trip, to keep the flow at the same number of screens.
+- [ ] Broaden the dimensions the model is allowed to ask about.
+  - Update `CLARIFY_SYSTEM`'s guidance/examples to explicitly include: deadline/target date, budget
+    for paid resources, tools/hardware access, motivation/context (career vs. hobby vs.
+    exam-driven), solo vs. must-fit-a-team's-stack — as illustrative dimensions the model can reach
+    for, not a new fixed list to replace the old fixed list with.
+- [ ] Make profile-driven skipping a hard rule.
+  - In `CLARIFY_SYSTEM`, change "use it to make the questions sharper" (soft) to an explicit
+    instruction: if the profile already answers a dimension, do not ask about it — instead state
+    the assumption as a statement the founder can correct (this can show up as one of the returned
+    "questions" phrased as a statement + implicit yes/no, e.g. "Assuming ~5–8 hrs/week and solid
+    backend experience — different for this one?").
+  - This only works if `profileContext` is actually passed into the clarify call — confirm
+    `RoadmapService.generate()` already does this (it does, via `ProfileContext.forPrompt`) and
+    that the prompt change actually gets acted on (test manually with a founder profile that has
+    strong signal, e.g. the current dev profile's self-description/skills).
+- [ ] Add a "skip questions, just assume" affordance.
+  - In `GenerateRoadmapScreen`'s `questions` phase, add a secondary action (e.g. `Button
+    variant="ghost"`) like "Skip — just use your best guess" that calls `propose()` (or the
+    outline-drafting call) with empty/unanswered clarifications, relying on the model to state its
+    assumptions plainly in the resulting outline (ties into the paraphrase/assumption-stating work
+    above).
+- [ ] Acceptance: test with at least three different goal shapes (a narrow specific one with a rich
+  profile, a broad vague one, and one that's genuinely ambiguous like "learn Rust") and confirm the
+  clarifying questions are visibly different/sharper per goal, not the same two questions every
+  time.
+- [ ] **Push + tag `phase-17-complete`. Stop. Let the founder use this for real before continuing.**
+
+---
+
+## Phase 18 — Complexity-aware structure (assessment step, flat/nested gating, cross-module deps)
+
+Goal: give generation one explicit, shared, structured understanding of "how big/complex is this
+goal, for someone at what level" instead of every prompt (outline, expand-module) independently
+re-guessing scope from raw text — the single highest-leverage structural change from
+`ROADMAP_INTELLIGENCE_NOTES.md` Section 2. Everything downstream (module count, flat-vs-nested,
+step sizing) should read from this one source of truth instead of guessing separately.
+
+- [ ] Add the explicit assessment pass.
+  - New method `RoadmapAiService.assessGoal(String goal, String clarifications, String
+    profileContext, String groundingContext)` returning a new record, e.g.
+    `GoalAssessment(int complexity, Integer estimatedTotalHours, String domain, String priorLevel,
+    String shape)` where `shape` is strictly `"flat"` or `"nested"`.
+  - New prompt pair in `PromptTemplates` (`ASSESS_SYSTEM` / `assessUser`) — keep the self-talk-voice
+    rules irrelevant here since this output is never shown to the founder directly (it's an
+    internal signal), so the system prompt can be more matter-of-fact/analytical than the
+    user-facing ones; still strict JSON only.
+  - Call this once in `RoadmapService.generate()` right after clarifications are answered, before
+    the outline call. Thread the resulting `GoalAssessment` into both `outlineUser`/`OUTLINE_SYSTEM`
+    and (later, when a module is expanded) `expandModuleUser`/`EXPAND_MODULE_SYSTEM` as an extra
+    plain-text block (e.g. "Assessed shape: nested, complexity 4/5, ~60 hours, prior level:
+    intermediate backend, no Rust experience") so every downstream prompt reads the same numbers
+    instead of re-deriving them.
+  - Decide what happens if the assessment call fails (same graceful-degradation pattern as
+    everywhere else in this codebase: fall back to today's un-assessed behavior — treat as
+    `shape: "nested"` with mid-range complexity — rather than blocking generation entirely).
+- [ ] Gate outline-then-expand behind `shape`.
+  - When `shape == "flat"`, skip the module-outline step and go straight to a single flat step
+    list. This effectively revives something like the pre-Phase-13 `proposeRoadmap`/`PROPOSE_SYSTEM`
+    path that was removed in Phase 13 (check git history — `git log -p --all -- '*/PromptTemplates.java'`
+    around the Phase 13 commit for the old `PROPOSE_SYSTEM`/`proposeUser` text to reuse as a
+    starting point) but now scoped by the assessment instead of being the only path.
+  - `RoadmapService.generate()` needs to branch on `assessment.shape()`: nested → today's
+    `moduleOutline` call; flat → a flat step-list call, returned via a variant of
+    `GenerateRoadmapResponse` (could reuse the existing `proposal` status/shape for this, since it
+    already matches "title + steps" exactly).
+  - `GenerateRoadmapScreen` needs a corresponding branch: if the response status is `proposal`
+    (flat), skip straight to the existing `StepProposalEditor` reused for module-expand (Phase 13
+    already built this component to be shared — reuse it here for the top-level flat case too)
+    instead of the outline-editing UI; accepting creates the roadmap with `draftSteps` directly
+    (the existing `createRoadmap({title, draftSteps})` path already supports this).
+- [ ] Derive module/step count bands from the assessment instead of hardcoding them.
+  - Replace `OUTLINE_SYSTEM`'s fixed "Between 2 and 8 modules" and `EXPAND_MODULE_SYSTEM`'s fixed
+    "Between 3 and 8 steps" with instructions that reference the passed-in complexity/hours, e.g.
+    "size the number of modules to the assessed complexity and estimated hours — don't apply a
+    fixed count regardless of scale."
+  - Keep *some* outer safety rail (e.g. never propose more than ~10 modules or ~10 steps in one
+    call) purely as a parsing/UX safety net, not as the primary sizing mechanism.
+- [ ] Add cross-module `dependsOn`.
+  - Current limitation: `RoadmapAiService.parseSteps` validates `dependsOn` as `dep < i` within the
+    *current batch only* — a module expansion has no visibility into other modules' step ids at
+    all right now.
+  - Change `RoadmapService.expandModule` to pass a compact list of prior (already-expanded)
+    modules' step texts + real entry ids into `expandModuleUser` (e.g. "Earlier steps you can
+    depend on: [id=201] Set up a Go dev environment; [id=202] ...") and change the expand-module
+    JSON contract so `dependsOn` can either be a same-batch index (as today) *or* one of these real
+    prior ids — needs a small tagged-union-style field or two separate optional fields
+    (`dependsOnIndex` for same-batch, `dependsOnEntryId` for cross-module) to keep parsing
+    unambiguous.
+  - `RoadmapService.addStepsToModule`/`createDraftSteps` needs updating to resolve a real
+    cross-module id directly (no index translation needed, since it's already a real entry id)
+    alongside the existing same-batch index resolution.
+- [ ] Add total-estimated-time rollup.
+  - Add a method (backend, since resource data + tree traversal both live there) that walks the
+    whole tree's `resources[].estimatedTime` strings, parses the common formats already produced by
+    generation (`~30 min`, `~1h`, `~2h`, "a few hours" — decide whether to parse the free-text ones
+    or only sum the ones matching a strict pattern, dropping the rest silently), and returns a
+    total. Surface it in `RoadmapResponse` (e.g. `progress.estimatedTotalMinutes`) and render it in
+    `RoadmapDetail` next to the existing progress bar.
+- [ ] Add AI-assisted outline maintenance.
+  - "Regenerate this module": new endpoint (e.g. `POST /roadmaps/{id}/modules/{moduleId}/regenerate-scope`)
+    that re-runs a scoped version of the outline call for just that module's title+scope, given the
+    rest of the roadmap's modules as context (so it doesn't duplicate/contradict siblings) — propose
+    → approve → apply, same pattern as everything else.
+  - "Insert a module here": similar shape, generates one new module (title + scope) at a chosen
+    position, shown for edit/accept before it's actually inserted.
+  - "Replan remaining unexpanded modules given progress so far": takes the roadmap's current state
+    (what's done, what's been reformulated/skipped a lot) and offers to regenerate every module that
+    hasn't been expanded yet, leaving completed/in-progress modules untouched. This is the most
+    involved of the three — fine to sequence last within this phase, or explicitly punt to a later
+    phase if time-boxing this one is needed, but don't drop it silently.
+- [ ] Note: model routing by task complexity (cheap/fast model for a trivial goal, a stronger one
+  for an ambiguous/large goal) is explicitly **not** a task here — it would mean going beyond the
+  Gemini/Groq provider constraint in CLAUDE.md Section 3. Worth revisiting only if that constraint
+  is ever deliberately reopened.
+- [ ] Acceptance: generate a roadmap for a genuinely small goal (e.g. "read one book chapter this
+  week") and confirm it takes the flat path with no outline/expand round-trip; generate one for a
+  large goal (e.g. "become a distributed systems engineer") and confirm module count/step sizing
+  visibly scales up versus a mid-size goal: this is the direct test of "flexible based on content,
+  complexity, background" from the original ask.
+- [ ] **Push + tag `phase-18-complete`. Stop. Let the founder use this for real before continuing.**
+
+---
+
+## Phase 19 — Substep richness, resource feedback loop, and generation self-checks
+
+Goal: fix the concrete inconsistency where "break this step down" produces a visibly poorer result
+than every other generation path, close the resource-usage feedback loop CLAUDE.md Section 2
+already promises but doesn't yet implement, and add cheap self-checks on generated plans. Full
+analysis in `ROADMAP_INTELLIGENCE_NOTES.md` Sections 5, 6, and 7.
+
+- [ ] Fix `BREAKDOWN_SYSTEM`/`breakdownUser` to receive profile + grounding context.
+  - Change `breakdownUser(String roadmapTitle, String stepText)` to
+    `breakdownUser(String roadmapTitle, String stepText, String profileContext, String
+    groundingContext)`, appending both the same way `outlineUser`/`expandModuleUser` already do
+    (`appendProfile(sb, profileContext)` + a "Real search results..." block).
+  - `RoadmapAiService.breakDownStep` needs the extra params threaded through; `ReformulateService`
+    (the only caller) needs to fetch `profileContext` (same `profileService.confirmedProfile()` +
+    `ProfileContext.forPrompt` pattern used in `RoadmapService`) and ground the stalled step's text
+    via `SearchGroundingService.ground(stepText)` before calling it.
+- [ ] Change `breakDownStep`'s return shape to match module-expansion steps.
+  - Update `BREAKDOWN_SYSTEM`'s JSON contract from `{"steps": ["...", "..."]}` to the same shape
+    `EXPAND_MODULE_SYSTEM` uses: `{"steps": [{"text", "kind", "weight", "dependsOn", "rationale"}]}`
+    (resources can be added in the same call via the existing `suggestResources` pipeline, reusing
+    the exclude-set dedup already built in Phase 13, or as a small follow-up call — prefer folding
+    it into one call if the token cost is acceptable).
+  - `RoadmapAiService.breakDownStep` return type changes from `List<String>` to `List<DraftStep>`
+    (the existing record already used by `proposeRoadmap`/`expandModule`).
+  - `RoadmapService.splitStep(Long roadmapId, Long stepId, List<String> replacements)` needs its
+    signature updated to accept the richer shape (`List<DraftStepInput>` or equivalent) and persist
+    kind/weight/rationale/resources on each created substep, not just `text`.
+  - `ReformulateService`/`ReformulateController`/the frontend `ReformulatePanel`/`StepProposalEditor`
+    usage for the break-down path all need updating to carry the richer per-step fields through the
+    propose → edit → apply round trip, reusing `StepProposalEditor` (already shared/generic) rather
+    than hand-rolling a second editor.
+- [ ] Decide and enforce a substep nesting depth limit.
+  - Pick a hard cap (2 or 3 levels total, including the top-level module) and enforce it
+    server-side in `RoadmapService.splitStep` (reject/error if the target step's depth is already
+    at the cap) and reflect the cap in the UI (e.g. "This is too much" / break-down action hidden
+    or disabled once a step is already at max depth, with a plain-voice explanation why).
+  - Manually test the Tree view's indentation and collapse/expand behavior at the chosen max depth
+    with real multi-line step text, and fix any visual breakage found (this may feed into Phase 21
+    if it turns out to be primarily a CSS issue rather than a logic one).
+- [ ] Add a "promote back up" path.
+  - Flatten: new `RoadmapService` method that takes a container step (one with substeps) and either
+    (a) requires it have no meaningful substep progress and just deletes the substeps, reverting the
+    parent to a plain leaf, or (b) is only offered as an option and explicitly warns/confirms since
+    it's destructive to sub-progress — decide which and document the choice.
+  - Graduate: new method that takes one substep and reparents it to become a sibling of its current
+    parent (under the same module/root), preserving its own substeps if any, adjusting
+    `order_index` on both the old and new sibling lists.
+  - Wire both into a `Menu` item on the relevant step/module rows in `RoadmapDetail`.
+- [ ] Wire up (or remove) `formatPreferences.prefer`.
+  - Decide first: is this worth building, or worth deleting? If building: add "prefer" chips to
+    `ProfileScreen` (mirroring the existing "avoid" chips, probably in the same `Learning formats`
+    section) so there's actually a way to set it, then pass `formatPreferences.prefer` into
+    `resourceSuggestUser` alongside the existing avoid list, with prompt wording like "prefer these
+    formats when a real result fits, but never invent one that doesn't exist" (keeping the
+    no-hallucination rule intact). If removing: delete the dead `prefer` handling from
+    `ProfileService.sanitizeFormatPreferences`, `LearnerProfile`, `ProfileResponse`,
+    `SaveProfileRequest` cleanly (don't leave a half-dead field).
+- [ ] Close the resource-usage and pace-calibration feedback loop.
+  - This is the biggest lift in this phase — scope it as: (a) a read path that aggregates a
+    founder's history (which resource formats got used vs. skipped from `session_history` across
+    all their roadmaps; average actual session duration vs. `estimatedTime`; `skip_count` and
+    `reformulateCount` distribution) into a compact summary, similar in spirit to
+    `ProfileContext.forPrompt` but built from behavior instead of stated profile; and (b) threading
+    that summary into `resourceSuggestUser` (bias toward historically-used formats) and into the
+    assessment/outline/expand prompts from Phase 18 (bias step sizing/pace).
+  - This overlaps with the existing Phase 9 `InferenceService`/"Analyze my sessions" mechanism —
+    check whether to extend that service to compute this summary (reusing its data-gathering) or
+    keep them separate; whichever avoids duplicating the same aggregation logic twice.
+  - Keep this founder-controlled, not silent: per CLAUDE.md's "AI interpretations are guesses, not
+    facts" principle, feeding *behavioral* inference into generation should probably route through
+    the same confirm-before-trust pattern Phase 9's inferred-preferences already uses, rather than
+    silently altering generation the moment enough history exists.
+- [ ] Add multi-query grounding per module.
+  - In `RoadmapService.expandModule`, replace the single `searchGrounding.ground(groundingQuery)`
+    call with 2–3 calls using varied query framings (e.g. `"{module} official documentation"`,
+    `"{module} project ideas"`, `"{module} common mistakes beginners make"`), merge the results
+    (dedup by URL), and pass the merged set into both `roadmapAi.expandModule` and
+    `roadmapAi.suggestResources`. The existing `SearchGroundingService` TTL cache already makes
+    repeated/similar queries cheap, so this doesn't need new caching infra — just more calls.
+- [ ] Add a self-consistency/self-critique pass.
+  - After a module outline or module expansion is generated, add one more cheap AI call that takes
+    the draft + the original scope/goal and asks a strict "does this fully and only cover what it
+    claims — list anything missing or extraneous" check, returning either "ok" or a short list of
+    issues. Decide what happens on a flagged issue: auto-retry once with the critique folded back
+    into the prompt, or surface the critique to the founder as an optional "the system noticed..."
+    line they can ignore. Prefer the quieter auto-retry-once approach to avoid adding a new
+    always-visible UI element for something that should usually be invisible.
+- [ ] Add verification-triggered prerequisite suggestions.
+  - When a Phase 8 verification (`VerificationService`) comes back with a named gap (`gap` field
+    already exists on the verify result per the existing `verify-gap` UI class), check whether that
+    gap plausibly maps to a missing prerequisite and, if so, surface a suggested `add_prerequisite`
+    reformulation the founder can accept/dismiss (reusing the existing `ReformulatePanel`/propose-
+    apply flow) rather than only ever being founder-triggered.
+- [ ] Acceptance: break down a step and confirm the resulting substeps carry kind/weight/resources
+  (not just plain text); confirm a founder profile's known skills aren't re-taught in a break-down;
+  confirm resource suggestions for two different modules never repeat a URL (already true) and now
+  also don't repeat across a break-down's substeps either.
+- [ ] **Push + tag `phase-19-complete`. Stop. Let the founder use this for real before continuing.**
+
+---
+
+## Phase 20 — Design system: color roles, iconography, typography, empty states
+
+Goal: fix the cross-cutting design-system issues that affect every screen, before touching
+individual screens in Phases 21–22. Full analysis in `UI_UX_NOTES.md` Section 1.
+
+- [ ] Add a distinct "link" color role, separate from `--brass`.
+  - Add a new token to `frontend/src/index.css` (e.g. `--link: <some value distinct from brass>` —
+    pick something that still reads as "on-brand" against the dark palette but is visually
+    distinguishable from the brass accent at a glance; a desaturated blue or teal is the
+    conventional "this is a hyperlink" signal and would contrast clearly against brass without
+    clashing with the existing danger/brass hues).
+  - Apply it everywhere a resource/external link currently uses brass: `StepDeepView.css`
+    (`.deep-resource-title`), `LearningPathView`'s resource links, `ExpandModuleModal`/
+    `StepProposalEditor`'s `.gen-resource-title`, `ReformulatePanel`'s resource link.
+  - Leave brass exactly as-is for primary buttons, active nav, selected chips, progress fill — only
+    the external-link usages change.
+- [ ] Add an external-link affordance.
+  - Pick one consistent treatment (a small ↗-style glyph after the link text, or a distinct
+    underline style shown by default rather than only on hover) and apply it via a single shared
+    approach (e.g. a small `ExternalLink` wrapper component in `components/ui/` that renders
+    `<a target="_blank" rel="noreferrer">` plus the chosen affordance, so every resource link in
+    the app goes through one place) rather than styling each usage site separately.
+- [ ] Add a small icon set for recurring actions.
+  - Scope deliberately small: kebab (already `⋯`, keep), delete, archive, drag-handle (already `⠿`,
+    keep). Decide on an approach — inline SVG components (no external icon library dependency,
+    consistent with "don't introduce new frameworks without flagging it" from CLAUDE.md Section 3)
+    kept in `components/ui/icons/` or similar, sized via the existing spacing scale.
+  - Apply to `Menu` items (Archive/Delete/Undo/etc. currently text-only) and anywhere a delete/
+    archive action appears as a bare text button.
+- [ ] Add color/weight-coding for status or type in long lists.
+  - Use the Events screen's severity-left-border pattern (`AdminEventsScreen.css`) as the literal
+    template — check its exact implementation and reuse the same mechanism (a colored left border
+    keyed off a status/severity value) for: the Everything view's type tag (idea vs. roadmap vs.
+    task) and/or status, and optionally the roadmap tree's step state marker colors (currently only
+    brass-for-current, everything else faint).
+- [ ] Handle long text consistently.
+  - Decide on one approach (CSS line-clamp with a "show more" toggle, vs. truncate-to-one-line with
+    full text always available on open) and apply it in both `Roadmap.css` (tree/Path rows) and
+    anywhere else long AI-generated text renders without truncation today. Fix the existing
+    mid-word ellipsis cutoff in `AllEntriesScreen`/`AllEntries.css` as part of the same pass (word-
+    boundary-aware truncation, e.g. via CSS `text-overflow: ellipsis` plus a max-width that's
+    already word-wrapping-safe, or truncate in JS at a word boundary).
+- [ ] Revisit empty/low-content states.
+  - Capture, the Draft-with-AI goal prompt, and an empty/one-item Roadmaps list all currently center
+    a title + input in a mostly-black viewport. Keep Capture's essential simplicity (must stay fast,
+    must stay a blank canvas per CLAUDE.md's low-friction principle) but consider: a narrower
+    content column instead of full-viewport centering, a subtle background treatment (e.g. a very
+    faint radial gradient or texture using existing tokens, nothing decorative/loud), or simply
+    anchoring content higher on the page (e.g. starting ~120px from the top) rather than dead-center
+    of the full viewport height, which is what makes it read as "vacant" at real screen sizes.
+- [ ] Adopt the shared type scale everywhere.
+  - Grep every component CSS file for hardcoded `rem`/`px` font-size values on headings/section
+    titles and replace with the matching `--text-*` token from `index.css` where one already fits;
+    only introduce a new scale step if a real gap is found (unlikely — the scale already spans
+    `xs` through `2xl`).
+- [ ] Lower priority: add `prefers-reduced-motion` handling.
+  - Wrap existing `transition`/`animation` CSS rules (hover states, modal open/close, collapse
+    toggles) in a `@media (prefers-reduced-motion: no-preference)` guard, or set durations to near-
+    zero under `@media (prefers-reduced-motion: reduce)`.
+- [ ] Acceptance: resource links are visibly a different color from primary buttons on at least one
+  real screen (deep view or Path view); at least one recurring action (Archive or Delete) renders
+  with an icon, not just text; the Everything view's ellipsis truncation no longer cuts mid-word.
+- [ ] **Push + tag `phase-20-complete`. Stop. Let the founder use this for real before continuing.**
+
+---
+
+## Phase 21 — Screen polish: the core loop (Capture, Roadmaps, Draft-with-AI, Tree/Path/deep view)
+
+Goal: apply the per-screen fixes from `UI_UX_NOTES.md` to the screens in the actual capture →
+roadmap → learn loop, building on the Phase 20 design-system foundations.
+
+- [ ] Capture screen (`CaptureScreen.jsx`/`.css`).
+  - Give the textarea/input a subtle visible border or background tint by default (not just on
+    focus), so the input area reads as a field rather than placeholder text sitting on bare
+    background.
+  - Increase the visual distinction between the mic button and the Capture button once there's
+    text entered — e.g. the Capture button could gain the primary-brass treatment only once the
+    field is non-empty (mirroring how disabled/enabled states already differ, just make the
+    difference more visible, e.g. a filled background vs. outline-only).
+  - Add a small first-time (or always-present but minimal) label near the big/small toggle
+    explaining significance, without turning it into a permanent wall of text — e.g. a `title`
+    tooltip attribute at minimum, or a one-line faint caption above the pills the first few times
+    the screen is seen.
+- [ ] Roadmaps list (`RoadmapsScreen.jsx`/`Roadmap.css`).
+  - Adjust the empty-state message and layout so 0, 1, and many roadmaps all look intentional — e.g.
+    for 0, the existing empty-state text is fine; for exactly 1, consider a bit of visual framing
+    (a subtle divider or slightly narrower max-width) so a single card doesn't read as a stray leftover
+    in a mostly-empty page.
+  - Give the "Archived (N)" link more visual weight — currently `--faint` text with no border; bump
+    it toward `--muted` or add a light border/pill treatment so it reads as a real navigation
+    target, not a footnote.
+- [ ] Draft-with-AI flow (`GenerateRoadmapScreen.jsx`/`.css`, `NewRoadmapScreen.css`).
+  - Differentiate the goal-entry screen from Capture visually — e.g. a slightly larger heading size
+    (using the type scale from Phase 20), or a bordered card around the textarea+buttons instead of
+    them floating directly on the background, signaling "this is a bigger, slower action."
+  - Give each module in the outline-editing screen its own bordered block/card (reusing the shared
+    `Card` component from `components/ui/`) instead of plain stacked `step-input`s, especially
+    valuable once there are 6+ modules to scroll through and edit.
+  - Elevate "Grounded in:" sources — e.g. render as a small bordered card/callout instead of plain
+    list text, so it reads as a trust signal worth noticing rather than something to skim past.
+- [ ] Tree view (`RoadmapDetail.jsx`/`Roadmap.css`).
+  - Give `.node-group` (module headers) a background tint (e.g. `var(--surface-2)`) or a left accent
+    border distinct from a plain step row, plus indent its child steps slightly more than the
+    current flush-left treatment, so the module/step hierarchy is visible without needing to read
+    the text.
+  - Anchor the kebab `Menu` to a fixed position (e.g. `align-self: flex-start` plus a fixed top
+    offset) so it doesn't visually drift relative to wrapped multi-line step text.
+  - Add a small margin between wrapped step text and its badge row (`.step-tags`) — currently badges
+    sit directly under wrapped text with minimal separation.
+  - Give `.step-needs` (the "needs: ..." prerequisite line) more visual weight — e.g. `var(--muted)`
+    instead of `var(--faint)`, or a small left accent mark — since it represents a real dependency,
+    not just an ordering hint.
+- [ ] Path view (`LearningPathView.jsx`/`Roadmap.css`).
+  - Add a small, faint module-name label per step (or once per contiguous run of steps from the same
+    module) — the tree/leaf data already carries enough to know which module a leaf came from (walk
+    up from the leaf via the roadmap's children structure, or have the backend include a
+    `moduleTitle` field per leaf in `RoadmapResponse.Progress`/a new field on each Path-relevant
+    node to avoid re-deriving it client-side).
+- [ ] Deep view + reformulate modal (`StepDeepView.jsx`/`.css`, `ReformulatePanel.jsx`/`.css`).
+  - Fix modal-on-modal stacking: either have `ReformulatePanel` replace the deep view's content in
+    place (same modal, swapped body) rather than opening as a second overlay, or keep two modals but
+    add a visible "back to step" affordance instead of relying on the founder guessing that × on the
+    inner modal returns to the outer one.
+  - Give "Select any text below for help" a proper affordance — e.g. a small icon prefix, or style
+    it as a lightly bordered callout/pill rather than plain floating caption text.
+  - Visually differentiate the three reformulate options — e.g. give "Break it into smaller steps"
+    and "Something to learn first" (both structural/tree-changing) one visual treatment, and "Find
+    gentler resources" (a content-only swap) a distinctly lighter one, so the weight of the action
+    is legible before clicking.
+- [ ] Resurfacing screen (`ResurfacingScreen.jsx`/`.css`).
+  - Give the restructure-review sub-screen (shown after picking "change the plan") its own visual
+    treatment — e.g. a bordered card around the proposed change, distinct from the plain
+    `step-input` styling it currently reuses — so it reads as "review this AI proposal" rather than
+    "fill out this form."
+- [ ] Acceptance: screenshot-compare the Tree view before/after — modules should be identifiable at
+  a glance without reading text; the reformulate modal no longer stacks two full-darkness overlays;
+  Capture's input area is visibly a field, not placeholder text on black.
+- [ ] **Push + tag `phase-21-complete`. Stop. Let the founder use this for real before continuing.**
+
+---
+
+## Phase 22 — Screen polish: organize & reflect (Everything, idea detail, Profile, Review, Events)
+
+Goal: apply the remaining per-screen fixes from `UI_UX_NOTES.md`, focused on the screens for
+organizing captures and reviewing the profile/history.
+
+- [ ] Everything view (`AllEntriesScreen.jsx`/`AllEntries.css`).
+  - Add type-coding within a group — e.g. a small colored dot or left border keyed by `idea` /
+    `roadmap` / `task`, reusing the Phase 20 color-coding mechanism, so a mixed group doesn't render
+    as one undifferentiated block of gray rows.
+  - Add a visual container around an open group's contents — e.g. a subtle left border or slight
+    background tint on the `<ul className="all-items">` block, so the boundary between one group's
+    rows and the next group's caret is clear even in a long "Captured" group.
+  - Give theme-cluster proposal cards (`.cluster-proposal`) a distinct visual treatment — e.g. a
+    brass-tinted left border or badge marking "AI suggestion" — so a proposed cluster reads as a
+    discovery to approve, not a data-entry form, consistent with the propose→approve pattern.
+- [ ] Idea detail modal (`IdeaDetailModal.jsx`/`.css`).
+  - Replace the modal's generic "Idea" title — either drop the title entirely (the textarea already
+    shows the text) or replace it with something small and functional (e.g. a status glyph, or just
+    remove the `title` prop passed to `Modal`).
+  - Add a small label above the Status chip row and another above the Significance chip row (e.g.
+    "Status" / "Significance", styled like `ProfileScreen`'s `.pref-group-label`) so the two chip
+    rows read as independent selectors.
+- [ ] Profile screen (`ProfileScreen.jsx`/`.css`).
+  - Fix the skills-list density problem — concretely: render a skill without a set confidence as a
+    compact `Chip` (name only, small ×), and only "promote" it to the full row-with-dropdown
+    treatment once the founder actually picks a confidence for it (e.g. clicking the chip reveals
+    the dropdown inline, or opens a tiny inline editor). This keeps a 39-skill resume import
+    visually compact (a wrapped cloud of chips) while still allowing the detail to be added for
+    skills the founder cares to annotate.
+  - Alternatively/additionally: visually separate resume-derived skills from hand-added ones (e.g.
+    two sub-groups under the Skills section) so the two sources aren't blended into one
+    undifferentiated wall.
+  - Move the "Unsaved changes" / "Saved." feedback so it's visible without scrolling to the very
+    bottom — e.g. a small sticky save bar pinned to the bottom of the viewport once there are
+    unsaved changes, or duplicate a compact indicator near the top of the page next to the title.
+- [ ] Review screen (`PromptTemplates.REVIEW_SYSTEM`, backend only — no frontend change needed).
+  - Tighten the hard rules to explicitly require multiple short sentences (e.g. "2–4 short
+    sentences, not one long run-on — break at natural pauses") rather than leaving sentence count
+    unconstrained, which is currently producing one long comma-spliced sentence.
+- [ ] Events screen (`AdminEventsScreen.jsx`/`.css`).
+  - Replace the `source`/`severity` `<select>` filters with the `Chip` toggle pattern used
+    elsewhere (Status/Theme in Everything, format-avoid and learning-preferences in Profile) for
+    visual consistency — likely a small multi-option toggle-chip row per filter dimension, reusing
+    the existing `Chip` component from `components/ui/`.
+- [ ] Acceptance: Profile's skill section for a 39-skill resume import fits in noticeably less
+  vertical space than today (chip-cloud, not full rows, for anything without a set confidence); the
+  idea detail modal's two chip rows are clearly labeled; Events' filters are chips, not dropdowns.
+- [ ] **Push + tag `phase-22-complete`. Stop. Let the founder use this for real before continuing.**
+
+---
+
 ## Explicitly not planned
 
 Do not add these unless the founder asks directly — they were considered and cut during
