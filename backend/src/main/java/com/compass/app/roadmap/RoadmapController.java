@@ -129,6 +129,28 @@ public class RoadmapController {
         return RoadmapResponse.of(roadmap, service::stepsOf);
     }
 
+    /**
+     * "Promote back up" — flatten (Phase 20): delete a container step's substeps, reverting it
+     * to a plain leaf. Only when none of them have real progress on them.
+     */
+    @DeleteMapping("/{id}/steps/{stepId}/substeps")
+    public RoadmapResponse flattenStep(@PathVariable Long id, @PathVariable Long stepId) {
+        service.flattenStep(id, stepId);
+        Entry roadmap = service.getRoadmap(id);
+        return RoadmapResponse.of(roadmap, service::stepsOf);
+    }
+
+    /**
+     * "Promote back up" — graduate (Phase 20): reparent one substep to become a sibling of its
+     * current parent instead of nested beneath it.
+     */
+    @PutMapping("/{id}/steps/{stepId}/graduate")
+    public RoadmapResponse graduateStep(@PathVariable Long id, @PathVariable Long stepId) {
+        service.graduateStep(id, stepId);
+        Entry roadmap = service.getRoadmap(id);
+        return RoadmapResponse.of(roadmap, service::stepsOf);
+    }
+
     /** Archive or unarchive a whole roadmap. Body is {archived}. */
     @PutMapping("/{id}/archive")
     public RoadmapResponse archive(@PathVariable Long id, @RequestBody ArchiveRoadmapRequest request) {

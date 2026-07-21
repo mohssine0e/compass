@@ -209,6 +209,20 @@ export function deleteRoadmapStep(roadmapId, stepId) {
   })
 }
 
+/** "Promote back up" — flatten (Phase 20): delete a container step's substeps. */
+export function flattenStep(roadmapId, stepId) {
+  return request(`/roadmaps/${roadmapId}/steps/${stepId}/substeps`, {
+    method: 'DELETE',
+  })
+}
+
+/** "Promote back up" — graduate (Phase 20): reparent a substep to be its parent's sibling. */
+export function graduateStep(roadmapId, stepId) {
+  return request(`/roadmaps/${roadmapId}/steps/${stepId}/graduate`, {
+    method: 'PUT',
+  })
+}
+
 /** "What this step covers" bullets for the deep view — generated once, then cached (Phase 7.5). */
 export function getStepCovers(stepId) {
   return request(`/roadmaps/steps/${stepId}/covers`, { method: 'POST' })

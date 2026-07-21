@@ -3,7 +3,9 @@ import {
   applyReplan,
   deleteRoadmap,
   deleteRoadmapStep,
+  flattenStep,
   getRoadmap,
+  graduateStep,
   insertRoadmapStep,
   insertModule,
   patchEntry,
@@ -271,6 +273,37 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     }
   }
 
+  // "Promote back up" (Phase 20): flatten deletes a container step's substeps (only allowed with
+  // no real progress on them, enforced server-side); graduate reparents a substep to be its
+  // parent's sibling instead of nested beneath it. Neither is AI-generated, so no propose/approve
+  // round trip — just a direct action, same as delete.
+  async function flattenStepAction(node) {
+    if (!window.confirm(`Remove the substeps under "${nodeText(node)}" and make it a plain step again?`)) return
+    setBusyStepId(node.id)
+    setError(null)
+    try {
+      await flattenStep(roadmap.id, node.id)
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusyStepId(null)
+    }
+  }
+
+  async function graduateStepAction(node) {
+    setBusyStepId(node.id)
+    setError(null)
+    try {
+      await graduateStep(roadmap.id, node.id)
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusyStepId(null)
+    }
+  }
+
   function startEdit(node) {
     setEditingStepId(node.id)
     setEditText(nodeText(node) || '')
@@ -368,8 +401,9 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     )
   }
 
-  // A leaf step row.
-  function StepRow({ node, depth }) {
+  // A leaf step row. A substep (its parent is itself a step, not a module/root) gets a
+  // "Graduate" action to promote back up as its parent's sibling instead of nested (Phase 20).
+  function StepRow({ node, depth, parentType }) {
     const isCurrent = node.id === currentId
     const isDone = node.status === 'done'
     const isDropped = node.status === 'dropped'
@@ -378,6 +412,9 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     const menuItems = [
       { label: 'Edit', onClick: () => startEdit(node) },
       ...(depth === 0 ? [{ label: 'Insert step above', onClick: () => startInsert(node.orderIndex) }] : []),
+      ...(parentType === 'roadmap_step'
+        ? [{ label: 'Graduate (move up a level)', onClick: () => graduateStepAction(node) }]
+        : []),
       ...(isDone ? [{ label: 'Undo', onClick: () => undoStep(node.id) }] : []),
       { label: 'Delete', onClick: () => deleteStep(node), danger: true },
     ]
@@ -449,10 +486,12 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   }
 
   // A container node — a module (child roadmap) or a step with substeps. Collapsible, with its
-  // own rolled-up progress.
-  function GroupNode({ node, depth }) {
+  // own rolled-up progress. A step-turned-container (from a break-down) gets a "Flatten" action
+  // to promote back up (Phase 20) — modules use a different mechanism (expand), not this.
+  function GroupNode({ node, depth, parentType }) {
     const open = !collapsed.has(node.id)
     const p = node.progress || { done: 0, total: 0 }
+    const isStepContainer = node.type === 'roadmap_step'
     return (
       <>
         <li
@@ -463,8 +502,18 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           <span className="node-group-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
           <span className="node-group-title">{nodeText(node)}</span>
           <Badge>{p.done}/{p.total}</Badge>
+          {isStepContainer && (
+            <span onClick={(e) => e.stopPropagation()}>
+              <Menu
+                label={`Actions for ${nodeText(node)}`}
+                items={[{ label: 'Flatten (remove substeps)', onClick: () => flattenStepAction(node), danger: true }]}
+              />
+            </span>
+          )}
         </li>
-        {open && node.children.map((child) => <NodeRenderer key={child.id} node={child} depth={depth + 1} />)}
+        {open && node.children.map((child) => (
+          <NodeRenderer key={child.id} node={child} depth={depth + 1} parentType={node.type} />
+        ))}
       </>
     )
   }
@@ -504,14 +553,16 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     )
   }
 
-  function NodeRenderer({ node, depth }) {
+  function NodeRenderer({ node, depth, parentType }) {
     if (node.type === 'roadmap') {
       return node.children && node.children.length > 0
-        ? <GroupNode node={node} depth={depth} />
+        ? <GroupNode node={node} depth={depth} parentType={parentType} />
         : <EmptyModuleNode node={node} depth={depth} />
     }
-    if (node.children && node.children.length > 0) return <GroupNode node={node} depth={depth} />
-    return <StepRow node={node} depth={depth} />
+    if (node.children && node.children.length > 0) {
+      return <GroupNode node={node} depth={depth} parentType={parentType} />
+    }
+    return <StepRow node={node} depth={depth} parentType={parentType} />
   }
 
   return (
@@ -638,7 +689,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
             return (
               <Fragment key={node.id}>
                 {renderInsertInput(node.orderIndex)}
-                <NodeRenderer node={node} depth={0} />
+                <NodeRenderer node={node} depth={0} parentType="roadmap" />
               </Fragment>
             )
           })}

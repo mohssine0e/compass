@@ -1095,6 +1095,81 @@ public class RoadmapService {
     }
 
     /**
+     * "Promote back up" — flatten (Phase 20): delete a container step's substeps, reverting it
+     * to a plain leaf. Only allowed when none of the substeps have any real progress on them
+     * (still {@code captured}, no notes, no session history) — decided in favor of a hard
+     * precondition over a destructive-action confirm dialog, consistent with how
+     * {@link #retrySkeletonModule} already guards against clobbering real work: cheap to check,
+     * and never silently loses something the founder actually did.
+     */
+    @Transactional
+    public void flattenStep(Long roadmapId, Long stepId) {
+        Entry container = repository.findById(stepId)
+                .filter(s -> s.getType() == EntryType.ROADMAP_STEP)
+                .orElseThrow(() -> new java.util.NoSuchElementException(
+                        "No step " + stepId + " on roadmap " + roadmapId));
+        List<Entry> substeps = repository.findByParentIdOrderByOrderIndexAsc(stepId);
+        if (substeps.isEmpty()) {
+            throw new IllegalArgumentException("This step has no substeps to flatten.");
+        }
+        if (substeps.stream().anyMatch(RoadmapService::hasRealProgress)) {
+            throw new IllegalStateException(
+                    "These substeps have real progress on them — nothing to flatten safely.");
+        }
+        repository.deleteAll(substeps);
+        repository.touchUpdatedAt(roadmapId, Instant.now());
+    }
+
+    /** Any sign of real engagement — self-marked progress, notes, or a tracked session. */
+    @SuppressWarnings("unchecked")
+    private static boolean hasRealProgress(Entry step) {
+        if (step.getStatus() != EntryStatus.CAPTURED) {
+            return true;
+        }
+        Map<String, Object> content = step.getContent();
+        if (content == null) {
+            return false;
+        }
+        Object notes = content.get("notes");
+        if (notes instanceof String s && !s.isBlank()) {
+            return true;
+        }
+        Object history = content.get("sessionHistory");
+        return history instanceof List<?> l && !l.isEmpty();
+    }
+
+    /**
+     * "Promote back up" — graduate (Phase 20): reparent one substep to become a sibling of its
+     * current parent (under the same module/root) instead of nested beneath it, right after that
+     * parent in order. Preserves its own substeps (if any — the nesting cap means there normally
+     * aren't, but this doesn't assume that). Reindexes both the old and new sibling lists.
+     */
+    @Transactional
+    public void graduateStep(Long roadmapId, Long stepId) {
+        Entry step = repository.findById(stepId)
+                .filter(s -> s.getType() == EntryType.ROADMAP_STEP)
+                .orElseThrow(() -> new java.util.NoSuchElementException(
+                        "No step " + stepId + " on roadmap " + roadmapId));
+        Entry oldParent = step.getParentId() == null ? null
+                : repository.findById(step.getParentId()).orElse(null);
+        if (oldParent == null || oldParent.getType() != EntryType.ROADMAP_STEP) {
+            throw new IllegalArgumentException("This step isn't nested under another step.");
+        }
+        Long newParentId = oldParent.getParentId();
+
+        List<Entry> oldSiblings = repository.findByParentIdOrderByOrderIndexAsc(oldParent.getId());
+        oldSiblings.removeIf(s -> s.getId().equals(stepId));
+        reindexAndSave(oldSiblings);
+
+        List<Entry> newSiblings = repository.findByParentIdOrderByOrderIndexAsc(newParentId);
+        int afterOldParent = indexOfStep(newSiblings, oldParent.getId(), roadmapId) + 1;
+        step.setParentId(newParentId);
+        newSiblings.add(Math.min(afterOldParent, newSiblings.size()), step);
+        reindexAndSave(newSiblings);
+        repository.touchUpdatedAt(roadmapId, Instant.now());
+    }
+
+    /**
      * Turn accepted resource inputs into stored resource maps: keep only ones with a real url
      * and title, give each a stable id (generated if the client didn't send one), and start
      * user_rating null. Drops anything malformed.

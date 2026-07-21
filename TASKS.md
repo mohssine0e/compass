@@ -1131,7 +1131,7 @@ separate systems.
     view at this depth in the browser: indentation steps correctly per level, multi-line substep
     text wraps cleanly with badges/dependency lines intact, and collapse/expand still works
     correctly on the now-container parent step — no visual breakage found.
-- [ ] Add a "promote back up" path.
+- [x] Add a "promote back up" path.
   - Flatten: new `RoadmapService` method that takes a container step (one with substeps) and either
     (a) requires it have no meaningful substep progress and just deletes the substeps, reverting the
     parent to a plain leaf, or (b) is only offered as an option and explicitly warns/confirms since
@@ -1140,6 +1140,26 @@ separate systems.
     parent (under the same module/root), preserving its own substeps if any, adjusting
     `order_index` on both the old and new sibling lists.
   - Wire both into a `Menu` item on the relevant step/module rows in `RoadmapDetail`.
+  - Decided (a) for flatten: a hard precondition (no substep has left `captured` status, notes,
+    or session history) rather than a confirm dialog — consistent with how
+    `retrySkeletonModule` (Phase 19) already guards against clobbering real work, cheap to check,
+    and never silently loses something the founder actually did. A destructive-but-safe action
+    still gets a `window.confirm` in the UI (matching the existing `Delete` pattern), since the
+    precondition guards *data loss*, not *surprise*.
+  - `RoadmapService.graduateStep` reparents onto the step's current parent's own parent, inserted
+    immediately after that parent in order, reindexing both the vacated and destination sibling
+    lists. New `DELETE /roadmaps/{id}/steps/{stepId}/substeps` (flatten) and
+    `PUT /roadmaps/{id}/steps/{stepId}/graduate` endpoints. In `RoadmapDetail`, `parentType` is
+    threaded through the existing tree-render recursion (alongside `depth`, already there for
+    indentation) so `GroupNode` can show "Flatten" only for a step-turned-container (not a
+    module — those use a different mechanism) and `StepRow` can show "Graduate" only when its
+    direct parent is itself a step, not a module or the root.
+  - Live-verified against the real substeps created earlier this session: graduated one substep
+    up to sibling-of-its-parent (correctly repositioned right after that parent, both sibling
+    lists correctly reindexed with no gaps/duplicates — confirmed via the full roadmap tree, not
+    just the one response), then flattened the remaining container back to a plain leaf (children
+    emptied, progress rollup cleared). Confirmed in the browser that the "Flatten"/"Graduate" menu
+    items only appear on the rows they actually apply to, given the tree's real current shape.
 - [ ] Wire up (or remove) `formatPreferences.prefer`.
   - Decide first: is this worth building, or worth deleting? If building: add "prefer" chips to
     `ProfileScreen` (mirroring the existing "avoid" chips, probably in the same `Learning formats`
