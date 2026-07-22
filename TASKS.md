@@ -1449,7 +1449,7 @@ and a career-scale one should read as visibly different kinds of thing, not just
     titles and replace with the matching `--text-*` token from `index.css` where one already fits;
     only introduce a new scale step if a real gap is found (unlikely — the scale already spans
     `xs` through `2xl`).
-- [ ] Lower priority: add `prefers-reduced-motion` handling.
+- [x] Lower priority: add `prefers-reduced-motion` handling.
   - Wrap existing `transition`/`animation` CSS rules (hover states, modal open/close, collapse
     toggles) in a `@media (prefers-reduced-motion: no-preference)` guard, or set durations to near-
     zero under `@media (prefers-reduced-motion: reduce)`.

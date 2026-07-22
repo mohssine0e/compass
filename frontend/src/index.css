@@ -71,3 +71,15 @@ input {
 ::selection {
   background: var(--brass-dim);
 }
+
+/* Reduced motion (Phase 21): one global guard instead of wrapping every transition/animation
+   rule — durations go to near-zero so state changes still land, just without movement. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
