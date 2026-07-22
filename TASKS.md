@@ -1499,7 +1499,7 @@ roadmap → learn loop, building on the Phase 21 design-system foundations.
     valuable once there are 6+ modules to scroll through and edit.
   - Elevate "Grounded in:" sources — e.g. render as a small bordered card/callout instead of plain
     list text, so it reads as a trust signal worth noticing rather than something to skim past.
-- [ ] Tree view (`RoadmapDetail.jsx`/`Roadmap.css`).
+- [x] Tree view (`RoadmapDetail.jsx`/`Roadmap.css`).
   - Give `.node-group` (module headers) a background tint (e.g. `var(--surface-2)`) or a left accent
     border distinct from a plain step row, plus indent its child steps slightly more than the
     current flush-left treatment, so the module/step hierarchy is visible without needing to read

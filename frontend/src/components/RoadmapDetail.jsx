@@ -462,7 +462,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     return (
       <li
         className={`step-item ${state} depth-${Math.min(depth, 3)}`}
-        style={depth ? { marginLeft: depth * 22 } : undefined}
+        style={depth ? { marginLeft: depth * 30 } : undefined}
       >
         <span className="step-marker" aria-hidden="true">
           {isDone ? '✓' : isDropped ? '–' : isCurrent ? '●' : '○'}
@@ -541,7 +541,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
       <>
         <li
           className={`node-group depth-${Math.min(depth, 3)}`}
-          style={depth ? { marginLeft: depth * 22 } : undefined}
+          style={depth ? { marginLeft: depth * 30 } : undefined}
           onClick={() => toggleCollapsed(node.id)}
         >
           <span className="node-group-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
@@ -571,7 +571,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   function EmptyModuleNode({ node, depth }) {
     const selected = selectedModuleIds.has(node.id)
     return (
-      <li className="node-group node-group-empty" style={depth ? { marginLeft: depth * 22 } : undefined}>
+      <li className="node-group node-group-empty" style={depth ? { marginLeft: depth * 30 } : undefined}>
         <input
           type="checkbox"
           className="node-group-select"

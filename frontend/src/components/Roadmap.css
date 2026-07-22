@@ -38,7 +38,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin-left: 10px;
+  margin-top: 6px;
   vertical-align: middle;
 }
 
@@ -57,9 +57,12 @@
   border-color: var(--brass);
 }
 
+/* A real dependency, not an ordering hint (Phase 22) — muted weight with a brass accent mark. */
 .step-needs {
   font-size: 0.78rem;
-  color: var(--faint);
+  color: var(--muted);
+  border-left: 2px solid var(--brass-dim);
+  padding-left: 6px;
 }
 
 .step-text-openable {
@@ -249,7 +252,7 @@
 
 .step-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 14px;
   padding: 14px 0;
   border-top: 1px solid var(--line);
@@ -263,6 +266,7 @@
   width: 20px;
   text-align: center;
   font-size: 0.95rem;
+  padding-top: 2px;
 }
 
 .step-text {
@@ -285,11 +289,14 @@
   letter-spacing: 0.02em;
 }
 
-/* Primary step action (Mark done) + the ⋯ menu, kept tight on the right of the row. */
+/* Primary step action (Mark done) + the ⋯ menu, kept tight on the right of the row.
+   Anchored to the top of the row (Phase 22) so it doesn't drift with wrapped text. */
 .step-actions {
   display: flex;
   align-items: center;
   gap: 6px;
+  align-self: flex-start;
+  margin-top: -6px;
 }
 
 /* Reorder mode (Phase 12): draggable rows with a handle, no other controls. */
@@ -363,14 +370,23 @@
   color: var(--muted);
 }
 
-/* A module / step-with-substeps header (Phase 13) — collapsible, with rolled-up progress. */
+/* A module / step-with-substeps header (Phase 13) — collapsible, with rolled-up progress.
+   Tinted (Phase 22) so the hierarchy shows without reading the text. */
 .node-group {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 0;
-  border-top: 1px solid var(--line);
+  padding: 12px 14px;
+  margin-top: 10px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
   cursor: pointer;
+}
+
+.node-group.depth-1,
+.node-group.depth-2,
+.node-group.depth-3 {
+  background: var(--surface);
 }
 
 .node-group-caret {
