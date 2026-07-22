@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { applyReformulate, proposeReformulate } from '../api'
 import StepProposalEditor, { fromProposedSteps, toDraftSteps } from './StepProposalEditor'
-import { Badge, Button, Modal } from './ui'
+import { Badge, Button, ExternalLink, Modal } from './ui'
 import './ReformulatePanel.css'
 
 // "This is too much" — user-initiated reformulation of a step (Phase 8.5). Offers three
@@ -105,9 +105,7 @@ export default function ReformulatePanel({ step, atMaxDepth = false, onClose, on
                 <ul className="reformulate-resources">
                   {resources.map((r, i) => (
                     <li key={i} className="reformulate-resource">
-                      <a href={r.url} target="_blank" rel="noreferrer" className="gen-resource-title">
-                        {r.title}
-                      </a>
+                      <ExternalLink href={r.url}>{r.title}</ExternalLink>
                       {r.format && <Badge>{r.format}</Badge>}
                       <button
                         className="step-remove"

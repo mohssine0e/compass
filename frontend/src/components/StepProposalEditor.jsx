@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Badge, Button } from './ui'
+import { Badge, Button, ExternalLink } from './ui'
 import './GenerateRoadmapScreen.css'
 
 // Stable client ids for proposed steps/resources, so dependency links and React keys survive
@@ -279,9 +279,7 @@ function StepResources({ step, onRemove, onMove, onAdd }) {
     <div className="gen-resources">
       {resources.map((r, i) => (
         <div className="gen-resource" key={r.rcid}>
-          <a className="gen-resource-title" href={r.url} target="_blank" rel="noreferrer">
-            {r.title}
-          </a>
+          <ExternalLink href={r.url}>{r.title}</ExternalLink>
           <span className="gen-resource-meta">
             {r.format && <Badge>{r.format}</Badge>}
             {r.estimatedTime && <span className="gen-resource-time">{r.estimatedTime}</span>}

@@ -1379,7 +1379,7 @@ and a career-scale one should read as visibly different kinds of thing, not just
     `StepProposalEditor`'s `.gen-resource-title`, `ReformulatePanel`'s resource link.
   - Leave brass exactly as-is for primary buttons, active nav, selected chips, progress fill — only
     the external-link usages change.
-- [ ] Add an external-link affordance.
+- [x] Add an external-link affordance.
   - Pick one consistent treatment (a small ↗-style glyph after the link text, or a distinct
     underline style shown by default rather than only on hover) and apply it via a single shared
     approach (e.g. a small `ExternalLink` wrapper component in `components/ui/` that renders

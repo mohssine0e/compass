@@ -520,15 +520,6 @@
   font-size: 0.9rem;
 }
 
-.path-step-resource a {
-  color: var(--link);
-  text-decoration: none;
-}
-
-.path-step-resource a:hover {
-  border-bottom: 1px solid var(--link);
-}
-
 .path-step-time {
   color: var(--faint);
   font-size: 0.82rem;

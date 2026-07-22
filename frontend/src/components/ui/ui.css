@@ -181,6 +181,21 @@
   color: var(--faint);
 }
 
+/* --- ExternalLink --- */
+.ui-extlink {
+  color: var(--link);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+.ui-extlink:hover {
+  border-bottom-color: var(--link);
+}
+.ui-extlink__glyph {
+  font-size: 0.75em;
+  margin-left: 3px;
+  opacity: 0.7;
+}
+
 /* --- Menu (kebab) --- */
 .ui-menu {
   position: relative;

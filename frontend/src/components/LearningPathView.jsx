@@ -1,4 +1,4 @@
-import { Badge } from './ui'
+import { Badge, ExternalLink } from './ui'
 import './Roadmap.css'
 
 // The learning path (Phase 13): an explicit ordered traversal — the leaf step you're on, the
@@ -52,7 +52,7 @@ export default function LearningPathView({ roadmap, onOpenStep }) {
               <ul className="path-step-resources">
                 {step.content.resources.map((r) => (
                   <li key={r.id || r.url} className="path-step-resource">
-                    <a href={r.url} target="_blank" rel="noreferrer">{r.title}</a>
+                    <ExternalLink href={r.url}>{r.title}</ExternalLink>
                     {r.estimatedTime && <span className="path-step-time">{r.estimatedTime}</span>}
                   </li>
                 ))}

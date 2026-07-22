@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { endSession, explainText, getProfile, getStepCovers, patchEntry, startSession } from '../api'
 import ReformulatePanel from './ReformulatePanel'
-import { Badge, Button } from './ui'
+import { Badge, Button, ExternalLink } from './ui'
 import './StepDeepView.css'
 
 // Select-text help actions (Phase 8.5). Labels stay plain, never teacher-y.
@@ -250,9 +250,9 @@ export default function StepDeepView({ step, atMaxDepth = false, onClose, onChan
             <ul className="deep-resources">
               {resources.map((r) => (
                 <li key={r.id || r.url} className="deep-resource">
-                  <a href={r.url} target="_blank" rel="noreferrer" className="deep-resource-title">
+                  <ExternalLink href={r.url} className="deep-resource-title">
                     {r.title}
-                  </a>
+                  </ExternalLink>
                   <span className="deep-resource-meta">
                     {r.format && <Badge>{r.format}</Badge>}
                     {r.estimatedTime && <span className="deep-faint">{r.estimatedTime}</span>}
