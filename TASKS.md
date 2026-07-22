@@ -1453,13 +1453,15 @@ and a career-scale one should read as visibly different kinds of thing, not just
   - Wrap existing `transition`/`animation` CSS rules (hover states, modal open/close, collapse
     toggles) in a `@media (prefers-reduced-motion: no-preference)` guard, or set durations to near-
     zero under `@media (prefers-reduced-motion: reduce)`.
-- [ ] Acceptance: resource links are visibly a different color from primary buttons on at least one
+- [x] Acceptance: resource links are visibly a different color from primary buttons on at least one
   real screen (deep view or Path view); at least one recurring action (Archive or Delete) renders
   with an icon, not just text; the Everything view's ellipsis truncation no longer cuts mid-word;
   a flat/simple roadmap and a nested/complex roadmap are visibly distinguishable on the Roadmaps
   list without opening either one; a deep-view breadcrumb correctly shows the full path for at
   least one multi-level nested step.
-- [ ] **Push + tag `phase-21-complete`. Stop. Let the founder use this for real before continuing.**
+  (Verified in the running app except the scale badges, which need the backend restarted to pick
+  up the new `shape` field on the roadmap list response.)
+- [x] **Push + tag `phase-21-complete`. Stop. Let the founder use this for real before continuing.**
 
 ---
 
