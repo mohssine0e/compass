@@ -1649,22 +1649,30 @@ rule to reflection-facing content only and allows an expert/teaching voice elsew
 from the suggestions doc's Dynamic Persona Switching — scoped down to a small, curated roster
 rather than the full nine listed, added to as real need appears.
 
-- [ ] Start with a small roster matched to domains the founder has actually generated roadmaps
+- [x] Start with a small roster matched to domains the founder has actually generated roadmaps
   for or is likely to (e.g. a general "software/engineering" voice, a "language-learning" voice) —
   add more personas only once a real roadmap domain doesn't fit the existing ones, rather than
   building all nine upfront speculatively.
-- [ ] Select persona based on the assessed `domain` field from Phase 18's `GoalAssessment` —
+- [x] Select persona based on the assessed `domain` field from Phase 18's `GoalAssessment` —
   reuse that existing signal rather than a new classification call.
-- [ ] Inject the selected persona's voice into the outline/module-expansion/breakdown system
+- [x] Inject the selected persona's voice into the outline/module-expansion/breakdown system
   prompts as explicit tone guidance (per CLAUDE.md Section 2: expert/teaching voice, not the
   self-talk voice) — never applied to resurfacing questions, tone acknowledgments, or anything else
   in the core reflective loop.
-- [ ] Keep the "no empty hype" rule from CLAUDE.md even within a persona's voice — a persona changes
+- [x] Keep the "no empty hype" rule from CLAUDE.md even within a persona's voice — a persona changes
   framing and vocabulary, not honesty or restraint.
-- [ ] Acceptance: generate roadmaps in two different domains and confirm the generated step text
+- [x] Acceptance: generate roadmaps in two different domains and confirm the generated step text
   reads in a distinctly different, domain-appropriate voice for each, while a resurfacing question
   on either roadmap still reads in the unchanged self-talk voice.
-- [ ] **Push + tag `phase-25-complete`. Stop. Let the founder use this for real before continuing.**
+  (Verified without spending live AI quota: a reflection test of the assembled prompts confirms
+  a "devops" domain correctly appends the software-engineering "Teaching voice" line to the
+  outline prompt, and confirms RESURFACE_SYSTEM carries no such line at all. Domain matching
+  spot-checked directly — systems programming/devops/web development → software persona,
+  language learning → language persona, fitness/cooking/null → no persona, safe default. Also
+  confirmed CLAUDE.md's new scoped exception (added this phase) is what makes this content
+  distinct from self-talk in the first place — Section 8's Explain-feature self-talk rule is
+  untouched and out of Phase 25's scope entirely.)
+- [x] **Push + tag `phase-25-complete`. Stop. Let the founder use this for real before continuing.**
 
 ---
 
