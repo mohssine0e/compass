@@ -75,6 +75,66 @@
   outline: none;
 }
 
+/* Compact chip cloud for unrated skills (Phase 23) — a 39-skill resume import stays a wrapped
+   cloud instead of a wall of dropdown rows; picking a confidence promotes a skill to the row
+   list above. */
+.skill-cloud-group {
+  margin-top: 12px;
+}
+
+.skill-cloud-group:first-child {
+  margin-top: 0;
+}
+
+.skill-cloud-label {
+  display: block;
+  color: var(--faint);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+
+.skill-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.skill-chip-wrap {
+  position: relative;
+}
+
+.skill-confidence-picker {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  z-index: 10;
+}
+
+.skill-confidence-option {
+  background: transparent;
+  border: none;
+  text-align: left;
+  color: var(--text);
+  font-size: 0.88rem;
+  padding: 6px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.skill-confidence-option:hover {
+  background: var(--surface);
+}
+
 .skill-remove {
   background: transparent;
   border: none;
@@ -212,12 +272,17 @@
   gap: 8px;
 }
 
+/* Sticky save bar (Phase 23) — visible without scrolling to the very bottom of a long profile. */
 .profile-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 16px;
   margin-top: 8px;
+  position: sticky;
+  bottom: 0;
+  padding: 14px 0;
+  background: linear-gradient(to top, var(--bg) 60%, transparent);
 }
 
 .profile-error {

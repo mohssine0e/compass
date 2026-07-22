@@ -95,6 +95,10 @@ export default function ProfileScreen() {
   const [interpreting, setInterpreting] = useState(false)
   const [confirmedAt, setConfirmedAt] = useState(null)
   const [newSkill, setNewSkill] = useState('')
+  // Name of the skill whose confidence picker is open (Phase 23) — a skill with no confidence
+  // renders as a compact chip until clicked, so a 39-skill import doesn't turn into a wall of
+  // rows; picking a confidence promotes it to the full row permanently.
+  const [pickingConfidenceFor, setPickingConfidenceFor] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState(null)
@@ -130,7 +134,7 @@ export default function ProfileScreen() {
       const existing = new Set(skills.map((s) => s.name.toLowerCase()))
       const added = (res.skills || [])
         .filter((name) => name && !existing.has(name.toLowerCase()))
-        .map((name) => ({ name }))
+        .map((name) => ({ name, source: 'resume' }))
       setSkills((prev) => [...prev, ...added])
       setResumeExtracted({
         experience: res.experience || [],
@@ -196,11 +200,19 @@ export default function ProfileScreen() {
       prev.map((s) => {
         if (s.name !== name) return s
         const next = { name: s.name }
+        if (s.source) next.source = s.source
         if (confidence) next.confidence = confidence
         return next
       })
     )
     setSaved(false)
+  }
+
+  // Picking a confidence from the inline chip picker promotes the skill to a full row and
+  // closes the picker in one action.
+  function pickConfidence(name, confidence) {
+    setConfidence(name, confidence)
+    setPickingConfidenceFor(null)
   }
 
   function toggleAvoidFormat(format) {
@@ -282,6 +294,10 @@ export default function ProfileScreen() {
     }
   }
 
+  const rated = skills.filter((s) => s.confidence)
+  const unratedResume = skills.filter((s) => !s.confidence && s.source === 'resume')
+  const unratedHand = skills.filter((s) => !s.confidence && s.source !== 'resume')
+
   return (
     <div className="profile">
       <h1 className="screen-title">Your profile</h1>
@@ -307,32 +323,57 @@ export default function ProfileScreen() {
         {skills.length === 0 ? (
           <p className="profile-empty">No skills yet. Add what you already know.</p>
         ) : (
-          <ul className="skill-list">
-            {skills.map((s) => (
-              <li className="skill-row" key={s.name}>
-                <span className="skill-name">{s.name}</span>
-                <select
-                  className="skill-confidence"
-                  value={s.confidence || ''}
-                  onChange={(e) => setConfidence(s.name, e.target.value)}
-                  aria-label={`Confidence in ${s.name}`}
-                >
-                  {CONFIDENCE.map((c) => (
-                    <option key={c.value} value={c.value}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  className="skill-remove"
-                  onClick={() => removeSkill(s.name)}
-                  aria-label={`Remove ${s.name}`}
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-          </ul>
+          <>
+            {rated.length > 0 && (
+              <ul className="skill-list">
+                {rated.map((s) => (
+                  <li className="skill-row" key={s.name}>
+                    <span className="skill-name">{s.name}</span>
+                    <select
+                      className="skill-confidence"
+                      value={s.confidence || ''}
+                      onChange={(e) => setConfidence(s.name, e.target.value)}
+                      aria-label={`Confidence in ${s.name}`}
+                    >
+                      {CONFIDENCE.map((c) => (
+                        <option key={c.value} value={c.value}>
+                          {c.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      className="skill-remove"
+                      onClick={() => removeSkill(s.name)}
+                      aria-label={`Remove ${s.name}`}
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {unratedResume.length > 0 && (
+              <SkillCloud
+                label={rated.length > 0 ? 'From your resume, unrated' : 'From your resume'}
+                skills={unratedResume}
+                pickingConfidenceFor={pickingConfidenceFor}
+                setPickingConfidenceFor={setPickingConfidenceFor}
+                pickConfidence={pickConfidence}
+                removeSkill={removeSkill}
+              />
+            )}
+            {unratedHand.length > 0 && (
+              <SkillCloud
+                label={unratedResume.length > 0 ? 'Hand-added, unrated' : undefined}
+                skills={unratedHand}
+                pickingConfidenceFor={pickingConfidenceFor}
+                setPickingConfidenceFor={setPickingConfidenceFor}
+                pickConfidence={pickConfidence}
+                removeSkill={removeSkill}
+              />
+            )}
+          </>
         )}
       </Section>
 
@@ -500,6 +541,44 @@ export default function ProfileScreen() {
         <Button variant="primary" onClick={save} disabled={saving}>
           {saving ? 'Saving…' : 'Save profile'}
         </Button>
+      </div>
+    </div>
+  )
+}
+
+// A compact chip cloud for skills with no confidence set yet (Phase 23) — keeps a large resume
+// import from turning into a wall of dropdown rows. Clicking a chip opens an inline confidence
+// picker right there; picking one promotes the skill to the full row above.
+function SkillCloud({ label, skills, pickingConfidenceFor, setPickingConfidenceFor, pickConfidence, removeSkill }) {
+  return (
+    <div className="skill-cloud-group">
+      {label && <span className="skill-cloud-label">{label}</span>}
+      <div className="skill-cloud">
+        {skills.map((s) => (
+          <div className="skill-chip-wrap" key={s.name}>
+            <Chip
+              onClick={() =>
+                setPickingConfidenceFor((prev) => (prev === s.name ? null : s.name))
+              }
+              onRemove={() => removeSkill(s.name)}
+            >
+              {s.name}
+            </Chip>
+            {pickingConfidenceFor === s.name && (
+              <div className="skill-confidence-picker">
+                {CONFIDENCE.filter((c) => c.value).map((c) => (
+                  <button
+                    key={c.value}
+                    className="skill-confidence-option"
+                    onClick={() => pickConfidence(s.name, c.value)}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   )

@@ -236,6 +236,7 @@ export default function AllEntriesScreen({ onOpenRoadmap, onDraftFromTheme }) {
                   <div className="cluster-proposals">
                     {proposedClusters.map((c, i) => (
                       <div className="cluster-proposal" key={i}>
+                        <Badge tone="brass">AI suggestion</Badge>
                         <input
                           className="step-input cluster-label-input"
                           value={c.label}

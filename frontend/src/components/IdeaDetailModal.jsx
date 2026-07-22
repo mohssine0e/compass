@@ -53,7 +53,7 @@ export default function IdeaDetailModal({ idea, tasks = [], onClose, onChanged, 
   const log = Array.isArray(idea.content.resurfaceLog) ? [...idea.content.resurfaceLog].reverse() : []
 
   return (
-    <Modal onClose={onClose} title="Idea" size="md">
+    <Modal onClose={onClose} size="md">
       <TextArea
         className="idea-detail-text"
         value={text}
@@ -63,21 +63,27 @@ export default function IdeaDetailModal({ idea, tasks = [], onClose, onChanged, 
       />
       {saving && <span className="deep-notes-status">Saving…</span>}
 
-      <div className="idea-detail-row">
-        {STATES.map((s) => (
-          <Chip key={s} toggle pressed={idea.status === s} onClick={() => setStatus(s)}>
-            {s.replace('_', ' ')}
-          </Chip>
-        ))}
+      <div className="idea-detail-group">
+        <span className="idea-detail-group-label">Status</span>
+        <div className="idea-detail-row">
+          {STATES.map((s) => (
+            <Chip key={s} toggle pressed={idea.status === s} onClick={() => setStatus(s)}>
+              {s.replace('_', ' ')}
+            </Chip>
+          ))}
+        </div>
       </div>
 
-      <div className="idea-detail-row">
-        <Chip toggle tone="brass" pressed={idea.significance === 'big'} onClick={() => setSignificance('big')}>
-          big
-        </Chip>
-        <Chip toggle tone="brass" pressed={idea.significance === 'small'} onClick={() => setSignificance('small')}>
-          small
-        </Chip>
+      <div className="idea-detail-group">
+        <span className="idea-detail-group-label">Significance</span>
+        <div className="idea-detail-row">
+          <Chip toggle tone="brass" pressed={idea.significance === 'big'} onClick={() => setSignificance('big')}>
+            big
+          </Chip>
+          <Chip toggle tone="brass" pressed={idea.significance === 'small'} onClick={() => setSignificance('small')}>
+            small
+          </Chip>
+        </div>
       </div>
 
       {tasks.length > 0 && (

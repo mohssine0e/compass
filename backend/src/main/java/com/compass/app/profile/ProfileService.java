@@ -202,6 +202,12 @@ public class ProfileService {
             if (confidence instanceof String c && CONFIDENCE_LEVELS.contains(c)) {
                 normalized.put("confidence", c);
             }
+            // "resume" marks a skill pulled from an uploaded resume, kept only so the profile
+            // screen can group resume-derived skills separately from hand-added ones (Phase 23) —
+            // any other value is dropped rather than trusted as free-form data.
+            if ("resume".equals(skill.get("source"))) {
+                normalized.put("source", "resume");
+            }
             clean.add(normalized);
         }
         return clean;

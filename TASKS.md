@@ -1548,7 +1548,7 @@ roadmap → learn loop, building on the Phase 21 design-system foundations.
 Goal: apply the remaining per-screen fixes from `UI_UX_NOTES.md`, focused on the screens for
 organizing captures and reviewing the profile/history.
 
-- [ ] Everything view (`AllEntriesScreen.jsx`/`AllEntries.css`).
+- [x] Everything view (`AllEntriesScreen.jsx`/`AllEntries.css`).
   - Add type-coding within a group — e.g. a small colored dot or left border keyed by `idea` /
     `roadmap` / `task`, reusing the Phase 21 color-coding mechanism, so a mixed group doesn't render
     as one undifferentiated block of gray rows.
@@ -1558,14 +1558,14 @@ organizing captures and reviewing the profile/history.
   - Give theme-cluster proposal cards (`.cluster-proposal`) a distinct visual treatment — e.g. a
     brass-tinted left border or badge marking "AI suggestion" — so a proposed cluster reads as a
     discovery to approve, not a data-entry form, consistent with the propose→approve pattern.
-- [ ] Idea detail modal (`IdeaDetailModal.jsx`/`.css`).
+- [x] Idea detail modal (`IdeaDetailModal.jsx`/`.css`).
   - Replace the modal's generic "Idea" title — either drop the title entirely (the textarea already
     shows the text) or replace it with something small and functional (e.g. a status glyph, or just
     remove the `title` prop passed to `Modal`).
   - Add a small label above the Status chip row and another above the Significance chip row (e.g.
     "Status" / "Significance", styled like `ProfileScreen`'s `.pref-group-label`) so the two chip
     rows read as independent selectors.
-- [ ] Profile screen (`ProfileScreen.jsx`/`.css`).
+- [x] Profile screen (`ProfileScreen.jsx`/`.css`).
   - Fix the skills-list density problem — concretely: render a skill without a set confidence as a
     compact `Chip` (name only, small ×), and only "promote" it to the full row-with-dropdown
     treatment once the founder actually picks a confidence for it (e.g. clicking the chip reveals

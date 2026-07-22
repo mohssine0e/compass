@@ -15,6 +15,15 @@
   border-color: var(--faint);
 }
 
+/* Labels the two chip rows (Phase 23) so Status/Significance read as independent selectors —
+   same treatment as ProfileScreen's .pref-group-label. */
+.idea-detail-group-label {
+  display: block;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+}
+
 .idea-detail-row {
   display: flex;
   flex-wrap: wrap;

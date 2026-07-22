@@ -73,14 +73,21 @@
   margin: 12px 0 24px;
 }
 
+/* A discovery to approve, not a data-entry form (Phase 23) — brass left accent + an explicit
+   "AI suggestion" badge, consistent with the propose→approve pattern used elsewhere. */
 .cluster-proposal {
   background: var(--surface);
   border: 1px solid var(--line);
+  border-left: 2px solid var(--brass);
   border-radius: 10px;
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.cluster-proposal > .ui-badge {
+  align-self: flex-start;
 }
 
 .cluster-label-input {
@@ -104,10 +111,13 @@
   gap: 8px;
 }
 
+/* A visual container around an open group's rows (Phase 23) — a faint left border marks the
+   boundary between one group's contents and the next group's caret, even in a long group. */
 .all-items {
   list-style: none;
-  margin: 0;
-  padding: 0;
+  margin: 0 0 4px;
+  padding: 0 0 0 10px;
+  border-left: 2px solid var(--line);
   display: flex;
   flex-direction: column;
 }
