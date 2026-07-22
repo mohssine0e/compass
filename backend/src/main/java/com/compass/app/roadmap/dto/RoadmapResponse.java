@@ -2,6 +2,7 @@ package com.compass.app.roadmap.dto;
 
 import com.compass.app.entry.Entry;
 import com.compass.app.entry.EntryStatus;
+import com.compass.app.entry.EntryType;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -21,6 +22,7 @@ public record RoadmapResponse(
         String notes,
         EntryStatus status,
         String verify,
+        String shape,
         Instant createdAt,
         Instant updatedAt,
         List<RoadmapNodeResponse> children,
@@ -167,12 +169,29 @@ public record RoadmapResponse(
                 notes,
                 roadmap.getStatus(),
                 verify,
+                shapeOf(roadmap, children),
                 roadmap.getCreatedAt(),
                 roadmap.getUpdatedAt(),
                 children,
                 new Progress(total, done, currentStepId, currentStepText, estimatedTotalMinutes,
                         pace.multiplier(), pace.sessions())
         );
+    }
+
+    /**
+     * The roadmap's scale (Phase 21 list badge): the Phase 18 assessment's {@code shape} when
+     * one was stored; for roadmaps created before assessments, fall back to what the structure
+     * says — module children mean nested, only leaf steps mean flat.
+     */
+    private static String shapeOf(Entry roadmap, List<RoadmapNodeResponse> children) {
+        if (roadmap.getContent() != null
+                && roadmap.getContent().get("assessment") instanceof Map<?, ?> assessment
+                && assessment.get("shape") instanceof String s) {
+            return s;
+        }
+        boolean hasModules = children.stream()
+                .anyMatch(c -> c.type() == EntryType.ROADMAP);
+        return hasModules ? "nested" : "flat";
     }
 
     private static String asString(Entry entry, String key) {

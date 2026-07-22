@@ -62,6 +62,31 @@ function fullyDoneGroups(nodes, out = []) {
   return out
 }
 
+// Default collapse on first load (Phase 21): a nested roadmap opens showing just the module
+// you're actually in — every container off the current step's ancestor path starts collapsed.
+// A flat roadmap has no containers, and a nested one without a current step (all done) falls
+// back to collapsing what's fully complete.
+function seedCollapsed(data) {
+  const children = data.children || []
+  if (data.shape !== 'nested' || data.progress?.currentStepId == null) {
+    return new Set(fullyDoneGroups(children))
+  }
+  const groups = []
+  const collectGroups = (nodes) => {
+    for (const n of nodes) {
+      if (n.children && n.children.length > 0) {
+        groups.push(n.id)
+        collectGroups(n.children)
+      }
+    }
+  }
+  collectGroups(children)
+  const onPath = new Set(
+    (findNodePath(children, data.progress.currentStepId) || []).map((n) => n.id)
+  )
+  return new Set(groups.filter((gid) => !onPath.has(gid)))
+}
+
 // Flatten every node's text by id, for the "needs: <step>" prerequisite label across the tree.
 function textByIdOf(nodes, map = new Map()) {
   for (const n of nodes) {
@@ -123,7 +148,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     try {
       const data = await getRoadmap(id)
       setRoadmap(data)
-      setCollapsed((prev) => (prev === null ? new Set(fullyDoneGroups(data.children || [])) : prev))
+      setCollapsed((prev) => (prev === null ? seedCollapsed(data) : prev))
     } catch (err) {
       setError(err.message)
     }
@@ -600,7 +625,10 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           {progress.currentStepId === null
             ? `All ${progress.total} done.`
             : `${progress.done} of ${progress.total} done`}
-          {progress.estimatedTotalMinutes > 0 && ` · ~${formatMinutes(progress.estimatedTotalMinutes)}`}
+          {progress.estimatedTotalMinutes > 0 &&
+            ` · ~${formatMinutes(progress.estimatedTotalMinutes)}${
+              roadmap.shape === 'nested' ? ', expect more if new to this' : ''
+            }`}
         </span>
       </div>
 

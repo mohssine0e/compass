@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { listArchivedRoadmaps, listRoadmaps, setRoadmapArchived } from '../api'
 import ProgressBar from './ProgressBar'
-import { Button } from './ui'
+import { Badge, Button } from './ui'
 import './Roadmap.css'
 
 // A passive drift cue (Phase 9): how long since this roadmap was last touched. Only once it's
@@ -85,11 +85,16 @@ export default function RoadmapsScreen({ onNew, onDraft, onOpen }) {
         <ul className="roadmap-cards">
           {list.map((r) => {
             const complete = r.progress.currentStepId === null
+            const modules = (r.children || []).filter((c) => c.type === 'roadmap').length
             return (
               <li key={r.id} className="roadmap-card-row">
                 <button className="roadmap-card" onClick={() => onOpen(r.id)}>
                   <div className="roadmap-card-top">
                     <span className="roadmap-card-title">{r.title}</span>
+                    {r.shape === 'flat' && <Badge>quick</Badge>}
+                    {r.shape === 'nested' && (
+                      <Badge tone="brass">{modules > 0 ? `${modules} modules` : 'in depth'}</Badge>
+                    )}
                     <span className="roadmap-card-count">
                       {r.progress.done}/{r.progress.total}
                     </span>

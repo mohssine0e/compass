@@ -154,7 +154,6 @@
 .roadmap-card-top {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
   gap: 12px;
 }
 
@@ -164,6 +163,7 @@
 }
 
 .roadmap-card-count {
+  margin-left: auto;
   color: var(--muted);
   font-size: 0.9rem;
   font-variant-numeric: tabular-nums;

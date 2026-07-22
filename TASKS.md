@@ -1408,7 +1408,7 @@ and a career-scale one should read as visibly different kinds of thing, not just
     the ancestor chain in the deep-view response, or the frontend can walk it client-side from
     already-loaded roadmap data) — prefer backend-computed if the deep view doesn't already have
     the full tree in memory when opened standalone.
-- [ ] Roadmap-scale visual distinction (merged in from the suggestions doc).
+- [x] Roadmap-scale visual distinction (merged in from the suggestions doc).
   - Add a small badge on each roadmap's list card distinguishing scale — e.g. a quick/simple
     roadmap (flat, per Phase 18's `shape` field) gets a subtle "Quick" badge, a nested/complex one
     gets a distinct badge — reusing the existing `Badge` component, not a new visual system. Base
