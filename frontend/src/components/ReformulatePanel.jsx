@@ -1,14 +1,17 @@
 import { useState } from 'react'
 import { applyReformulate, proposeReformulate } from '../api'
 import StepProposalEditor, { fromProposedSteps, toDraftSteps } from './StepProposalEditor'
-import { Badge, Button, ExternalLink, Modal } from './ui'
+import { Badge, Button, ExternalLink } from './ui'
 import './ReformulatePanel.css'
 
 // "This is too much" — user-initiated reformulation of a step (Phase 8.5). Offers three
 // approaches, drafts one (reusing the Phase 4/7.5 engines), and applies only on approval.
+// Renders inline inside the step deep view (Phase 22) — swapped in for the step's body rather
+// than stacked as a second overlay. `structural` marks the options that change the tree itself;
+// the resource swap is content-only and rendered lighter.
 const KINDS = [
-  { kind: 'break_down', label: 'Break it into smaller steps' },
-  { kind: 'add_prerequisite', label: 'Something to learn first' },
+  { kind: 'break_down', label: 'Break it into smaller steps', structural: true },
+  { kind: 'add_prerequisite', label: 'Something to learn first', structural: true },
   { kind: 'easier_resources', label: 'Find gentler resources' },
 ]
 
@@ -53,9 +56,11 @@ export default function ReformulatePanel({ step, atMaxDepth = false, onClose, on
   }
 
   return (
-    <Modal onClose={onClose} size="md">
+    <div className="reformulate-inline">
+      <button className="reformulate-back" onClick={onClose}>
+        ‹ Back to step
+      </button>
       <p className="reformulate-context">Too much as it stands?</p>
-      <p className="reformulate-step">{step.content.text}</p>
 
         {!proposal && (
           <div className="reformulate-options">
@@ -66,7 +71,11 @@ export default function ReformulatePanel({ step, atMaxDepth = false, onClose, on
                   directly.
                 </p>
               ) : (
-                <button key={k.kind} className="reformulate-option" onClick={() => choose(k.kind)}>
+                <button
+                  key={k.kind}
+                  className={'reformulate-option' + (k.structural ? ' is-structural' : ' is-light')}
+                  onClick={() => choose(k.kind)}
+                >
                   {k.label}
                 </button>
               )
@@ -133,6 +142,6 @@ export default function ReformulatePanel({ step, atMaxDepth = false, onClose, on
         )}
 
         {!proposal && error && <p className="deep-error">{error}</p>}
-    </Modal>
+    </div>
   )
 }

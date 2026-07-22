@@ -224,6 +224,19 @@ export default function StepDeepView({
 
         <h2 className="deep-title">{content.text}</h2>
 
+        {reformulating ? (
+          <ReformulatePanel
+            step={step}
+            atMaxDepth={atMaxDepth}
+            onClose={() => setReformulating(false)}
+            onApplied={() => {
+              setReformulating(false)
+              onChanged?.()
+              onClose()
+            }}
+          />
+        ) : (
+          <>
         {selection && (
           <div
             className="help-toolbar"
@@ -367,20 +380,9 @@ export default function StepDeepView({
             )}
           </div>
         )}
+          </>
+        )}
       </div>
-
-      {reformulating && (
-        <ReformulatePanel
-          step={step}
-          atMaxDepth={atMaxDepth}
-          onClose={() => setReformulating(false)}
-          onApplied={() => {
-            setReformulating(false)
-            onChanged?.()
-            onClose()
-          }}
-        />
-      )}
     </div>
   )
 }

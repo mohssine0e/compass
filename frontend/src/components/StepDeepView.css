@@ -222,9 +222,14 @@ button.deep-crumb:hover {
 
 /* --- Select-text help (Phase 8.5) --- */
 
+/* A real affordance, not floating caption text (Phase 22): a quiet dashed pill. */
 .help-hint {
   margin: 0;
   font-size: 0.82rem;
+  align-self: flex-start;
+  border: 1px dashed var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
 }
 
 .help-toolbar {

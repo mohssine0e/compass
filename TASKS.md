@@ -1517,7 +1517,7 @@ roadmap → learn loop, building on the Phase 21 design-system foundations.
     up from the leaf via the roadmap's children structure, or have the backend include a
     `moduleTitle` field per leaf in `RoadmapResponse.Progress`/a new field on each Path-relevant
     node to avoid re-deriving it client-side).
-- [ ] Deep view + reformulate modal (`StepDeepView.jsx`/`.css`, `ReformulatePanel.jsx`/`.css`).
+- [x] Deep view + reformulate modal (`StepDeepView.jsx`/`.css`, `ReformulatePanel.jsx`/`.css`).
   - Fix modal-on-modal stacking: either have `ReformulatePanel` replace the deep view's content in
     place (same modal, swapped body) rather than opening as a second overlay, or keep two modals but
     add a visible "back to step" affordance instead of relying on the founder guessing that × on the

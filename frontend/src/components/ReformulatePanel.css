@@ -1,16 +1,30 @@
-/* Overlay/panel/close now come from the shared <Modal>; only content styles remain here. */
+/* Renders inline inside the step deep view (Phase 22) — no overlay of its own. */
+.reformulate-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.reformulate-back {
+  align-self: flex-start;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  transition: color 0.15s ease;
+}
+
+.reformulate-back:hover {
+  color: var(--text);
+}
+
 .reformulate-context {
   margin: 0;
   color: var(--faint);
   font-size: 0.85rem;
-}
-
-.reformulate-step {
-  margin: 0;
-  color: var(--text);
-  font-size: 1.1rem;
-  line-height: 1.35;
-  padding-right: 24px;
 }
 
 .reformulate-options {
@@ -34,6 +48,17 @@
 .reformulate-option:hover {
   border-color: var(--brass);
   color: var(--brass);
+}
+
+/* The two structural options change the tree itself; the resource swap is content-only and
+   reads deliberately lighter (Phase 22). */
+.reformulate-option.is-structural {
+  border-left: 3px solid var(--brass-dim);
+}
+
+.reformulate-option.is-light {
+  border-style: dashed;
+  color: var(--muted);
 }
 
 .reformulate-proposal {
