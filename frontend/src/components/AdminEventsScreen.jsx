@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getAdminEvents } from '../api'
+import { Chip } from './ui'
 import './AdminEventsScreen.css'
 
 // Operational window into recent system events (Phase 5): a plain list, most recent first,
 // filterable by source/severity — nothing fancier than the plain-list views elsewhere.
-const SOURCES = ['', 'ai_provider', 'system']
-const SEVERITIES = ['', 'info', 'warning', 'error']
+// Filters are Chip toggles (Phase 23), matching the pattern used in Everything/Profile — an
+// empty string means "all"; clicking the already-selected chip clears back to it.
+const SOURCES = ['ai_provider', 'system']
+const SEVERITIES = ['info', 'warning', 'error']
 
 export default function AdminEventsScreen() {
   const [events, setEvents] = useState(null)
@@ -31,8 +34,8 @@ export default function AdminEventsScreen() {
       <div className="events-head">
         <h1 className="screen-title">Events</h1>
         <div className="events-filters">
-          <FilterSelect label="source" value={source} onChange={setSource} options={SOURCES} />
-          <FilterSelect label="severity" value={severity} onChange={setSeverity} options={SEVERITIES} />
+          <FilterChips label="source" value={source} onChange={setSource} options={SOURCES} />
+          <FilterChips label="severity" value={severity} onChange={setSeverity} options={SEVERITIES} />
         </div>
       </div>
 
@@ -64,18 +67,23 @@ export default function AdminEventsScreen() {
   )
 }
 
-function FilterSelect({ label, value, onChange, options }) {
+function FilterChips({ label, value, onChange, options }) {
   return (
-    <label className="events-filter">
+    <div className="events-filter">
       <span className="events-filter-label">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)}>
+      <div className="events-filter-chips">
         {options.map((o) => (
-          <option key={o} value={o}>
-            {o === '' ? 'all' : o}
-          </option>
+          <Chip
+            key={o}
+            toggle
+            pressed={value === o}
+            onClick={() => onChange(value === o ? '' : o)}
+          >
+            {o}
+          </Chip>
         ))}
-      </select>
-    </label>
+      </div>
+    </div>
   )
 }
 

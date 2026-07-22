@@ -1582,7 +1582,7 @@ organizing captures and reviewing the profile/history.
   - Tighten the hard rules to explicitly require multiple short sentences (e.g. "2–4 short
     sentences, not one long run-on — break at natural pauses") rather than leaving sentence count
     unconstrained, which is currently producing one long comma-spliced sentence.
-- [ ] Events screen (`AdminEventsScreen.jsx`/`.css`).
+- [x] Events screen (`AdminEventsScreen.jsx`/`.css`).
   - Replace the `source`/`severity` `<select>` filters with the `Chip` toggle pattern used
     elsewhere (Status/Theme in Everything, format-avoid and learning-preferences in Profile) for
     visual consistency — likely a small multi-option toggle-chip row per filter dimension, reusing

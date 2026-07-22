@@ -19,22 +19,19 @@
   gap: 14px;
 }
 
+/* Chip toggle filters (Phase 23) — matches the pattern in Everything/Profile instead of a
+   dropdown; empty selection reads as "all", clicking the active chip clears it. */
 .events-filter {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   color: var(--faint);
   font-size: 0.85rem;
 }
 
-.events-filter select {
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 5px 8px;
-  font-size: 0.9rem;
-  outline: none;
+.events-filter-chips {
+  display: flex;
+  gap: 6px;
 }
 
 .events-empty,
