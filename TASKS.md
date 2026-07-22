@@ -1394,7 +1394,7 @@ and a career-scale one should read as visibly different kinds of thing, not just
     spacing scale.
   - Apply to `Menu` items (Archive/Delete/Undo/etc. currently text-only) and anywhere a delete/
     archive action appears as a bare text button.
-- [ ] Depth-level visual treatment for the roadmap tree (merged in from the suggestions doc's
+- [x] Depth-level visual treatment for the roadmap tree (merged in from the suggestions doc's
   "Step Hierarchy & Breadcrumb Navigation").
   - Give each nesting depth a distinct, consistent treatment: module (level 0) bold + brass +
     expandable; step (level 1) normal weight; substep (level 2) lighter/smaller text; deepest level

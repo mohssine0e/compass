@@ -94,6 +94,46 @@
   line-height: 1.6;
 }
 
+/* Breadcrumb — full path from roadmap root to this step, each segment clickable (Phase 21). */
+.deep-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding-right: 28px;
+  font-size: 0.8rem;
+}
+
+.deep-crumb-seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.deep-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--muted);
+  font-size: inherit;
+  font-family: inherit;
+}
+
+button.deep-crumb:hover {
+  color: var(--text);
+}
+
+.deep-crumb.is-current {
+  color: var(--faint);
+}
+
+.deep-crumb-sep {
+  color: var(--faint);
+}
+
 .deep-resources {
   list-style: none;
   margin: 0;

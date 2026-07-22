@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { endSession, explainText, getProfile, getStepCovers, patchEntry, startSession } from '../api'
 import ReformulatePanel from './ReformulatePanel'
-import { Badge, Button, ExternalLink } from './ui'
+import { Badge, Button, ExternalLink, IconModule, IconStep, IconSubstep, IconSubSubstep } from './ui'
 import './StepDeepView.css'
 
 // Select-text help actions (Phase 8.5). Labels stay plain, never teacher-y.
@@ -18,7 +18,17 @@ const HELP_ACTIONS = [
 // works fine without ever opening this — low friction preserved.
 const WEIGHT_LABEL = { small: 'small', medium: 'medium', large: 'large' }
 
-export default function StepDeepView({ step, atMaxDepth = false, onClose, onChanged }) {
+// Depth icons for breadcrumb segments after the roadmap root (Phase 21).
+const CRUMB_ICONS = [IconModule, IconStep, IconSubstep, IconSubSubstep]
+
+export default function StepDeepView({
+  step,
+  atMaxDepth = false,
+  breadcrumb = null,
+  onNavigate,
+  onClose,
+  onChanged,
+}) {
   const content = step.content || {}
   const [covers, setCovers] = useState(content.covers || null)
   const [loadingCovers, setLoadingCovers] = useState(false)
@@ -184,6 +194,33 @@ export default function StepDeepView({ step, atMaxDepth = false, onClose, onChan
         <button className="deep-close" onClick={onClose} aria-label="Close">
           ×
         </button>
+
+        {breadcrumb && breadcrumb.length > 1 && (
+          <nav className="deep-breadcrumb" aria-label="Path to this step">
+            {breadcrumb.map((seg, i) => {
+              const isLast = i === breadcrumb.length - 1
+              const CrumbIcon = i > 0 ? CRUMB_ICONS[Math.min(i - 1, CRUMB_ICONS.length - 1)] : null
+              const inner = (
+                <>
+                  {CrumbIcon && <CrumbIcon size={12} />}
+                  {seg.label}
+                </>
+              )
+              return (
+                <span className="deep-crumb-seg" key={seg.id ?? 'root'}>
+                  {i > 0 && <span className="deep-crumb-sep" aria-hidden="true">→</span>}
+                  {isLast ? (
+                    <span className="deep-crumb is-current">{inner}</span>
+                  ) : (
+                    <button className="deep-crumb" onClick={() => onNavigate?.(seg)}>
+                      {inner}
+                    </button>
+                  )}
+                </span>
+              )
+            })}
+          </nav>
+        )}
 
         <h2 className="deep-title">{content.text}</h2>
 

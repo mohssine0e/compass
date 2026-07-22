@@ -370,6 +370,38 @@
   color: var(--brass);
 }
 
+/* Depth-level treatment (Phase 21): each nesting level reads as its own kind of thing —
+   modules boldest + brass, steps normal, substeps progressively smaller and quieter. */
+.node-group-depth-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--faint);
+}
+
+.node-group.depth-0 .node-group-title,
+.node-group.depth-0 .node-group-depth-icon {
+  color: var(--brass);
+}
+
+.node-group.depth-1 .node-group-title,
+.node-group.depth-2 .node-group-title,
+.node-group.depth-3 .node-group-title {
+  font-weight: var(--weight-normal);
+}
+
+.node-group.depth-2 .node-group-title,
+.node-group.depth-3 .node-group-title {
+  font-size: 0.92rem;
+}
+
+.step-item.depth-2 .step-text {
+  font-size: 0.92rem;
+}
+
+.step-item.depth-3 .step-text {
+  font-size: 0.85rem;
+}
+
 .node-group-empty {
   cursor: default;
 }

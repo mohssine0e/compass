@@ -24,7 +24,22 @@ import ProgressBar from './ProgressBar'
 import ReplanModulesModal from './ReplanModulesModal'
 import StepDeepView from './StepDeepView'
 import VerifyModal from './VerifyModal'
-import { Badge, Button, IconArchive, IconDelete, IconEdit, IconUndo, Menu } from './ui'
+import {
+  Badge,
+  Button,
+  IconArchive,
+  IconDelete,
+  IconEdit,
+  IconModule,
+  IconStep,
+  IconSubstep,
+  IconSubSubstep,
+  IconUndo,
+  Menu,
+} from './ui'
+
+// One icon per nesting depth (Phase 21) — module boldest, sub-substep faintest.
+const DEPTH_ICONS = [IconModule, IconStep, IconSubstep, IconSubSubstep]
 import './Roadmap.css'
 
 // A roadmap is a tree (Phase 13): a flat roadmap is one level of leaf steps and reads as a plain
@@ -419,7 +434,10 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
       { label: 'Delete', onClick: () => deleteStep(node), danger: true, icon: <IconDelete /> },
     ]
     return (
-      <li className={`step-item ${state}`} style={depth ? { marginLeft: depth * 22 } : undefined}>
+      <li
+        className={`step-item ${state} depth-${Math.min(depth, 3)}`}
+        style={depth ? { marginLeft: depth * 22 } : undefined}
+      >
         <span className="step-marker" aria-hidden="true">
           {isDone ? '✓' : isDropped ? '–' : isCurrent ? '●' : '○'}
         </span>
@@ -492,14 +510,18 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     const open = !collapsed.has(node.id)
     const p = node.progress || { done: 0, total: 0 }
     const isStepContainer = node.type === 'roadmap_step'
+    const DepthIcon = DEPTH_ICONS[Math.min(depth, DEPTH_ICONS.length - 1)]
     return (
       <>
         <li
-          className="node-group"
+          className={`node-group depth-${Math.min(depth, 3)}`}
           style={depth ? { marginLeft: depth * 22 } : undefined}
           onClick={() => toggleCollapsed(node.id)}
         >
           <span className="node-group-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
+          <span className="node-group-depth-icon" aria-hidden="true">
+            <DepthIcon size={14} />
+          </span>
           <span className="node-group-title">{nodeText(node)}</span>
           <Badge>{p.done}/{p.total}</Badge>
           {isStepContainer && (
@@ -738,6 +760,31 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
         <StepDeepView
           step={toStepShape(findNode(children, deepStepId))}
           atMaxDepth={(findNodeDepth(children, deepStepId) ?? 0) >= MAX_STEP_DEPTH}
+          breadcrumb={[
+            { id: null, label: roadmap.title },
+            ...(findNodePath(children, deepStepId) || []).map((n) => ({
+              id: n.id,
+              type: n.type,
+              label: nodeText(n),
+            })),
+            { id: deepStepId, label: nodeText(findNode(children, deepStepId)) },
+          ]}
+          onNavigate={(seg) => {
+            // Root or a module goes back to the tree (expanding that module); an ancestor
+            // step opens its own deep view instead.
+            if (seg.id != null && seg.type === 'roadmap_step') {
+              setDeepStepId(seg.id)
+              return
+            }
+            setDeepStepId(null)
+            if (seg.id != null) {
+              setCollapsed((prev) => {
+                const next = new Set(prev)
+                next.delete(seg.id)
+                return next
+              })
+            }
+          }}
           onClose={() => setDeepStepId(null)}
           onChanged={load}
         />
@@ -840,6 +887,19 @@ function findNode(nodes, targetId) {
     if (n.id === targetId) return n
     if (n.children) {
       const found = findNode(n.children, targetId)
+      if (found) return found
+    }
+  }
+  return null
+}
+
+// Ancestor chain from the top level down to (excluding) the target node, in order — feeds the
+// deep view's breadcrumb (Phase 21). Null if the target isn't in the tree.
+function findNodePath(nodes, targetId, trail = []) {
+  for (const n of nodes) {
+    if (n.id === targetId) return trail
+    if (n.children) {
+      const found = findNodePath(n.children, targetId, [...trail, n])
       if (found) return found
     }
   }
