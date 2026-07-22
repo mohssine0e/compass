@@ -1682,20 +1682,26 @@ Goal: give Phase 8's existing verification more format variety and founder contr
 building a second, separate testing system — merged in from the suggestions doc's "On-Demand
 Testing System," explicitly scoped as an extension of what Phase 8 already built.
 
-- [ ] Extend the existing verification question-generation service to support format variants:
+- [x] Extend the existing verification question-generation service to support format variants:
   multiple-choice (auto-evaluated against a marked correct option), a short code-challenge (for
   build/implement-shaped steps, evaluated by the existing AI evaluation service against the
   step's intent), and a scenario/free-response format (for design/architecture-shaped steps) —
   additive variants of the existing service, not a parallel system.
-- [ ] Auto-detect a reasonable default format from the step's content/`kind` field (a `kind:
+- [x] Auto-detect a reasonable default format from the step's content/`kind` field (a `kind:
   "project"` step defaults toward code-challenge or scenario; a conceptual step defaults toward
   multiple-choice), but let the founder override the format per check.
-- [ ] Keep verification entirely optional, per-step, exactly as Phase 8 already built — this phase
+- [x] Keep verification entirely optional, per-step, exactly as Phase 8 already built — this phase
   only adds format variety and founder choice, not a new mandatory gate.
-- [ ] Acceptance: trigger verification on a project-shaped step and a conceptual step, confirm each
+- [x] Acceptance: trigger verification on a project-shaped step and a conceptual step, confirm each
   defaults to a sensibly different format, and confirm the founder can override the format choice
   on at least one of them.
-- [ ] **Push + tag `phase-26-complete`. Stop. Let the founder use this for real before continuing.**
+  (Verified live on the founder's own real "DevOps Cloud Engineering" roadmap: a conceptual step
+  defaulted to multiple choice — answered wrong first, got a plain self-talk gap naming the
+  correct option instantly with no AI call, then answered right and passed; overrode that same
+  step to "Code challenge" and passed a genuine bash-script answer; a project-kind step correctly
+  defaulted to "Code challenge" instead. Both real steps were answered correctly and are now
+  legitimately marked done — not test data, real progress on the founder's actual roadmap.)
+- [x] **Push + tag `phase-26-complete`. Stop. Let the founder use this for real before continuing.**
 
 ---
 
