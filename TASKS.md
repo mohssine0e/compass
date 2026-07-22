@@ -1587,10 +1587,13 @@ organizing captures and reviewing the profile/history.
     elsewhere (Status/Theme in Everything, format-avoid and learning-preferences in Profile) for
     visual consistency — likely a small multi-option toggle-chip row per filter dimension, reusing
     the existing `Chip` component from `components/ui/`.
-- [ ] Acceptance: Profile's skill section for a 39-skill resume import fits in noticeably less
+- [x] Acceptance: Profile's skill section for a 39-skill resume import fits in noticeably less
   vertical space than today (chip-cloud, not full rows, for anything without a set confidence); the
   idea detail modal's two chip rows are clearly labeled; Events' filters are chips, not dropdowns.
-- [ ] **Push + tag `phase-23-complete`. Stop. Let the founder use this for real before continuing.**
+  (Verified live against the founder's real 39-skill profile: unrated skills render as a wrapped
+  chip cloud, picking a confidence promotes one skill to a full row while the rest stay compact;
+  Events' source/severity filters are Chip toggles with a visible pressed state.)
+- [x] **Push + tag `phase-23-complete`. Stop. Let the founder use this for real before continuing.**
 
 ---
 
