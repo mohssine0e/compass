@@ -312,12 +312,14 @@ final class PromptTemplates {
         not the primary sizing mechanism).
       - Fit the scope to their stated time and starting point. Don't pad.
       - Give the roadmap a short, plain title (a few words) naming what they'll be able to do.
+      - If a "Teaching voice" is given below, write step text/rationale in that voice — framing
+        and vocabulary only, never hype, never softer honesty than the rest of these rules.
       - Output ONLY strict JSON, no prose around it:
         {"title": "...", "interpretation": "..." or null, "steps": [{"text": "...", "kind": "concept", "weight": "medium", "dependsOnIndex": null, "rationale": "..."}], "skipped": ["..."]}
       """;
 
   static String flatProposeUser(String goal, String clarifications, String profileContext,
-      String groundingContext, String assessmentContext) {
+      String groundingContext, String assessmentContext, String domain) {
     StringBuilder sb = new StringBuilder();
     sb.append("Goal: ").append(goal == null ? "" : goal.trim()).append('\n');
     if (clarifications != null && !clarifications.isBlank()) {
@@ -329,6 +331,7 @@ final class PromptTemplates {
     if (assessmentContext != null && !assessmentContext.isBlank()) {
       sb.append("Assessed scope: ").append(assessmentContext.trim()).append('\n');
     }
+    appendPersonaVoice(sb, domain);
     if (groundingContext != null && !groundingContext.isBlank()) {
       sb.append("Real search results to ground this in:\n")
           .append(groundingContext.trim()).append('\n');
@@ -394,12 +397,14 @@ final class PromptTemplates {
         one call (a parsing/UX safety rail, not the primary sizing mechanism).
       - Fit the scope to their stated time and starting point. Don't pad.
       - Give the whole roadmap a short, plain title (a few words) naming what they'll be able to do.
+      - If a "Teaching voice" is given below, write module titles/scopes in that voice — framing
+        and vocabulary only, never hype, never softer honesty than the rest of these rules.
       - Output ONLY strict JSON, no prose around it:
         {"title": "...", "interpretation": "..." or null, "modules": [{"title": "...", "scope": "..."}], "skipped": ["..."]}
       """;
 
   static String outlineUser(String goal, String clarifications, String profileContext,
-      String groundingContext, String assessmentContext) {
+      String groundingContext, String assessmentContext, String domain) {
     StringBuilder sb = new StringBuilder();
     sb.append("Goal: ").append(goal == null ? "" : goal.trim()).append('\n');
     if (clarifications != null && !clarifications.isBlank()) {
@@ -411,6 +416,7 @@ final class PromptTemplates {
     if (assessmentContext != null && !assessmentContext.isBlank()) {
       sb.append("Assessed scope: ").append(assessmentContext.trim()).append('\n');
     }
+    appendPersonaVoice(sb, domain);
     if (groundingContext != null && !groundingContext.isBlank()) {
       sb.append("Real search results to ground the structure in:\n")
           .append(groundingContext.trim()).append('\n');
@@ -471,13 +477,15 @@ final class PromptTemplates {
         don't apply a fixed count. Never more than 10 steps in one call (a parsing/UX safety rail,
         not the primary sizing mechanism).
       - Stay inside this module's scope — don't wander into other modules' territory.
+      - If a "Teaching voice" is given below, write step text/rationale in that voice — framing
+        and vocabulary only, never hype, never softer honesty than the rest of these rules.
       - Output ONLY strict JSON, no prose around it:
         {"steps": [{"text": "...", "kind": "concept", "weight": "medium", "dependsOnIndex": null, "dependsOnEntryId": null, "rationale": "...", "riskScore": null}]}
       """;
 
   static String expandModuleUser(String roadmapTitle, String moduleTitle, String moduleScope,
       String profileContext, String groundingContext, String assessmentContext,
-      List<RoadmapAiService.PriorStep> priorSteps, boolean isFoundationalModule) {
+      List<RoadmapAiService.PriorStep> priorSteps, boolean isFoundationalModule, String domain) {
     StringBuilder sb = new StringBuilder();
     sb.append("Roadmap: ").append(roadmapTitle == null ? "" : roadmapTitle.trim()).append('\n');
     sb.append("Module to expand: ").append(moduleTitle == null ? "" : moduleTitle.trim()).append('\n');
@@ -490,6 +498,7 @@ final class PromptTemplates {
     if (assessmentContext != null && !assessmentContext.isBlank()) {
       sb.append("Assessed scope: ").append(assessmentContext.trim()).append('\n');
     }
+    appendPersonaVoice(sb, domain);
     if (priorSteps != null && !priorSteps.isEmpty()) {
       sb.append("Steps already drafted in EARLIER modules (real ids — use dependsOnEntryId if one ")
           .append("of these is a genuine prerequisite for a step here):\n");
@@ -542,6 +551,18 @@ final class PromptTemplates {
   }
 
   /**
+   * Append a Phase 25 teaching-persona voice line for {@code domain}, if the small curated
+   * roster has one — never called for reflection-facing prompts (resurfacing, acknowledgments,
+   * Explain), only the generation-content prompts named in {@link TeachingPersonas}'s doc.
+   */
+  private static void appendPersonaVoice(StringBuilder sb, String domain) {
+    String voice = TeachingPersonas.voiceFor(domain);
+    if (voice != null) {
+      sb.append("Teaching voice to write this content in: ").append(voice).append('\n');
+    }
+  }
+
+  /**
    * System prompt for breaking one stalled step into smaller steps (Phase 20: same richer step
    * shape {@link #EXPAND_MODULE_SYSTEM} uses, not plain text, so a break-down no longer reads as
    * a visibly poorer result than every other generation path). Used when the user, on a
@@ -567,17 +588,20 @@ final class PromptTemplates {
 
       Hard rules:
       - 2 to 4 steps. Together they must fully cover the original step, nothing more, nothing less.
+      - If a "Teaching voice" is given below, write step text/rationale in that voice — framing
+        and vocabulary only, never hype, never softer honesty than the rest of these rules.
       - Output ONLY strict JSON, no prose around it:
         {"steps": [{"text": "...", "kind": "concept", "weight": "medium", "dependsOnIndex": null, "rationale": "..."}]}
       """;
 
   static String breakdownUser(String roadmapTitle, String stepText, String profileContext,
-      String groundingContext) {
+      String groundingContext, String domain) {
     StringBuilder sb = new StringBuilder();
     sb.append("Roadmap: ").append(roadmapTitle == null ? "" : roadmapTitle.trim()).append('\n');
     sb.append("The stalled step to break down: ").append(stepText == null ? "" : stepText.trim())
         .append('\n');
     appendProfile(sb, profileContext);
+    appendPersonaVoice(sb, domain);
     if (groundingContext != null && !groundingContext.isBlank()) {
       sb.append("Real search results to ground this in:\n").append(groundingContext.trim()).append('\n');
     }

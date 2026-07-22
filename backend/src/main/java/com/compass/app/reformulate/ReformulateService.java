@@ -72,7 +72,8 @@ public class ReformulateService {
         String groundingContext = grounding == null ? null : grounding.context();
 
         List<RoadmapAiService.DraftStep> smaller =
-            roadmapAi.breakDownStep(roadmapTitle, stepText, profileContext, groundingContext);
+            roadmapAi.breakDownStep(roadmapTitle, stepText, profileContext, groundingContext,
+                roadmapService.domainOf(stepId));
         if (smaller == null) {
           throw new IllegalStateException("Couldn't break this down right now.");
         }

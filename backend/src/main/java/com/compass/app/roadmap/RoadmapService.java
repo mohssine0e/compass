@@ -156,7 +156,8 @@ public class RoadmapService {
         if ("flat".equals(assessment.shape())) {
             onStage.accept(GenerationStage.DRAFTING);
             RoadmapAiService.FlatProposal flat = roadmapAi.proposeFlat(
-                    goal, clarificationsText, profileContext, groundingContext, assessmentContext);
+                    goal, clarificationsText, profileContext, groundingContext, assessmentContext,
+                    assessment.domain());
             if (flat == null) {
                 throw new IllegalStateException(
                         "Drafting is unavailable right now — write the steps yourself.");
@@ -174,7 +175,8 @@ public class RoadmapService {
 
         onStage.accept(GenerationStage.DRAFTING);
         RoadmapAiService.RoadmapOutline outline = roadmapAi.moduleOutline(
-                goal, clarificationsText, profileContext, groundingContext, assessmentContext);
+                goal, clarificationsText, profileContext, groundingContext, assessmentContext,
+                assessment.domain());
         if (outline == null) {
             throw new IllegalStateException(
                     "Drafting is unavailable right now — write the steps yourself.");
@@ -265,6 +267,7 @@ public class RoadmapService {
                 .map(p -> ProfileContext.forModulePrompt(p, moduleTitle, moduleScope))
                 .orElse(null);
         String assessmentContext = storedAssessmentContext(roadmap);
+        String domain = storedDomain(roadmap);
 
         // Steps already drafted in genuinely earlier modules (lower order index), offered as
         // real cross-module prerequisites (Phase 18) — not just same-batch ones.
@@ -307,7 +310,7 @@ public class RoadmapService {
         boolean isFoundationalModule = module.getOrderIndex() == null || module.getOrderIndex() == 0;
         List<RoadmapAiService.DraftStep> steps = roadmapAi.expandModule(roadmapTitle, moduleTitle,
                 moduleScope, profileContext, groundingContext, assessmentContext, priorSteps,
-                isFoundationalModule);
+                isFoundationalModule, domain);
         if (steps == null) {
             return null;
         }
@@ -432,10 +435,10 @@ public class RoadmapService {
                 new RoadmapAiService.GoalAssessment(complexity, hours, domain, priorLevel, shape, archetype));
     }
 
-    /** The roadmap's stored archetype (Phase 24) — "career_path" gates the portfolio mandate. */
-    private static String storedArchetype(Entry roadmap) {
+    /** The roadmap's stored assessed domain (Phase 18/25) — picks a Phase 25 teaching persona. */
+    private static String storedDomain(Entry roadmap) {
         Object raw = roadmap.getContent() != null ? roadmap.getContent().get("assessment") : null;
-        return raw instanceof Map<?, ?> map && map.get("archetype") instanceof String s ? s : null;
+        return raw instanceof Map<?, ?> map && map.get("domain") instanceof String s ? s : null;
     }
 
     /** The roadmap's stored assessed complexity (1-5), or the mid-range default if none stored. */
@@ -702,6 +705,31 @@ public class RoadmapService {
                 .map(this::depthOf)
                 .map(depth -> depth >= MAX_STEP_DEPTH)
                 .orElse(false);
+    }
+
+    /**
+     * The assessed domain (Phase 18) of the roadmap a node belongs to, walking up from any node
+     * (step, module, or the root itself) to the root entry that actually carries the stored
+     * assessment — modules and steps never carry their own. Used to pick a Phase 25 teaching
+     * persona for reformulate/resurfacing-triggered breakdowns, which only have a step or module
+     * id in hand, not the root. Null if the node doesn't exist or nothing was ever assessed.
+     */
+    @Transactional(readOnly = true)
+    public String domainOf(Long nodeId) {
+        Entry node = repository.findById(nodeId).orElse(null);
+        if (node == null) {
+            return null;
+        }
+        Entry root = node;
+        while (root.getParentId() != null) {
+            Entry parent = repository.findById(root.getParentId()).orElse(null);
+            if (parent == null) {
+                break;
+            }
+            root = parent;
+        }
+        return root.getContent() != null && root.getContent().get("assessment") instanceof Map<?, ?> assessment
+                && assessment.get("domain") instanceof String s ? s : null;
     }
 
     /** Every resource url already attached anywhere in this roadmap's tree (Phase 13 dedup). */

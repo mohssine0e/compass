@@ -124,16 +124,17 @@ public class RoadmapAiService {
      * plus a one-line scope, drafted before any individual steps. {@code null} on failure.
      */
     public RoadmapOutline moduleOutline(String goal, String clarifications, String profileContext,
-                                        String groundingContext, String assessmentContext) {
+                                        String groundingContext, String assessmentContext,
+                                        String domain) {
         String cacheKey = AiGenerationCache.key("outline", goal, clarifications, profileContext,
-                groundingContext, assessmentContext);
+                groundingContext, assessmentContext, domain);
         RoadmapOutline cached = cache.get(cacheKey);
         if (cached != null) {
             return cached;
         }
         JsonNode json = ai.generate(AiTier.HEAVY, "roadmap outline", PromptTemplates.OUTLINE_SYSTEM,
                 PromptTemplates.outlineUser(goal, clarifications, profileContext, groundingContext,
-                        assessmentContext));
+                        assessmentContext, domain));
         if (json == null) {
             return null;
         }
@@ -155,16 +156,17 @@ public class RoadmapAiService {
      * {@code null} on failure.
      */
     public FlatProposal proposeFlat(String goal, String clarifications, String profileContext,
-                                    String groundingContext, String assessmentContext) {
+                                    String groundingContext, String assessmentContext,
+                                    String domain) {
         String cacheKey = AiGenerationCache.key("flat", goal, clarifications, profileContext,
-                groundingContext, assessmentContext);
+                groundingContext, assessmentContext, domain);
         FlatProposal cached = cache.get(cacheKey);
         if (cached != null) {
             return cached;
         }
         JsonNode json = ai.generate(AiTier.HEAVY, "flat roadmap", PromptTemplates.FLAT_PROPOSE_SYSTEM,
                 PromptTemplates.flatProposeUser(goal, clarifications, profileContext,
-                        groundingContext, assessmentContext));
+                        groundingContext, assessmentContext, domain));
         if (json == null) {
             return null;
         }
@@ -189,18 +191,20 @@ public class RoadmapAiService {
     public List<DraftStep> expandModule(String roadmapTitle, String moduleTitle, String moduleScope,
                                         String profileContext, String groundingContext,
                                         String assessmentContext, List<PriorStep> priorSteps,
-                                        boolean isFoundationalModule) {
+                                        boolean isFoundationalModule, String domain) {
         String priorStepsKey = priorSteps == null ? "" : priorSteps.stream()
                 .map(p -> p.id() + ":" + p.text()).collect(java.util.stream.Collectors.joining("|"));
         String cacheKey = AiGenerationCache.key("expand", roadmapTitle, moduleTitle, moduleScope,
-                profileContext, groundingContext, assessmentContext, priorStepsKey, isFoundationalModule);
+                profileContext, groundingContext, assessmentContext, priorStepsKey,
+                String.valueOf(isFoundationalModule), domain);
         List<DraftStep> cached = cache.get(cacheKey);
         if (cached != null) {
             return cached;
         }
         JsonNode json = ai.generate(AiTier.HEAVY, "module expansion", PromptTemplates.EXPAND_MODULE_SYSTEM,
                 PromptTemplates.expandModuleUser(roadmapTitle, moduleTitle, moduleScope,
-                        profileContext, groundingContext, assessmentContext, priorSteps, isFoundationalModule));
+                        profileContext, groundingContext, assessmentContext, priorSteps,
+                        isFoundationalModule, domain));
         if (json == null) {
             return null;
         }
@@ -472,9 +476,9 @@ public class RoadmapAiService {
      * path. {@code null} on failure.
      */
     public List<DraftStep> breakDownStep(String roadmapTitle, String stepText, String profileContext,
-                                         String groundingContext) {
+                                         String groundingContext, String domain) {
         JsonNode json = ai.generate(AiTier.HEAVY, "step breakdown", PromptTemplates.BREAKDOWN_SYSTEM,
-                PromptTemplates.breakdownUser(roadmapTitle, stepText, profileContext, groundingContext));
+                PromptTemplates.breakdownUser(roadmapTitle, stepText, profileContext, groundingContext, domain));
         if (json == null) {
             return null;
         }

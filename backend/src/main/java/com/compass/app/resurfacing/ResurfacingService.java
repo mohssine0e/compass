@@ -245,7 +245,8 @@ public class ResurfacingService {
                 String groundingContext = grounding == null ? null : grounding.context();
 
                 List<RoadmapAiService.DraftStep> smaller =
-                        roadmapAi.breakDownStep(title, stepText, profileContext, groundingContext);
+                        roadmapAi.breakDownStep(title, stepText, profileContext, groundingContext,
+                                roadmapService.domainOf(roadmap.getId()));
                 if (smaller == null) {
                     throw new IllegalStateException("Couldn't draft smaller steps right now.");
                 }
