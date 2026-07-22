@@ -1,0 +1,13 @@
+%% Compass — "expand this module" flow, triggered later/on demand from the outline in
+%% diagram 3. Unlike diagram 3, this is a SINGLE BLOCKING HTTP request — no job/poll
+%% wrapper — so it can leave the UI showing only a spinner for up to ~75s in the worst
+%% case (see docs/current-status.md for why this gap still exists).
+flowchart TD
+    A["Founder clicks\n'Expand this module'"] --> B["Gather context: pruned profile +\nmulti-query grounding + earlier\nmodules' real step ids"]
+    B --> C["HEAVY tier: expandModule\nsteps with kind/weight/dependsOn/riskScore"]
+    C --> D{"Call\nsucceeded?"}
+    D -- yes --> E["Insert bridge steps for\nrisky cross-module dependencies"]
+    E --> F["Suggest resources + critique"]
+    F --> G["Proposal ready to review/accept"]
+    D -- "no — whole HEAVY\nchain failed" --> H["FAST tier fallback:\ntitles-only skeleton"]
+    H --> I["Persisted as skeletonOnly;\nbackground job retries every 10 min"]

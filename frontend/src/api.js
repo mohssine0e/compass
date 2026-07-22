@@ -115,6 +115,16 @@ export function addModuleSteps(roadmapId, moduleId, draftSteps) {
   })
 }
 
+/**
+ * Background-draft status for this roadmap's not-yet-expanded modules — each unexpanded module
+ * starts drafting automatically server-side (roadmap created, module inserted/regenerated/
+ * replanned), so this is worth polling instead of always blocking on `expandModule`. Each item is
+ * `{moduleId, status: 'PENDING'|'DONE'|'FAILED', result, error}`.
+ */
+export function getModulePrefetchStatus(roadmapId) {
+  return request(`/roadmaps/${roadmapId}/modules/prefetch-status`)
+}
+
 /** Redraft one module's title/scope (Phase 18). Nothing persisted; accept via `updateModule`. */
 export function regenerateModuleScope(roadmapId, moduleId) {
   return request(`/roadmaps/${roadmapId}/modules/${moduleId}/regenerate-scope`, { method: 'POST' })

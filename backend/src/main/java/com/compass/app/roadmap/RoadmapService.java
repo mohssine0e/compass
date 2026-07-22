@@ -484,6 +484,23 @@ public class RoadmapService {
     }
 
     /**
+     * Ids of this roadmap's not-yet-expanded modules — any direct child module with no steps of
+     * its own yet. Used by {@link ModulePrefetchService} (via the controller) to know which
+     * modules to draft in the background whenever one appears or changes.
+     */
+    @Transactional(readOnly = true)
+    public List<Long> unexpandedModuleIds(Long roadmapId) {
+        List<Long> ids = new ArrayList<>();
+        for (Entry m : repository.findByParentIdOrderByOrderIndexAsc(roadmapId)) {
+            if (m.getType() == EntryType.ROADMAP
+                    && repository.findByParentIdOrderByOrderIndexAsc(m.getId()).isEmpty()) {
+                ids.add(m.getId());
+            }
+        }
+        return ids;
+    }
+
+    /**
      * Redraft one module's title/scope (Phase 18) — propose half of "regenerate this module";
      * nothing changes until {@link #updateModule} is called with the (possibly edited) result.
      */

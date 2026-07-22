@@ -7,6 +7,17 @@
   align-self: flex-start;
 }
 
+/* Desktop: a roadmap tree (modules/steps/substeps) is exactly the content that benefits
+   from more width — the 620px cap from the mobile/PWA layout was leaving most of a
+   full-screen desktop window empty. Widen on screens with the room; phone-sized viewports
+   keep the narrow column. */
+@media (min-width: 900px) {
+  .roadmap-list,
+  .roadmap-detail {
+    max-width: 1100px;
+  }
+}
+
 .app-main:has(.roadmap-list),
 .app-main:has(.roadmap-detail) {
   justify-content: flex-start;
@@ -453,6 +464,21 @@
 /* Checkbox to pick modules for a batch expansion (Phase 19) — opt-in, off by default. */
 .node-group-select {
   cursor: pointer;
+  flex-shrink: 0;
+}
+
+.node-group-select:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+/* A module already drafting in the background — replaces the "Expand this module" button so
+   there's nothing to click while it's not actually ready yet. */
+.node-group-working {
+  color: var(--faint);
+  font-size: 0.85rem;
+  font-style: italic;
+  padding: 6px 10px;
   flex-shrink: 0;
 }
 

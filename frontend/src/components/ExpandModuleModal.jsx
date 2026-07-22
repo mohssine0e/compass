@@ -3,21 +3,27 @@ import { addModuleSteps, expandModule } from '../api'
 import StepProposalEditor, { attachIssueCids, fromProposedSteps, toDraftSteps } from './StepProposalEditor'
 import { Button, Modal } from './ui'
 
-// Expand one module of a roadmap into its own steps, on demand (Phase 13). Drafts once on open
-// (grounded on the module's own scope, deduped against resources already used elsewhere in the
-// roadmap), then reuses the same propose→approve→apply editor as top-level generation — the
-// user edits before anything is kept.
-export default function ExpandModuleModal({ roadmapId, module, onClose, onApplied }) {
-  const [steps, setSteps] = useState(null) // null while drafting
-  const [skipped, setSkipped] = useState([])
-  const [sources, setSources] = useState([])
-  const [issues, setIssues] = useState([])
-  const [skeletonOnly, setSkeletonOnly] = useState(false)
-  const [loading, setLoading] = useState(true)
+// Expand one module of a roadmap into its own steps (Phase 13). Most modules are already being
+// drafted in the background from the moment they appear as unexpanded (see
+// `getModulePrefetchStatus`) — when the caller already has that result, pass it as `prefetched`
+// and this skips straight to the editor instead of drafting again on open. Falls back to the
+// normal on-demand call when there's nothing prefetched yet (a background draft that's still
+// running, failed, or was never started). Either way, reuses the same propose→approve→apply
+// editor as top-level generation — the user edits before anything is kept.
+export default function ExpandModuleModal({ roadmapId, module, prefetched, onClose, onApplied }) {
+  const [steps, setSteps] = useState(prefetched ? fromProposedSteps(prefetched.steps) : null)
+  const [skipped, setSkipped] = useState(prefetched?.skipped || [])
+  const [sources, setSources] = useState(prefetched?.sources || [])
+  const [issues, setIssues] = useState(
+    prefetched ? attachIssueCids(fromProposedSteps(prefetched.steps), prefetched.issues) : []
+  )
+  const [skeletonOnly, setSkeletonOnly] = useState(!!prefetched?.skeletonOnly)
+  const [loading, setLoading] = useState(!prefetched)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
   useEffect(() => {
+    if (prefetched) return // already have a real result, no need to draft again
     let alive = true
     expandModule(roadmapId, module.id)
       .then((res) => {
@@ -38,7 +44,7 @@ export default function ExpandModuleModal({ roadmapId, module, onClose, onApplie
     return () => {
       alive = false
     }
-  }, [roadmapId, module.id])
+  }, [roadmapId, module.id, prefetched])
 
   const cleanSteps = (steps || []).filter((s) => s.text.trim())
   const canApply = cleanSteps.length > 0 && !busy

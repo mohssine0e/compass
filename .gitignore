@@ -28,3 +28,6 @@ frontend/dist-ssr/
 
 # the regenirated files like the dist folder
 dist/
+
+# hidden folders
+.*/

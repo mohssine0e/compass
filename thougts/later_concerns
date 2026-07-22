@@ -1,0 +1,58 @@
+PART 2: FOR LATER CONCERNS (Post-Launch)
+1. Security (Defer Until Multi-User)
+Suggestion	Why Defer
+API Key Redaction in Logs	You're the only person seeing the logs. Even if API keys appear in logs, you're the one who owns them. Not a risk until multiple people access logs.
+Data Retention Policy	You can manually clean up old data if it becomes a problem. No need to build automated policies until you have real users generating significant data.
+IP-Based Rate Limiting	With only one user (you), rate limits are already enforced by provider quotas. IP limits add complexity with zero benefit.
+Content Safety Check	You're not going to abuse your own system or enter harmful content. This is only needed when untrusted users join.
+Opt-Out Header for Training	While some providers (Gemini, DeepSeek) may use your data for training, you're the only user. You can decide for yourself if this matters. Add the opt-out header when you care about data privacy.
+2. Multi-User Features (Defer Until Real Users)
+Suggestion	Why Defer
+User ID Tracking	Only one user. You know who you are. No need to distinguish.
+Quota Dashboard Endpoint	You can check provider dashboards directly (Groq console, Google AI Studio, NVIDIA build portal). No need to build a custom endpoint yet.
+Performance Metrics Endpoint	You can check logs manually. Add this only when you need historical trends or want to share metrics.
+Slack/Email Alerts	You'll notice if the app breaks—you're the one using it. Alerts are only needed when you're not actively monitoring.
+Pre-Flight Quota Check	Nice-to-have, but 429 errors are handled gracefully by the fallback chain. You can add this when you care about saving 60 seconds of failover latency (which only matters at scale).
+3. Infrastructure (Defer Until Scale)
+Suggestion	Why Defer
+Job Persistence to PostgreSQL	In-memory ConcurrentHashMap is perfectly fine for a single user. If the app restarts, you'll just regenerate the roadmap. No data loss—it's all regeneratable. Add persistence only when users can't afford to lose job state.
+Distributed Caching	Caffeine in-memory cache is fine for one user. No need for Redis or distributed solutions until multiple users share a cache.
+Horizontal Scaling	One instance is enough. No need to think about scaling until you have concurrent users.
+Database Indexing	With only one user, the database handles queries instantly. Indexing is an optimization for multi-user query loads.
+4. Advanced AI Features (Defer Until Quality Becomes Critical)
+Suggestion	Why Defer
+Hybrid 8B vs 49B Ensemble	Adds model selection complexity. Start with a single model per tier. If you hit quality issues, you can revisit this.
+SME Critique Loop	Adds 1-2 extra AI calls per career roadmap. Only critical if you're generating career paths and want to catch hallucinations. Defer until you have real career path users.
+Dynamic Re-Forecasting	Requires session history data. You won't have enough data until you've used the app for a while. Defer until you have at least 10-20 completed sessions per roadmap.
+Retroactive Alignment	Complex logic involving project detection and patch generation. Defer until users actually finish projects and you can see if tech-stack drift is a real problem.
+Proactive Nudges	Requires tuning to avoid being annoying. Defer until you have real usage patterns and can observe what's helpful vs. intrusive.
+Dependency Risk + Bridges	Advanced graph logic. Defer until you see real dependency issues (e.g., users struggling with specific transitions).
+Double-Check Heavy	Adds a Gemini Pro call. Defer until career paths are actually being generated and you want to validate quality.
+Project Validation (AI Review)	Complex and quota-intensive. Defer until users are actually completing projects and want feedback.
+5. Testing (Defer Until Code is Stable)
+Suggestion	Why Defer
+Regression Tests with Golden Prompts	While you're actively iterating on prompts, golden tests will constantly break. Add them once prompts are stable.
+WireMock Integration	Mockito is simpler for a solo developer. WireMock adds complexity without benefit. Add it only when you need to simulate API behaviors at scale.
+Performance/Load Testing	Only one user. No need.
+6. Observability (Defer Until Needed)
+Suggestion	Why Defer
+Detailed Metrics Endpoint	You can check logs. Add this only when you need a dashboard or want to share performance data.
+Failed Job Prompt Storage	You can debug locally. No need to store failed prompts until you have users reporting issues.
+Alerting System	You're the only user. You'll notice if it breaks. Alerts are only needed when you're not actively using it.
+7. UI/UX Polish (Defer Until Core Works)
+Suggestion	Why Defer
+Collapsible Modules by Default	Nice-to-have, but you can manually collapse modules. Defer until the roadmap tree gets deep enough to be overwhelming.
+Timeline Visualization	Visual polish. Defer until you have enough roadmaps to make a timeline meaningful.
+Project Validation (AI Review)	Complex and quota-intensive. Defer until users are actually completing projects and want feedback.
+Advanced Breadcrumb Styling	Basic breadcrumb is enough for now. Style it more later.
+8. Advanced UI/UX (Defer Until Multi-Module)
+Suggestion	Why Defer
+Drag-and-Drop Reorder	Nice-to-have but adds significant complexity. Use the current reorder mode (toggle + arrow buttons) until you need more.
+Collapsible Completed Phases	Simple toggle is enough for now. Full collapsible UI can come later.
+Module Progress Indicators	Basic progress bar is enough. Phase-level indicators can come later.
+Resource Categorization	Simple list is fine. Categorization (video/article/interactive) can be added later.
+Quick Reference: Keep vs. Defer
+Category	Keep (Implement Now)	Defer (For Later)
+Architecture	Async Job, Parallel Expansion, Progressive Generation, Tiered Fast-Fallback	Distributed Caching, Horizontal Scaling, Job Persistence
+Generation Logic	Archetype Categorization, Phase-Based Structure, Project Mandate, Split Structure vs. Resources	SME Critique Loop, Dynamic Re-Forecasting, Retroactive Alignment, Dependency Risk + Bridges
+AI Layer	Task-Aware Routing, Semantic Prompt Caching,	

@@ -1,0 +1,14 @@
+%% Compass — system overview (zoomed out). See 2-ai-provider-tiers.mermaid for what's
+%% inside the "AI layer" box.
+flowchart TB
+    FE["Frontend\nReact + Vite PWA"]
+    API["Backend REST API\nRoadmapController + others"]
+    ORCH["RoadmapService\n(orchestration)"]
+    AI["AI layer\n(tiered provider failover —\nsee diagram 2)"]
+    SEARCH["Search grounding\nExa (primary) → Tavily (fallback)"]
+    DB[("PostgreSQL\nentries / learner_profile / system_events")]
+
+    FE --> API --> ORCH
+    ORCH --> AI
+    ORCH --> SEARCH
+    ORCH --> DB

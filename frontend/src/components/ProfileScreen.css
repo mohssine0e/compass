@@ -5,6 +5,15 @@
   padding: 0 24px;
 }
 
+/* Desktop: this screen holds real content (skills, resume, preferences) — the 620px cap
+   from the mobile/PWA layout leaves most of a full-screen desktop window empty. Widen it
+   on screens with the room, keep the narrow column for anything phone-sized. */
+@media (min-width: 900px) {
+  .profile {
+    max-width: 1100px;
+  }
+}
+
 .profile-lead {
   color: var(--muted);
   font-size: var(--text-base);

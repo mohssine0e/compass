@@ -11,6 +11,7 @@ import com.compass.app.roadmap.dto.GenerationJobResponse;
 import com.compass.app.roadmap.dto.InsertModuleRequest;
 import com.compass.app.roadmap.dto.InsertStepRequest;
 import com.compass.app.roadmap.dto.ModuleExpansionResult;
+import com.compass.app.roadmap.dto.ModulePrefetchStatus;
 import com.compass.app.roadmap.dto.ReorderStepsRequest;
 import com.compass.app.roadmap.dto.ReplanModuleItem;
 import com.compass.app.roadmap.dto.ReplanModulesRequest;
@@ -36,18 +37,36 @@ public class RoadmapController {
 
     private final RoadmapService service;
     private final GenerationJobService jobs;
+    private final ModulePrefetchService prefetch;
 
-    public RoadmapController(RoadmapService service, GenerationJobService jobs) {
+    public RoadmapController(RoadmapService service, GenerationJobService jobs, ModulePrefetchService prefetch) {
         this.service = service;
         this.jobs = jobs;
+        this.prefetch = prefetch;
     }
 
-    /** Create a roadmap with an ordered list of manually-written steps. */
+    /**
+     * Create a roadmap — with manually-written steps, an accepted draft, or an accepted module
+     * outline. When it's a module outline, kick off background drafting for every
+     * module right away, so they're often already ready by the time the founder opens one
+     * instead of waiting on "Expand this module".
+     */
     @PostMapping
     public ResponseEntity<RoadmapResponse> create(@RequestBody CreateRoadmapRequest request) {
         Entry roadmap = service.create(request);
+        prefetch.prefetchAll(roadmap.getId(), service.unexpandedModuleIds(roadmap.getId()));
         RoadmapResponse body = RoadmapResponse.of(roadmap, service::stepsOf);
         return ResponseEntity.status(HttpStatus.CREATED).body(body);
+    }
+
+    /**
+     * Background-prefetch status for this roadmap's not-yet-expanded modules — poll
+     * this instead of blocking on {@link #expandModule}. A module can already be DONE (drafted,
+     * ready to review) by the time the founder opens it.
+     */
+    @GetMapping("/{id}/modules/prefetch-status")
+    public List<ModulePrefetchStatus> prefetchStatus(@PathVariable Long id) {
+        return prefetch.statusFor(id);
     }
 
     /**
@@ -191,6 +210,7 @@ public class RoadmapController {
     public ResponseEntity<RoadmapResponse> addModuleSteps(@PathVariable Long id, @PathVariable Long moduleId,
                                                            @RequestBody AddModuleStepsRequest request) {
         service.addStepsToModule(id, moduleId, request.draftSteps());
+        prefetch.invalidate(moduleId); // no longer unexpanded — drop any tracked background draft
         Entry roadmap = service.getRoadmap(id);
         RoadmapResponse body = RoadmapResponse.of(roadmap, service::stepsOf);
         return ResponseEntity.status(HttpStatus.CREATED).body(body);
@@ -206,11 +226,17 @@ public class RoadmapController {
         return service.regenerateModuleScope(id, moduleId);
     }
 
-    /** Apply an edited module title/scope. Body is {title, scope}. */
+    /**
+     * Apply an edited module title/scope. Body is {title, scope}. The module's scope just
+     * changed, so any background draft already in flight/done under the old scope is stale —
+     * drop it and start a fresh one.
+     */
     @PutMapping("/{id}/modules/{moduleId}")
     public RoadmapResponse updateModule(@PathVariable Long id, @PathVariable Long moduleId,
                                          @RequestBody UpdateModuleRequest request) {
         service.updateModule(id, moduleId, request.title(), request.scope());
+        prefetch.invalidate(moduleId);
+        prefetch.prefetchAll(id, List.of(moduleId));
         Entry roadmap = service.getRoadmap(id);
         return RoadmapResponse.of(roadmap, service::stepsOf);
     }
@@ -224,11 +250,15 @@ public class RoadmapController {
         return service.proposeNewModule(id);
     }
 
-    /** Insert an accepted new module. Body is {title, scope, position?} — appended if omitted. */
+    /**
+     * Insert an accepted new module. Body is {title, scope, position?} — appended if omitted.
+     * It's unexpanded from the moment it exists, so kick off its background draft right away too.
+     */
     @PostMapping("/{id}/modules")
     public ResponseEntity<RoadmapResponse> insertModule(@PathVariable Long id,
                                                           @RequestBody InsertModuleRequest request) {
-        service.insertModule(id, request.title(), request.scope(), request.position());
+        Entry module = service.insertModule(id, request.title(), request.scope(), request.position());
+        prefetch.prefetchAll(id, List.of(module.getId()));
         Entry roadmap = service.getRoadmap(id);
         RoadmapResponse body = RoadmapResponse.of(roadmap, service::stepsOf);
         return ResponseEntity.status(HttpStatus.CREATED).body(body);
@@ -243,10 +273,17 @@ public class RoadmapController {
         return service.replanRemainingModules(id);
     }
 
-    /** Apply an accepted replan. Body is {modules: [{moduleId, title, scope}]}. */
+    /**
+     * Apply an accepted replan. Body is {modules: [{moduleId, title, scope}]}. Every replanned
+     * module's scope just changed, so drop and restart its background draft, same as a single
+     * regenerate-scope accept.
+     */
     @PutMapping("/{id}/modules/replan")
     public RoadmapResponse applyReplan(@PathVariable Long id, @RequestBody ReplanModulesRequest request) {
         service.applyReplan(id, request.modules());
+        List<Long> moduleIds = request.modules().stream().map(ReplanModuleItem::moduleId).toList();
+        moduleIds.forEach(prefetch::invalidate);
+        prefetch.prefetchAll(id, moduleIds);
         Entry roadmap = service.getRoadmap(id);
         return RoadmapResponse.of(roadmap, service::stepsOf);
     }

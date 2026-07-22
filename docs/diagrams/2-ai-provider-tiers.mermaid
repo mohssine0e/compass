@@ -1,0 +1,17 @@
+%% Compass — the "AI layer" box from diagram 1, expanded. Two tiers, two providers each,
+%% tried in order within a tier on any error/timeout/quota exhaustion.
+flowchart LR
+    Caller["AiJsonGenerator\n(every AI-calling feature\nnames one tier in code)"]
+
+    subgraph FAST["FAST tier — short, cheap, frequent calls\n(tone acks, clarifying Qs, verification)"]
+        direction LR
+        Groq["Groq\nprimary"] --> Flash["Gemini Flash\nbackup"]
+    end
+
+    subgraph HEAVY["HEAVY tier — generation-weight calls\n(outline, module expansion, critique)"]
+        direction LR
+        Pro["Gemini Pro\nprimary — 40s timeout"] --> Nvidia["NVIDIA NIM\nlast resort — 75s timeout"]
+    end
+
+    Caller --> FAST
+    Caller --> HEAVY

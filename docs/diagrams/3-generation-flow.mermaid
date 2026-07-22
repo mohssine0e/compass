@@ -1,0 +1,17 @@
+%% Compass — top-level "POST /roadmaps/generate/start" flow. This entire flow runs inside
+%% a background job (GenerationJobService); the frontend polls every 1.2s and shows the
+%% current stage (the boxes below) plus elapsed time, instead of a frozen button.
+%% See 4-module-expansion-flow.mermaid for what happens LATER, per module — a separate,
+%% still-blocking mechanism.
+flowchart TD
+    A["Founder enters a goal"] --> B["Stage: CLARIFYING\nclarifying / follow-up questions"]
+    B --> C{"Anything left\nto ask?"}
+    C -- yes --> B2["Show a question round\nfounder answers"]
+    B2 --> B
+    C -- no --> D["Stage: ASSESSING\nassessGoal → complexity, domain, shape"]
+    D --> E{"assessment.shape"}
+    E -- "flat\nsmall goal" --> F["Stage: DRAFTING\nflat step list"]
+    E -- "nested\nbigger goal" --> G["Stage: DRAFTING\nmodule outline only"]
+    F --> H["Stage: FINDING_RESOURCES\nsuggest resources + self-critique"]
+    H --> J["Job DONE:\nstep proposal ready to review"]
+    G --> K["Job DONE:\nmodule outline ready\n(each module expanded later, on demand)"]

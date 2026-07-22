@@ -34,7 +34,7 @@ export default defineConfig({
     proxy: {
       // The PWA and the API share an origin in dev; the backend lives under /api.
       '/api': {
-        target: 'http://localhost:8081',
+        target: 'http://localhost:8080',
         changeOrigin: true,
       },
     },

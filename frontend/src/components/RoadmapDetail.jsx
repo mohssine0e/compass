@@ -4,6 +4,7 @@ import {
   deleteRoadmap,
   deleteRoadmapStep,
   flattenStep,
+  getModulePrefetchStatus,
   getRoadmap,
   graduateStep,
   insertRoadmapStep,
@@ -89,6 +90,16 @@ function seedCollapsed(data) {
   return new Set(groups.filter((gid) => !onPath.has(gid)))
 }
 
+// True if any module anywhere in the tree has no steps of its own yet — worth polling
+// background-draft status for. Once every module's expanded, this goes false and polling stops.
+function hasEmptyModule(nodes) {
+  for (const n of nodes) {
+    if (n.type === 'roadmap' && (!n.children || n.children.length === 0)) return true
+    if (n.children && n.children.length > 0 && hasEmptyModule(n.children)) return true
+  }
+  return false
+}
+
 // Flatten every node's text by id, for the "needs: <step>" prerequisite label across the tree.
 function textByIdOf(nodes, map = new Map()) {
   for (const n of nodes) {
@@ -145,6 +156,10 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   const [replanning, setReplanning] = useState(false)
   // Structural tree vs. the ordered "what's next" learning path (Phase 13).
   const [view, setView] = useState('tree')
+  // Background-draft status per unexpanded module id, e.g. {status, result, error} — see
+  // getModulePrefetchStatus. Every unexpanded module starts drafting server-side the moment it
+  // appears, so this is usually already DONE by the time the founder opens one.
+  const [prefetch, setPrefetch] = useState({})
 
   const load = useCallback(async () => {
     try {
@@ -159,6 +174,39 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   useEffect(() => {
     load()
   }, [load])
+
+  // Poll background-draft status while any module here is still unexpanded — stops on its own
+  // once every module has steps (hasEmptyModule goes false and the interval is never set again).
+  useEffect(() => {
+    if (!roadmap || !hasEmptyModule(roadmap.children || [])) return
+    let alive = true
+    const tick = () => {
+      getModulePrefetchStatus(roadmap.id)
+        .then((list) => {
+          if (!alive) return
+          const map = {}
+          for (const item of list) map[item.moduleId] = item
+          setPrefetch(map)
+        })
+        .catch(() => {}) // best-effort status only — a failed poll just tries again next tick
+    }
+    tick()
+    const interval = setInterval(tick, 2500)
+    return () => {
+      alive = false
+      clearInterval(interval)
+    }
+  }, [roadmap])
+
+  // A module already tracked here (drafting or done in the background) shouldn't also be picked
+  // for the manual batch-expand action — that would spend a second real AI call on the same
+  // content. Drop it from the selection the moment a background job appears for it.
+  useEffect(() => {
+    setSelectedModuleIds((prev) => {
+      const next = new Set([...prev].filter((moduleId) => !prefetch[moduleId]))
+      return next.size === prev.size ? prev : next
+    })
+  }, [prefetch])
 
   async function markDone(stepId) {
     setBusyStepId(stepId)
@@ -574,14 +622,22 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
 
   // A module (child roadmap) that hasn't been expanded into steps yet (Phase 13) — its own row
   // with the module's scope and an explicit "Expand" action, instead of being treated as a leaf.
+  // Most modules are already drafting (or done) in the background from the moment they appear —
+  // reflect that instead of always offering a button that blocks on a fresh AI call.
   function EmptyModuleNode({ node, depth }) {
     const selected = selectedModuleIds.has(node.id)
+    const job = prefetch[node.id]
+    const isPending = job?.status === 'PENDING'
+    const isDone = job?.status === 'DONE'
+    const stepCount = isDone ? (job.result?.steps?.length ?? 0) : 0
     return (
       <li className="node-group node-group-empty" style={depth ? { marginLeft: depth * 30 } : undefined}>
         <input
           type="checkbox"
           className="node-group-select"
           checked={selected}
+          disabled={!!job}
+          title={job ? 'Already drafting in the background — no need to batch-select this one' : undefined}
           aria-label={`Select ${nodeText(node)} for batch expansion`}
           onChange={(e) => {
             setSelectedModuleIds((prev) => {
@@ -600,9 +656,13 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
         <Button variant="ghost" onClick={() => setRegeneratingModuleId(node.id)}>
           Regenerate scope
         </Button>
-        <Button variant="ghost" onClick={() => setExpandingModuleId(node.id)}>
-          Expand this module
-        </Button>
+        {isPending ? (
+          <span className="node-group-working" aria-live="polite">Working on it…</span>
+        ) : (
+          <Button variant="ghost" onClick={() => setExpandingModuleId(node.id)}>
+            {isDone ? `Review ${stepCount} step${stepCount === 1 ? '' : 's'}` : 'Expand this module'}
+          </Button>
+        )}
       </li>
     )
   }
@@ -854,6 +914,9 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
         <ExpandModuleModal
           roadmapId={id}
           module={findNode(children, expandingModuleId)}
+          prefetched={
+            prefetch[expandingModuleId]?.status === 'DONE' ? prefetch[expandingModuleId].result : undefined
+          }
           onClose={() => setExpandingModuleId(null)}
           onApplied={async () => {
             setExpandingModuleId(null)
