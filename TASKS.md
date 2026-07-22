@@ -1533,10 +1533,13 @@ roadmap → learn loop, building on the Phase 21 design-system foundations.
     treatment — e.g. a bordered card around the proposed change, distinct from the plain
     `step-input` styling it currently reuses — so it reads as "review this AI proposal" rather than
     "fill out this form."
-- [ ] Acceptance: screenshot-compare the Tree view before/after — modules should be identifiable at
+- [x] Acceptance: screenshot-compare the Tree view before/after — modules should be identifiable at
   a glance without reading text; the reformulate modal no longer stacks two full-darkness overlays;
   Capture's input area is visibly a field, not placeholder text on black.
-- [ ] **Push + tag `phase-22-complete`. Stop. Let the founder use this for real before continuing.**
+  (Verified live: module headers now tint + brass-accent at depth 0; "This is too much" opens a
+  single inline panel inside the same modal with a "‹ Back to step" affordance, no second overlay;
+  Capture's textarea sits in a bordered/tinted card.)
+- [x] **Push + tag `phase-22-complete`. Stop. Let the founder use this for real before continuing.**
 
 ---
 
