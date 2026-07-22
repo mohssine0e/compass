@@ -1511,7 +1511,7 @@ roadmap → learn loop, building on the Phase 21 design-system foundations.
   - Give `.step-needs` (the "needs: ..." prerequisite line) more visual weight — e.g. `var(--muted)`
     instead of `var(--faint)`, or a small left accent mark — since it represents a real dependency,
     not just an ordering hint.
-- [ ] Path view (`LearningPathView.jsx`/`Roadmap.css`).
+- [x] Path view (`LearningPathView.jsx`/`Roadmap.css`).
   - Add a small, faint module-name label per step (or once per contiguous run of steps from the same
     module) — the tree/leaf data already carries enough to know which module a leaf came from (walk
     up from the leaf via the roadmap's children structure, or have the backend include a

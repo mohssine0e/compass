@@ -596,6 +596,16 @@
   font-size: 0.82rem;
 }
 
+/* Faint module label above each contiguous run of same-module steps on the path (Phase 22). */
+.path-module-label {
+  list-style: none;
+  color: var(--faint);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 12px 0 2px 34px;
+}
+
 .path-more {
   padding: 14px 0 0 34px;
   color: var(--faint);

@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { truncateAtWord } from '../text'
 import { Badge, ExternalLink } from './ui'
 import './Roadmap.css'
@@ -8,12 +9,13 @@ import './Roadmap.css'
 const HOW_MANY_AHEAD = 4
 
 // Leaf roadmap_step nodes in tree (pre-order) order, matching the backend's leaf traversal.
-function flattenLeaves(nodes, out = []) {
+// Each leaf carries the title of the module it sits under (Phase 22) — null in a flat roadmap.
+function flattenLeaves(nodes, moduleTitle = null, out = []) {
   for (const n of nodes) {
     if (n.children && n.children.length > 0) {
-      flattenLeaves(n.children, out)
+      flattenLeaves(n.children, n.type === 'roadmap' ? n.content?.title : moduleTitle, out)
     } else if (n.type === 'roadmap_step') {
-      out.push(n)
+      out.push({ ...n, moduleTitle })
     }
   }
   return out
@@ -32,8 +34,11 @@ export default function LearningPathView({ roadmap, onOpenStep }) {
   return (
     <ol className="learning-path">
       {upcoming.map((step, i) => (
+        <Fragment key={step.id}>
+        {step.moduleTitle && (i === 0 || upcoming[i - 1].moduleTitle !== step.moduleTitle) && (
+          <li className="path-module-label">{step.moduleTitle}</li>
+        )}
         <li
-          key={step.id}
           className={'path-step' + (i === 0 ? ' is-current' : '')}
           onDoubleClick={() => onOpenStep?.(step.id)}
         >
@@ -61,6 +66,7 @@ export default function LearningPathView({ roadmap, onOpenStep }) {
             )}
           </div>
         </li>
+        </Fragment>
       ))}
       {currentIndex + 1 + HOW_MANY_AHEAD < leaves.length && (
         <li className="path-more">…{leaves.length - (currentIndex + 1 + HOW_MANY_AHEAD)} more after this</li>
