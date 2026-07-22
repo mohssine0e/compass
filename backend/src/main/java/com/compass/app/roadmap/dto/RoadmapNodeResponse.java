@@ -17,6 +17,12 @@ import java.util.function.Function;
  *
  * <p>{@code progress} is filled for container nodes (those with children) by rolling up over
  * their leaf descendants; it's null for leaves, which carry their own {@code status} instead.
+ *
+ * <p>{@code missingProjectFlag} (Phase 24) is a soft, non-blocking signal set only by
+ * {@link RoadmapResponse#of} on a career-scale roadmap's post-foundational top-level modules that
+ * have been expanded but contain no {@code kind: "project"} step among their leaves — never
+ * computed here, since a single node has no view of the roadmap's overall archetype or its
+ * position among sibling modules.
  */
 public record RoadmapNodeResponse(
         Long id,
@@ -26,7 +32,8 @@ public record RoadmapNodeResponse(
         Long dependsOn,
         Map<String, Object> content,
         NodeProgress progress,
-        List<RoadmapNodeResponse> children
+        List<RoadmapNodeResponse> children,
+        boolean missingProjectFlag
 ) {
     /** Rolled-up counts over a container's leaf descendants. */
     public record NodeProgress(int total, int done) {
@@ -55,8 +62,24 @@ public record RoadmapNodeResponse(
                 entry.getDependsOn(),
                 entry.getContent(),
                 progress,
-                children
+                children,
+                false
         );
+    }
+
+    /** A copy of this node with {@code missingProjectFlag} set — see the class doc. */
+    public RoadmapNodeResponse withMissingProjectFlag(boolean flag) {
+        return new RoadmapNodeResponse(id, type, status, orderIndex, dependsOn, content, progress,
+                children, flag);
+    }
+
+    /** Whether any leaf step in this subtree is a {@code kind: "project"} step (Phase 24). */
+    public static boolean hasProjectStep(RoadmapNodeResponse node) {
+        if (node.children().isEmpty()) {
+            return node.type() == EntryType.ROADMAP_STEP
+                    && node.content() != null && "project".equals(node.content().get("kind"));
+        }
+        return node.children().stream().anyMatch(RoadmapNodeResponse::hasProjectStep);
     }
 
     /** Leaf step descendants of these nodes, in pre-order (the real order of work). */

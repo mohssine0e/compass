@@ -90,8 +90,12 @@ public class RoadmapAiService {
         String domain = AiJsonGenerator.text(json.get("domain"));
         String priorLevel = AiJsonGenerator.text(json.get("priorLevel"));
         String shape = "flat".equals(AiJsonGenerator.text(json.get("shape"))) ? "flat" : "nested";
-        return new GoalAssessment(complexity, hours, domain, priorLevel, shape);
+        String archetypeRaw = AiJsonGenerator.text(json.get("archetype"));
+        String archetype = ARCHETYPES.contains(archetypeRaw) ? archetypeRaw : "topic_deep_dive";
+        return new GoalAssessment(complexity, hours, domain, priorLevel, shape, archetype);
     }
+
+    private static final Set<String> ARCHETYPES = Set.of("quick_task", "topic_deep_dive", "career_path");
 
     /** A plain-text summary of an assessment for other prompts to read; {@code null} if none. */
     public static String assessmentContext(GoalAssessment a) {
@@ -100,6 +104,9 @@ public class RoadmapAiService {
         }
         StringBuilder sb = new StringBuilder();
         sb.append("shape ").append(a.shape()).append(", complexity ").append(a.complexity()).append("/5");
+        if (a.archetype() != null) {
+            sb.append(", archetype: ").append(a.archetype());
+        }
         if (a.estimatedTotalHours() != null) {
             sb.append(", ~").append(a.estimatedTotalHours()).append(" hours total");
         }
@@ -181,18 +188,19 @@ public class RoadmapAiService {
      */
     public List<DraftStep> expandModule(String roadmapTitle, String moduleTitle, String moduleScope,
                                         String profileContext, String groundingContext,
-                                        String assessmentContext, List<PriorStep> priorSteps) {
+                                        String assessmentContext, List<PriorStep> priorSteps,
+                                        boolean isFoundationalModule) {
         String priorStepsKey = priorSteps == null ? "" : priorSteps.stream()
                 .map(p -> p.id() + ":" + p.text()).collect(java.util.stream.Collectors.joining("|"));
         String cacheKey = AiGenerationCache.key("expand", roadmapTitle, moduleTitle, moduleScope,
-                profileContext, groundingContext, assessmentContext, priorStepsKey);
+                profileContext, groundingContext, assessmentContext, priorStepsKey, isFoundationalModule);
         List<DraftStep> cached = cache.get(cacheKey);
         if (cached != null) {
             return cached;
         }
         JsonNode json = ai.generate(AiTier.HEAVY, "module expansion", PromptTemplates.EXPAND_MODULE_SYSTEM,
                 PromptTemplates.expandModuleUser(roadmapTitle, moduleTitle, moduleScope,
-                        profileContext, groundingContext, assessmentContext, priorSteps));
+                        profileContext, groundingContext, assessmentContext, priorSteps, isFoundationalModule));
         if (json == null) {
             return null;
         }
@@ -580,9 +588,16 @@ public class RoadmapAiService {
      * {@code estimatedTotalHours} is a best-effort estimate (nullable), {@code domain} and
      * {@code priorLevel} are a couple of words each, and {@code shape} is strictly "flat" or
      * "nested" — the gate between a single step list and a modules-then-steps roadmap.
+     *
+     * <p>{@code archetype} (Phase 24) is a coarse classification — "quick_task",
+     * "topic_deep_dive", or "career_path" — additive to this same call. It exists because
+     * {@code complexity}/{@code shape} alone can't tell a deep topic dive apart from a career
+     * pivot at the same complexity/shape; {@code career_path} is what gates the Phase 24
+     * portfolio-arc bias and Project Portfolio Mandate. Never null from a successful assessment;
+     * defaults to "topic_deep_dive" if the model's value doesn't match a known one.
      */
     public record GoalAssessment(int complexity, Integer estimatedTotalHours, String domain,
-                                 String priorLevel, String shape) {
+                                 String priorLevel, String shape, String archetype) {
     }
 
     /**

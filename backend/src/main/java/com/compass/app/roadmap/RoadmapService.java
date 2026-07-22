@@ -149,7 +149,7 @@ public class RoadmapService {
         RoadmapAiService.GoalAssessment assessment = roadmapAi.assessGoal(
                 goal, clarificationsText, profileContext, groundingContext);
         if (assessment == null) {
-            assessment = new RoadmapAiService.GoalAssessment(3, null, null, null, "nested");
+            assessment = new RoadmapAiService.GoalAssessment(3, null, null, null, "nested", "topic_deep_dive");
         }
         String assessmentContext = RoadmapAiService.assessmentContext(assessment);
 
@@ -302,8 +302,12 @@ public class RoadmapService {
         String groundingContext = grounding == null ? null : grounding.contextTop(maxGroundingSnippets);
         List<String> sources = grounding == null ? List.of() : grounding.sources();
 
+        // Foundational (first) module gets no portfolio-project expectation even for a
+        // career-scale roadmap — the mandate only applies once past foundations (Phase 24).
+        boolean isFoundationalModule = module.getOrderIndex() == null || module.getOrderIndex() == 0;
         List<RoadmapAiService.DraftStep> steps = roadmapAi.expandModule(roadmapTitle, moduleTitle,
-                moduleScope, profileContext, groundingContext, assessmentContext, priorSteps);
+                moduleScope, profileContext, groundingContext, assessmentContext, priorSteps,
+                isFoundationalModule);
         if (steps == null) {
             return null;
         }
@@ -423,8 +427,15 @@ public class RoadmapService {
         String domain = map.get("domain") instanceof String s ? s : null;
         String priorLevel = map.get("priorLevel") instanceof String s ? s : null;
         String shape = map.get("shape") instanceof String s ? s : "nested";
+        String archetype = map.get("archetype") instanceof String s ? s : null;
         return RoadmapAiService.assessmentContext(
-                new RoadmapAiService.GoalAssessment(complexity, hours, domain, priorLevel, shape));
+                new RoadmapAiService.GoalAssessment(complexity, hours, domain, priorLevel, shape, archetype));
+    }
+
+    /** The roadmap's stored archetype (Phase 24) — "career_path" gates the portfolio mandate. */
+    private static String storedArchetype(Entry roadmap) {
+        Object raw = roadmap.getContent() != null ? roadmap.getContent().get("assessment") : null;
+        return raw instanceof Map<?, ?> map && map.get("archetype") instanceof String s ? s : null;
     }
 
     /** The roadmap's stored assessed complexity (1-5), or the mid-range default if none stored. */
@@ -844,6 +855,7 @@ public class RoadmapService {
         map.put("domain", a.domain());
         map.put("priorLevel", a.priorLevel());
         map.put("shape", a.shape());
+        map.put("archetype", a.archetype());
         return map;
     }
 

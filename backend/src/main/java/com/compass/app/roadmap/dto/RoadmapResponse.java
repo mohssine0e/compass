@@ -23,6 +23,7 @@ public record RoadmapResponse(
         EntryStatus status,
         String verify,
         String shape,
+        String archetype,
         Instant createdAt,
         Instant updatedAt,
         List<RoadmapNodeResponse> children,
@@ -147,6 +148,7 @@ public record RoadmapResponse(
         List<RoadmapNodeResponse> children = childrenOf.apply(roadmap.getId()).stream()
                 .map(child -> RoadmapNodeResponse.of(child, childrenOf))
                 .toList();
+        children = flagMissingProjects(roadmap, children);
 
         List<RoadmapNodeResponse> leaves = new ArrayList<>();
         RoadmapNodeResponse.collectLeaves(children, leaves);
@@ -170,12 +172,47 @@ public record RoadmapResponse(
                 roadmap.getStatus(),
                 verify,
                 shapeOf(roadmap, children),
+                archetypeOf(roadmap),
                 roadmap.getCreatedAt(),
                 roadmap.getUpdatedAt(),
                 children,
                 new Progress(total, done, currentStepId, currentStepText, estimatedTotalMinutes,
                         pace.multiplier(), pace.sessions())
         );
+    }
+
+    /**
+     * Project Portfolio Mandate flag (Phase 24, non-blocking): for a career-scale roadmap, mark
+     * each top-level module that isn't the first (foundational) one, has already been expanded
+     * into steps, and has no project-kind step among its leaves — a visible nudge, never a reason
+     * to reject anything. Left alone for flat roadmaps, non-career archetypes, unexpanded modules,
+     * and the foundational module itself.
+     */
+    private static List<RoadmapNodeResponse> flagMissingProjects(Entry roadmap, List<RoadmapNodeResponse> children) {
+        boolean isCareerPath = roadmap.getContent() != null
+                && roadmap.getContent().get("assessment") instanceof Map<?, ?> assessment
+                && "career_path".equals(assessment.get("archetype"));
+        if (!isCareerPath) {
+            return children;
+        }
+        List<RoadmapNodeResponse> result = new ArrayList<>();
+        for (int i = 0; i < children.size(); i++) {
+            RoadmapNodeResponse node = children.get(i);
+            boolean flagIt = i > 0 && node.type() == EntryType.ROADMAP && !node.children().isEmpty()
+                    && !RoadmapNodeResponse.hasProjectStep(node);
+            result.add(flagIt ? node.withMissingProjectFlag(true) : node);
+        }
+        return result;
+    }
+
+    /** The roadmap's assessed archetype (Phase 24), or null if never assessed/stored. */
+    private static String archetypeOf(Entry roadmap) {
+        if (roadmap.getContent() != null
+                && roadmap.getContent().get("assessment") instanceof Map<?, ?> assessment
+                && assessment.get("archetype") instanceof String s) {
+            return s;
+        }
+        return null;
     }
 
     /**

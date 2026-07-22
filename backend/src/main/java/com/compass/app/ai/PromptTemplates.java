@@ -232,12 +232,23 @@ final class PromptTemplates {
         covers it honestly (no need for named modules/areas); "nested" when it genuinely breaks
         into distinct major areas that each deserve their own expansion. Most small, narrow goals
         are flat; most "learn X" or "become able to Y" goals spanning weeks/months are nested.
+      - archetype: a coarse read of what KIND of goal this is, since complexity/shape alone can't
+        tell a deep single-topic dive apart from a career pivot at the same scale:
+        - "quick_task": a short, bounded thing — done in a session or two, no real learning arc.
+        - "topic_deep_dive": genuinely learning or mastering one subject/skill area, however deep —
+          no implication of a job/portfolio outcome (e.g. "understand distributed systems deeply",
+          "get fluent in Spanish").
+        - "career_path": the goal is explicitly about becoming employable/job-ready in a role or
+          switching careers (e.g. "become a DevOps engineer", "break into data science") — implies
+          a recognizable arc (foundations → tools → specialization → a portfolio/proof of work) and
+          real, shareable projects, not just conceptual mastery. Only use this when the goal itself
+          is about the career outcome, not merely a topic that happens to be used professionally.
 
       Hard rules:
       - Be honest and specific, not deferential — a goal that is actually small gets a low
         complexity and "flat", even if the wording sounds ambitious.
       - Output ONLY strict JSON, no prose around it:
-        {"complexity": 3, "estimatedTotalHours": 40, "domain": "...", "priorLevel": "...", "shape": "nested"}
+        {"complexity": 3, "estimatedTotalHours": 40, "domain": "...", "priorLevel": "...", "shape": "nested", "archetype": "topic_deep_dive"}
       """;
 
   static String assessUser(String goal, String clarifications, String profileContext,
@@ -350,6 +361,14 @@ final class PromptTemplates {
       authoritative sources actually structure this material over your own memory. Don't invent
       sources.
 
+      If the assessed archetype (given below) is "career_path", bias the outline toward a
+      recognizable arc: foundational concepts and prerequisites first, core tools/technologies
+      next, deeper specialization after that, and a portfolio/capstone project area last. This is
+      guidance, not a rigid template — real goals don't always split cleanly into exactly four
+      named phases, so don't force awkward or padded modules just to hit that shape. For any
+      archetype other than "career_path", ignore this and size the outline purely on its own
+      merits as usual.
+
       If the goal could reasonably mean more than one thing (different domains, scopes, or
       end points — e.g. "learn Rust" could mean systems programming, web backends, embedded, or
       games), include an "interpretation" field: one plain line stating plainly which reading
@@ -439,6 +458,14 @@ final class PromptTemplates {
         5 = a real jump that could lose someone). Leave null when there's no dependency, or when
         the leap is small (don't inflate scores).
 
+      Project Portfolio Mandate (Phase 24): if the assessed archetype (given below) is
+      "career_path" AND this is stated as a later, post-foundational module, include AT LEAST ONE
+      "project" step that produces something concrete and publicly shareable — a real repo, a
+      deployed thing, a written artifact — not just an exercise done and discarded. This is
+      guidance the module should follow, not a hard requirement that overrides the module's actual
+      scope; skip it if this module's scope genuinely has no honest project to build. Ignore this
+      entirely for any other archetype, or for the foundational module.
+
       Hard rules:
       - Size the number of steps to the assessed scope given below and this module's own scope —
         don't apply a fixed count. Never more than 10 steps in one call (a parsing/UX safety rail,
@@ -450,13 +477,15 @@ final class PromptTemplates {
 
   static String expandModuleUser(String roadmapTitle, String moduleTitle, String moduleScope,
       String profileContext, String groundingContext, String assessmentContext,
-      List<RoadmapAiService.PriorStep> priorSteps) {
+      List<RoadmapAiService.PriorStep> priorSteps, boolean isFoundationalModule) {
     StringBuilder sb = new StringBuilder();
     sb.append("Roadmap: ").append(roadmapTitle == null ? "" : roadmapTitle.trim()).append('\n');
     sb.append("Module to expand: ").append(moduleTitle == null ? "" : moduleTitle.trim()).append('\n');
     if (moduleScope != null && !moduleScope.isBlank()) {
       sb.append("What this module covers: ").append(moduleScope.trim()).append('\n');
     }
+    sb.append("Module position: ").append(isFoundationalModule
+        ? "the first, foundational module" : "a later, post-foundational module").append('\n');
     appendProfile(sb, profileContext);
     if (assessmentContext != null && !assessmentContext.isBlank()) {
       sb.append("Assessed scope: ").append(assessmentContext.trim()).append('\n');

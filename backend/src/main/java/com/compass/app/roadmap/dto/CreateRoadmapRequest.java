@@ -49,8 +49,9 @@ public record CreateRoadmapRequest(
     public record ModuleInput(String title, String scope) {
     }
 
-    /** The goal-scope read (Phase 18) computed when this roadmap was drafted. */
+    /** The goal-scope read (Phase 18, {@code archetype} added Phase 24) computed when this
+     * roadmap was drafted. */
     public record AssessmentInput(int complexity, Integer estimatedTotalHours, String domain,
-                                  String priorLevel, String shape) {
+                                  String priorLevel, String shape, String archetype) {
     }
 }

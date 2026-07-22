@@ -90,10 +90,11 @@ public record GenerateRoadmapResponse(
      * {@code CreateRoadmapRequest} and stored on the roadmap entry.
      */
     public record ProposedAssessment(int complexity, Integer estimatedTotalHours, String domain,
-                                     String priorLevel, String shape) {
+                                     String priorLevel, String shape, String archetype) {
         public static ProposedAssessment from(RoadmapAiService.GoalAssessment a) {
             return a == null ? null : new ProposedAssessment(
-                    a.complexity(), a.estimatedTotalHours(), a.domain(), a.priorLevel(), a.shape());
+                    a.complexity(), a.estimatedTotalHours(), a.domain(), a.priorLevel(), a.shape(),
+                    a.archetype());
         }
     }
 
