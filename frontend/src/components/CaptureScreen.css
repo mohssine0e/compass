@@ -15,6 +15,20 @@
   padding: clamp(80px, 16vh, 160px) 0 40px;
 }
 
+/* The input reads as a field, not placeholder text on bare background (Phase 22) — a quiet
+   tint and border by default, slightly brighter when focused. */
+.capture-field {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px;
+  transition: border-color 0.15s ease;
+}
+
+.capture-field:focus-within {
+  border-color: var(--faint);
+}
+
 .capture-input {
   width: 100%;
   min-height: 96px;
@@ -37,6 +51,18 @@
   color: var(--muted);
   font-size: 1.15rem;
   font-style: italic;
+}
+
+.capture-significance-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.capture-sig-hint {
+  margin: 0;
+  color: var(--faint);
+  font-size: var(--text-xs);
 }
 
 .capture-significance {
@@ -132,6 +158,17 @@
 
 .capture-submit:hover:not(:disabled) {
   background: var(--brass-dim);
+}
+
+/* Once there's something to capture, the button fills in (Phase 22) — the ready state is
+   visible at a glance, not just an un-grey. */
+.capture-submit.is-ready {
+  background: var(--brass-dim);
+  border-color: var(--brass);
+}
+
+.capture-submit.is-ready:hover {
+  background: rgba(207, 157, 91, 0.45);
 }
 
 .capture-submit:disabled {

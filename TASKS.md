@@ -1470,7 +1470,7 @@ and a career-scale one should read as visibly different kinds of thing, not just
 Goal: apply the per-screen fixes from `UI_UX_NOTES.md` to the screens in the actual capture →
 roadmap → learn loop, building on the Phase 21 design-system foundations.
 
-- [ ] Capture screen (`CaptureScreen.jsx`/`.css`).
+- [x] Capture screen (`CaptureScreen.jsx`/`.css`).
   - Give the textarea/input a subtle visible border or background tint by default (not just on
     focus), so the input area reads as a field rather than placeholder text sitting on bare
     background.

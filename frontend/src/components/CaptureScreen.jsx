@@ -1,4 +1,20 @@
 import { useCallback, useRef, useState } from 'react'
+
+// The significance caption shows only for the first few visits (Phase 22) — enough to learn
+// what big/small means, then it gets out of the way. Tooltips stay for later.
+const SIG_HINT_KEY = 'compass.sigHintSeen'
+const SIG_HINT_MAX_VIEWS = 5
+
+function shouldShowSigHint() {
+  try {
+    const seen = Number(localStorage.getItem(SIG_HINT_KEY) || 0)
+    if (seen >= SIG_HINT_MAX_VIEWS) return false
+    localStorage.setItem(SIG_HINT_KEY, String(seen + 1))
+    return true
+  } catch {
+    return false
+  }
+}
 import { createEntry } from '../api'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import './CaptureScreen.css'
@@ -8,6 +24,7 @@ export default function CaptureScreen() {
   const [significance, setSignificance] = useState(null) // 'big' | 'small' | null
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState(null) // { kind: 'held' | 'error', message }
+  const [showSigHint] = useState(shouldShowSigHint)
   const textareaRef = useRef(null)
 
   const appendSpokenText = useCallback((chunk) => {
@@ -70,22 +87,32 @@ export default function CaptureScreen() {
         )}
       </div>
 
-      <div className="capture-significance" role="group" aria-label="How big is this?">
-        {['big', 'small'].map((level) => (
-          <button
-            key={level}
-            type="button"
-            className={
-              'sig-tap' + (significance === level ? ' is-selected' : '')
-            }
-            aria-pressed={significance === level}
-            onClick={() =>
-              setSignificance((cur) => (cur === level ? null : level))
-            }
-          >
-            {level}
-          </button>
-        ))}
+      <div className="capture-significance-block">
+        {showSigHint && (
+          <p className="capture-sig-hint">big things come back later — small ones just get held</p>
+        )}
+        <div className="capture-significance" role="group" aria-label="How big is this?">
+          {['big', 'small'].map((level) => (
+            <button
+              key={level}
+              type="button"
+              className={
+                'sig-tap' + (significance === level ? ' is-selected' : '')
+              }
+              aria-pressed={significance === level}
+              title={
+                level === 'big'
+                  ? 'Worth returning to — this will resurface later'
+                  : 'A passing note — held, not pushed'
+              }
+              onClick={() =>
+                setSignificance((cur) => (cur === level ? null : level))
+              }
+            >
+              {level}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="capture-footer">
@@ -110,7 +137,11 @@ export default function CaptureScreen() {
           </button>
         )}
 
-        <button className="capture-submit" onClick={submit} disabled={!canSubmit}>
+        <button
+          className={'capture-submit' + (canSubmit ? ' is-ready' : '')}
+          onClick={submit}
+          disabled={!canSubmit}
+        >
           {saving ? 'Holding…' : 'Capture'}
         </button>
       </div>
