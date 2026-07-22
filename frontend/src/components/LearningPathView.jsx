@@ -1,3 +1,4 @@
+import { truncateAtWord } from '../text'
 import { Badge, ExternalLink } from './ui'
 import './Roadmap.css'
 
@@ -38,7 +39,7 @@ export default function LearningPathView({ roadmap, onOpenStep }) {
         >
           <span className="path-step-marker" aria-hidden="true">{i === 0 ? '●' : '○'}</span>
           <div className="path-step-body">
-            <p className="path-step-text">{step.content?.text}</p>
+            <p className="path-step-text">{truncateAtWord(step.content?.text)}</p>
             <div className="path-step-meta">
               {step.content?.skeletonOnly && (
                 <Badge tone="danger">basic outline — details pending</Badge>

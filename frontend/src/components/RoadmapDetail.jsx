@@ -22,6 +22,7 @@ import LearningPathView from './LearningPathView'
 import ModuleProposalModal from './ModuleProposalModal'
 import ProgressBar from './ProgressBar'
 import ReplanModulesModal from './ReplanModulesModal'
+import { truncateAtWord } from '../text'
 import StepDeepView from './StepDeepView'
 import VerifyModal from './VerifyModal'
 import {
@@ -483,7 +484,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
             onDoubleClick={() => setDeepStepId(node.id)}
             title="Double-click for details"
           >
-            <span className="step-text-main">{node.content?.text}</span>
+            <span className="step-text-main">{truncateAtWord(node.content?.text)}</span>
             {(node.content?.kind === 'project' ||
               node.content?.weight ||
               node.content?.skeletonOnly ||
@@ -795,7 +796,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
               type: n.type,
               label: nodeText(n),
             })),
-            { id: deepStepId, label: nodeText(findNode(children, deepStepId)) },
+            { id: deepStepId, label: truncateAtWord(nodeText(findNode(children, deepStepId)), 60) },
           ]}
           onNavigate={(seg) => {
             // Root or a module goes back to the tree (expanding that module); an ancestor

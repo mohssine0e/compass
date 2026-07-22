@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { clusterIdeas, listEntries, patchEntry } from '../api'
+import { truncateAtWord } from '../text'
 import IdeaDetailModal from './IdeaDetailModal'
 import { Badge, Button } from './ui'
 import './AllEntries.css'
@@ -311,7 +312,7 @@ function EntryGroup({ label, count, open, onToggle, items, tasksByParent, onOpen
                     onClick={isRoadmap ? () => onOpenRoadmap(e.id) : isIdea ? () => onOpenIdea(e.id) : undefined}
                     role={isRoadmap || isIdea ? 'button' : undefined}
                   >
-                    {text}
+                    {truncateAtWord(text)}
                   </span>
                   <span className="all-tags">
                     <span className="all-tag">{isRoadmap ? 'roadmap' : e.type}</span>
