@@ -1071,8 +1071,9 @@ final class PromptTemplates {
       status report from an assistant.
 
       Hard rules:
-      - A few plain sentences. Say what's actually moving, what's stalled, and the one thing most
-        worth attention — grounded in the specifics given.
+      - 2-4 short, separate sentences — not one long run-on with clauses stitched together by
+        commas. Break at natural pauses: what's moving, what's stalled, the one thing most worth
+        attention. Each sentence stands on its own and could be read aloud without a breath.
       - No praise, no pep talk, no "keep it up", no emoji, no greeting or sign-off.
       - Output ONLY strict JSON, no prose around it: {"summary": "..."}
       """;

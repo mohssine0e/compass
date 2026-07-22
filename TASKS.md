@@ -1578,7 +1578,7 @@ organizing captures and reviewing the profile/history.
   - Move the "Unsaved changes" / "Saved." feedback so it's visible without scrolling to the very
     bottom — e.g. a small sticky save bar pinned to the bottom of the viewport once there are
     unsaved changes, or duplicate a compact indicator near the top of the page next to the title.
-- [ ] Review screen (`PromptTemplates.REVIEW_SYSTEM`, backend only — no frontend change needed).
+- [x] Review screen (`PromptTemplates.REVIEW_SYSTEM`, backend only — no frontend change needed).
   - Tighten the hard rules to explicitly require multiple short sentences (e.g. "2–4 short
     sentences, not one long run-on — break at natural pauses") rather than leaving sentence count
     unconstrained, which is currently producing one long comma-spliced sentence.
