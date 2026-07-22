@@ -995,13 +995,60 @@ final class PromptTemplates {
       - "full": a harder question, or a small concrete task ("write a function that…", "explain
         why X happens when Y"). Still answerable in a few sentences or a short snippet.
 
+      Format (Phase 26, given below alongside rigor):
+      - "code_challenge": ask for actual code (or precise pseudocode) that does something concrete
+        tied to the step — not "explain how you'd do X", but "write X". Still answerable in a
+        short snippet, not a real assignment.
+      - "scenario": pose a short, concrete design/judgment situation and ask what they'd do and
+        why — a real decision with tradeoffs, not a definition question.
+      - "free_response" (the default when neither of the above applies): today's plain recall/
+        understanding question or small task, exactly as rigor describes above.
+
       Hard rules:
       - Exactly one check. Specific to THIS step, not the whole roadmap. Plain and direct.
       - No multiple-choice, no trivia, no praise, no preamble, no emoji.
       - Output ONLY strict JSON, no prose: {"question": "..."}
       """;
 
-  static String checkUser(String roadmapTitle, String stepText, String rigor) {
+  static String checkUser(String roadmapTitle, String stepText, String rigor, String format) {
+    StringBuilder sb = new StringBuilder();
+    if (roadmapTitle != null && !roadmapTitle.isBlank()) {
+      sb.append("Roadmap: ").append(roadmapTitle.trim()).append('\n');
+    }
+    sb.append("Step: ").append(stepText == null ? "" : stepText.trim()).append('\n');
+    sb.append("Rigor: ").append("full".equals(rigor) ? "full" : "light").append('\n');
+    sb.append("Format: ").append(format == null ? "free_response" : format).append('\n');
+    sb.append("Write the check as JSON.");
+    return sb.toString();
+  }
+
+  /**
+   * System prompt for a multiple-choice check (Phase 26) — a distinct JSON contract from the
+   * free-text formats above (options + which one is correct), so it gets its own system prompt
+   * rather than branching {@link #CHECK_SYSTEM}'s single-question shape.
+   */
+  static final String CHECK_MULTIPLE_CHOICE_SYSTEM = """
+      Write ONE fair multiple-choice check for a single step of a learning roadmap — something a
+      person who actually did the step could answer, but someone who only skimmed could not.
+
+      Rigor:
+      - "light": tests plain recall/understanding of the core idea.
+      - "full": tests applying the idea, not just recalling it — a "what happens if…" or "which
+        approach is right here" question, not a bigger question in disguise (still one question).
+
+      Exactly 4 options, exactly one correct. Distractors must be genuinely plausible — real
+      misconceptions or near-misses a person could actually hold, never a joke option or something
+      obviously wrong just to pad the count.
+
+      Hard rules:
+      - Specific to THIS step, not the whole roadmap. Plain and direct, no praise, no preamble, no
+        emoji.
+      - correctIndex is 0-based, indexing into "options".
+      - Output ONLY strict JSON, no prose:
+        {"question": "...", "options": ["...", "...", "...", "..."], "correctIndex": 0}
+      """;
+
+  static String checkMultipleChoiceUser(String roadmapTitle, String stepText, String rigor) {
     StringBuilder sb = new StringBuilder();
     if (roadmapTitle != null && !roadmapTitle.isBlank()) {
       sb.append("Roadmap: ").append(roadmapTitle.trim()).append('\n');

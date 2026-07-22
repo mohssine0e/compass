@@ -6,6 +6,14 @@
   letter-spacing: 0.03em;
 }
 
+/* Format picker (Phase 26) — founder-overridable per check; changing it refetches a fresh
+   check in that format. */
+.verify-format-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .verify-question {
   margin: 0;
   color: var(--text);
@@ -13,6 +21,34 @@
   font-weight: 500;
   line-height: 1.35;
   padding-right: 24px;
+}
+
+/* Multiple-choice options (Phase 26) — auto-graded instantly, no free-text needed. */
+.verify-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.verify-option {
+  text-align: left;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 0.98rem;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.verify-option:hover:not(:disabled) {
+  border-color: var(--faint);
+}
+
+.verify-option.is-selected {
+  border-color: var(--brass);
+  color: var(--brass);
+  background: var(--brass-dim);
 }
 
 .verify-answer {

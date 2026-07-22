@@ -252,16 +252,33 @@ export function explainText(selectedText, context) {
   })
 }
 
-/** Generate a verification check for a step (Phase 8). Returns { question }. */
-export function getStepCheck(stepId) {
-  return request(`/verification/steps/${stepId}/check`, { method: 'POST' })
+/**
+ * A step's auto-detected default check format (Phase 26: multiple_choice/code_challenge/
+ * scenario/free_response), so the format picker can preselect it. Returns { format }.
+ */
+export function getStepDefaultFormat(stepId) {
+  return request(`/verification/steps/${stepId}/default-format`)
 }
 
-/** Answer a step's check. Returns { passed, gap }; on pass the step is marked done. */
-export function verifyStep(stepId, answer) {
+/**
+ * Generate a verification check for a step (Phase 8), optionally in a specific format (Phase 26)
+ * — omit to use the step's auto-detected default. Returns { format, question, options }; options
+ * is only set for format "multiple_choice".
+ */
+export function getStepCheck(stepId, format) {
+  const query = format ? `?format=${encodeURIComponent(format)}` : ''
+  return request(`/verification/steps/${stepId}/check${query}`, { method: 'POST' })
+}
+
+/**
+ * Answer a step's check. Returns { passed, gap }; on pass the step is marked done. `answer` is
+ * the free-text answer; `selectedIndex` (Phase 26) is the chosen option's index for a
+ * multiple_choice check instead — pass whichever the pending check's format calls for.
+ */
+export function verifyStep(stepId, answer, selectedIndex) {
   return request(`/verification/steps/${stepId}/verify`, {
     method: 'POST',
-    body: JSON.stringify({ answer }),
+    body: JSON.stringify({ answer, selectedIndex }),
   })
 }
 
