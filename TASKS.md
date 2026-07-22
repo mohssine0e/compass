@@ -1482,7 +1482,7 @@ roadmap → learn loop, building on the Phase 21 design-system foundations.
     explaining significance, without turning it into a permanent wall of text — e.g. a `title`
     tooltip attribute at minimum, or a one-line faint caption above the pills the first few times
     the screen is seen.
-- [ ] Roadmaps list (`RoadmapsScreen.jsx`/`Roadmap.css`).
+- [x] Roadmaps list (`RoadmapsScreen.jsx`/`Roadmap.css`).
   - Adjust the empty-state message and layout so 0, 1, and many roadmaps all look intentional — e.g.
     for 0, the existing empty-state text is fine; for exactly 1, consider a bit of visual framing
     (a subtle divider or slightly narrower max-width) so a single card doesn't read as a stray leftover

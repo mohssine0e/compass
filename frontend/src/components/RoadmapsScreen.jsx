@@ -82,7 +82,7 @@ export default function RoadmapsScreen({ onNew, onDraft, onOpen }) {
       )}
 
       {list && list.length > 0 && (
-        <ul className="roadmap-cards">
+        <ul className={'roadmap-cards' + (list.length === 1 ? ' is-single' : '')}>
           {list.map((r) => {
             const complete = r.progress.currentStepId === null
             const modules = (r.children || []).filter((c) => c.type === 'roadmap').length

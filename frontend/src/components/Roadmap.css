@@ -109,6 +109,12 @@
   gap: 12px;
 }
 
+/* Exactly one roadmap (Phase 22): frame the lone card a little narrower so it reads as a
+   deliberate single item, not a stray leftover in an empty page. */
+.roadmap-cards.is-single {
+  max-width: 520px;
+}
+
 .roadmap-card-row {
   display: flex;
   align-items: center;
@@ -119,18 +125,22 @@
   flex: 1;
 }
 
+/* A real navigation target, not a footnote (Phase 22): pill treatment at muted weight. */
 .roadmap-archived-link {
+  align-self: flex-start;
   margin-top: 20px;
   background: transparent;
-  border: none;
-  color: var(--faint);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
   font-size: 0.85rem;
-  padding: 4px 0;
-  transition: color 0.15s ease;
+  padding: 5px 14px;
+  transition: color 0.15s ease, border-color 0.15s ease;
 }
 
 .roadmap-archived-link:hover {
-  color: var(--muted);
+  color: var(--text);
+  border-color: var(--faint);
 }
 
 .roadmap-card {
