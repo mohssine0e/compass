@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react'
  * behind one ⋯ instead of a wall of buttons — Phase 12). Opens on click, closes on outside-click,
  * Escape, or after choosing an item. Mark a destructive item with `danger: true`.
  *
- * @param {{label: string, onClick: () => void, danger?: boolean}[]} items
+ * @param {{label: string, onClick: () => void, danger?: boolean, icon?: import('react').ReactNode}[]} items
  * @param {string} [label='Actions']  accessible label for the trigger
  * @example
  *   <Menu items={[{ label: 'Edit', onClick: edit }, { label: 'Delete', onClick: del, danger: true }]} />
@@ -53,6 +53,7 @@ export default function Menu({ items = [], label = 'Actions', className = '' }) 
                 item.onClick()
               }}
             >
+              {item.icon && <span className="ui-menu__icon">{item.icon}</span>}
               {item.label}
             </button>
           ))}

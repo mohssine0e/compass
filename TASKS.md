@@ -1385,7 +1385,7 @@ and a career-scale one should read as visibly different kinds of thing, not just
     approach (e.g. a small `ExternalLink` wrapper component in `components/ui/` that renders
     `<a target="_blank" rel="noreferrer">` plus the chosen affordance, so every resource link in
     the app goes through one place) rather than styling each usage site separately.
-- [ ] Add a small icon set for recurring actions and hierarchy depth.
+- [x] Add a small icon set for recurring actions and hierarchy depth.
   - Scope deliberately small: kebab (already `⋯`, keep), delete, archive, drag-handle (already `⠿`,
     keep), plus one icon per hierarchy depth level (module / step / substep / sub-substep — see
     the depth-level treatment below). Decide on an approach — inline SVG components (no external

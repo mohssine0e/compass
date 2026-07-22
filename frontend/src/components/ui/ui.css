@@ -229,6 +229,9 @@
   flex-direction: column;
 }
 .ui-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   background: transparent;
   border: none;
   text-align: left;
@@ -236,6 +239,13 @@
   font-size: 0.9rem;
   padding: 7px 10px;
   border-radius: 6px;
+}
+.ui-menu__icon {
+  display: inline-flex;
+  color: var(--faint);
+}
+.ui-menu__item--danger .ui-menu__icon {
+  color: inherit;
 }
 .ui-menu__item:hover {
   background: var(--surface);

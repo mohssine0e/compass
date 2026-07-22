@@ -24,7 +24,7 @@ import ProgressBar from './ProgressBar'
 import ReplanModulesModal from './ReplanModulesModal'
 import StepDeepView from './StepDeepView'
 import VerifyModal from './VerifyModal'
-import { Badge, Button, Menu } from './ui'
+import { Badge, Button, IconArchive, IconDelete, IconEdit, IconUndo, Menu } from './ui'
 import './Roadmap.css'
 
 // A roadmap is a tree (Phase 13): a flat roadmap is one level of leaf steps and reads as a plain
@@ -410,13 +410,13 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     const state = isDone ? 'is-done' : isDropped ? 'is-dropped' : isCurrent ? 'is-current' : 'is-upcoming'
     const isEditing = editingStepId === node.id
     const menuItems = [
-      { label: 'Edit', onClick: () => startEdit(node) },
+      { label: 'Edit', onClick: () => startEdit(node), icon: <IconEdit /> },
       ...(depth === 0 ? [{ label: 'Insert step above', onClick: () => startInsert(node.orderIndex) }] : []),
       ...(parentType === 'roadmap_step'
         ? [{ label: 'Graduate (move up a level)', onClick: () => graduateStepAction(node) }]
         : []),
-      ...(isDone ? [{ label: 'Undo', onClick: () => undoStep(node.id) }] : []),
-      { label: 'Delete', onClick: () => deleteStep(node), danger: true },
+      ...(isDone ? [{ label: 'Undo', onClick: () => undoStep(node.id), icon: <IconUndo /> }] : []),
+      { label: 'Delete', onClick: () => deleteStep(node), danger: true, icon: <IconDelete /> },
     ]
     return (
       <li className={`step-item ${state}`} style={depth ? { marginLeft: depth * 22 } : undefined}>
@@ -638,8 +638,8 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
             <Menu
               label="Roadmap actions"
               items={[
-                { label: 'Archive', onClick: archiveRoadmap },
-                { label: 'Delete roadmap', onClick: deleteWholeRoadmap, danger: true },
+                { label: 'Archive', onClick: archiveRoadmap, icon: <IconArchive /> },
+                { label: 'Delete roadmap', onClick: deleteWholeRoadmap, danger: true, icon: <IconDelete /> },
               ]}
             />
           </>
