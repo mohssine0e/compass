@@ -118,13 +118,28 @@
   background: transparent;
   border: none;
   border-top: 1px solid var(--line);
+  border-left: 2px solid transparent;
   color: var(--text);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 14px 0;
+  padding: 14px 0 14px 10px;
   font-size: 1rem;
+}
+
+/* Type coding (Phase 21) — the Events screen's severity-left-border pattern, keyed off entry
+   type, so a long mixed list scans without reading each row's tag. */
+.all-row.type-roadmap {
+  border-left-color: var(--brass);
+}
+
+.all-row.type-idea {
+  border-left-color: var(--link);
+}
+
+.all-row.type-task {
+  border-left-color: var(--faint);
 }
 
 .all-items li:last-child .all-row {

@@ -305,7 +305,7 @@ function EntryGroup({ label, count, open, onToggle, items, tasksByParent, onOpen
             const tasks = tasksByParent.get(e.id) || []
             return (
               <li key={e.id}>
-                <div className={'all-row' + (isRoadmap || isIdea ? ' is-clickable' : '')}>
+                <div className={`all-row type-${e.type}` + (isRoadmap || isIdea ? ' is-clickable' : '')}>
                   <span
                     className="all-text"
                     onClick={isRoadmap ? () => onOpenRoadmap(e.id) : isIdea ? () => onOpenIdea(e.id) : undefined}

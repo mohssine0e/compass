@@ -1423,7 +1423,7 @@ and a career-scale one should read as visibly different kinds of thing, not just
     Phase 13 collapse mechanism), while a flat/simple roadmap keeps showing everything — this
     should already be close to true given Phase 12's "collapse completed steps" work; audit and
     extend rather than rebuild.
-- [ ] Add color/weight-coding for status or type in long lists.
+- [x] Add color/weight-coding for status or type in long lists.
   - Use the Events screen's severity-left-border pattern (`AdminEventsScreen.css`) as the literal
     template — check its exact implementation and reuse the same mechanism (a colored left border
     keyed off a status/severity value) for: the Everything view's type tag (idea vs. roadmap vs.
