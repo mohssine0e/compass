@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { createRoadmap, generateRoadmap } from '../api'
-import { Button } from './ui'
+import { Button, Card } from './ui'
 import StepProposalEditor, { attachIssueCids, fromProposedSteps, toDraftSteps } from './StepProposalEditor'
 import './NewRoadmapScreen.css'
 import './GenerateRoadmapScreen.css'
@@ -214,42 +214,44 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
       {phase === 'goal' && (
         <>
           <label className="gen-label">What do you want a roadmap for?</label>
-          <textarea
-            className="roadmap-notes gen-goal"
-            value={goal}
-            onChange={(e) => {
-              setGoal(e.target.value)
-              if (error) setError(null)
-            }}
-            placeholder="e.g. learn to read Arabic, ship a side project, get comfortable with algorithms"
-            rows={3}
-            autoFocus
-          />
-          {busy && (
-            <p className="gen-progress">
-              {STAGE_LABELS[stage] || 'Working'}… ({formatElapsed(elapsedSeconds)})
-            </p>
-          )}
-          <div className="roadmap-actions">
-            {error && <span className="roadmap-error">{error}</span>}
-            <Button variant="ghost" onClick={onCancel}>
-              Cancel
-            </Button>
-            {!unavailable && (
-              <Button variant="ghost" onClick={skipAndDraft} disabled={!goal.trim() || busy}>
-                Skip — just draft it
-              </Button>
+          <Card className="gen-goal-card">
+            <textarea
+              className="roadmap-notes gen-goal"
+              value={goal}
+              onChange={(e) => {
+                setGoal(e.target.value)
+                if (error) setError(null)
+              }}
+              placeholder="e.g. learn to read Arabic, ship a side project, get comfortable with algorithms"
+              rows={3}
+              autoFocus
+            />
+            {busy && (
+              <p className="gen-progress">
+                {STAGE_LABELS[stage] || 'Working'}… ({formatElapsed(elapsedSeconds)})
+              </p>
             )}
-            {unavailable ? (
-              <Button variant="primary" onClick={onManual}>
-                Write it yourself
+            <div className="roadmap-actions">
+              {error && <span className="roadmap-error">{error}</span>}
+              <Button variant="ghost" onClick={onCancel}>
+                Cancel
               </Button>
-            ) : (
-              <Button variant="primary" onClick={askQuestions} disabled={!goal.trim() || busy}>
-                {busy ? 'Working…' : 'Draft an outline'}
-              </Button>
-            )}
-          </div>
+              {!unavailable && (
+                <Button variant="ghost" onClick={skipAndDraft} disabled={!goal.trim() || busy}>
+                  Skip — just draft it
+                </Button>
+              )}
+              {unavailable ? (
+                <Button variant="primary" onClick={onManual}>
+                  Write it yourself
+                </Button>
+              ) : (
+                <Button variant="primary" onClick={askQuestions} disabled={!goal.trim() || busy}>
+                  {busy ? 'Working…' : 'Draft an outline'}
+                </Button>
+              )}
+            </div>
+          </Card>
         </>
       )}
 
@@ -315,7 +317,7 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
           />
           <div className="roadmap-steps">
             {modules.map((m, i) => (
-              <div className="gen-step" key={m.cid}>
+              <Card className="gen-step gen-module-card" key={m.cid}>
                 <div className="step-row">
                   <span className="step-index">{i + 1}</span>
                   <input
@@ -340,7 +342,7 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
                   onChange={(e) => setModuleField(m.cid, 'scope', e.target.value)}
                   placeholder="What falls under this module (optional)"
                 />
-              </div>
+              </Card>
             ))}
             <Button type="button" variant="ghost" className="step-add" onClick={addModule}>
               + Add module

@@ -1490,7 +1490,7 @@ roadmap → learn loop, building on the Phase 21 design-system foundations.
   - Give the "Archived (N)" link more visual weight — currently `--faint` text with no border; bump
     it toward `--muted` or add a light border/pill treatment so it reads as a real navigation
     target, not a footnote.
-- [ ] Draft-with-AI flow (`GenerateRoadmapScreen.jsx`/`.css`, `NewRoadmapScreen.css`).
+- [x] Draft-with-AI flow (`GenerateRoadmapScreen.jsx`/`.css`, `NewRoadmapScreen.css`).
   - Differentiate the goal-entry screen from Capture visually — e.g. a slightly larger heading size
     (using the type scale from Phase 21), or a bordered card around the textarea+buttons instead of
     them floating directly on the background, signaling "this is a bigger, slower action."

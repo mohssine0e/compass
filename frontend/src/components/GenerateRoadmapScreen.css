@@ -1,6 +1,20 @@
+/* The goal prompt reads as a bigger, slower action than Capture (Phase 22): a real heading
+   over a bordered card, instead of bare text floating on the background. */
 .gen-label {
   color: var(--text);
-  font-size: var(--text-lg);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-medium);
+}
+
+.gen-goal-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Each module in the outline editor is its own card (Phase 22) — scannable at 6+ modules. */
+.gen-module-card {
+  gap: 8px;
 }
 
 .gen-goal {
@@ -214,14 +228,21 @@
   color: var(--muted);
 }
 
+/* "Grounded in:" is a trust signal worth noticing (Phase 22) — a quiet callout card with a
+   brass accent, not skim-past list text. */
 .gen-sources {
-  border-top: 1px solid var(--line);
-  padding-top: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--brass);
+  border-radius: var(--radius);
+  padding: 12px 16px;
 }
 
 .gen-sources-label {
-  color: var(--faint);
+  color: var(--muted);
   font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .gen-sources-list {
