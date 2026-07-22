@@ -1528,7 +1528,7 @@ roadmap → learn loop, building on the Phase 21 design-system foundations.
     and "Something to learn first" (both structural/tree-changing) one visual treatment, and "Find
     gentler resources" (a content-only swap) a distinctly lighter one, so the weight of the action
     is legible before clicking.
-- [ ] Resurfacing screen (`ResurfacingScreen.jsx`/`.css`).
+- [x] Resurfacing screen (`ResurfacingScreen.jsx`/`.css`).
   - Give the restructure-review sub-screen (shown after picking "change the plan") its own visual
     treatment — e.g. a bordered card around the proposed change, distinct from the plain
     `step-input` styling it currently reuses — so it reads as "review this AI proposal" rather than

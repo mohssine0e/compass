@@ -7,7 +7,7 @@ import {
 } from '../api'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import StepProposalEditor, { fromProposedSteps, toDraftSteps } from './StepProposalEditor'
-import { Button } from './ui'
+import { Button, Card } from './ui'
 import './ResurfacingScreen.css'
 
 // Shown before capture when something stalled is worth an honest look (Phase 2).
@@ -245,31 +245,33 @@ function RestructureReview({
       <p className="resurface-context">The step you're on:</p>
       <p className="resurface-entry">{restructure.targetStepText}</p>
 
-      {isBreakDown ? (
-        <>
-          <p className="resurface-restructure-lead">
-            Break it into smaller steps. Edit anything before you keep it.
-          </p>
-          <StepProposalEditor
-            steps={restructure.steps}
-            onChange={(next) => setRestructure((prev) => ({ ...prev, steps: next }))}
-          />
-        </>
-      ) : (
-        <>
-          {restructure.why && <p className="resurface-restructure-why">{restructure.why}</p>}
-          <p className="resurface-restructure-lead">Do this first. Edit it before you keep it.</p>
-          <input
-            className="step-input resurface-prereq-input"
-            value={restructure.prerequisite}
-            onChange={(e) =>
-              setRestructure((prev) => ({ ...prev, prerequisite: e.target.value }))
-            }
-            placeholder="Prerequisite step"
-            autoFocus
-          />
-        </>
-      )}
+      <Card className="resurface-proposal-card">
+        {isBreakDown ? (
+          <>
+            <p className="resurface-restructure-lead">
+              Break it into smaller steps. Edit anything before you keep it.
+            </p>
+            <StepProposalEditor
+              steps={restructure.steps}
+              onChange={(next) => setRestructure((prev) => ({ ...prev, steps: next }))}
+            />
+          </>
+        ) : (
+          <>
+            {restructure.why && <p className="resurface-restructure-why">{restructure.why}</p>}
+            <p className="resurface-restructure-lead">Do this first. Edit it before you keep it.</p>
+            <input
+              className="step-input resurface-prereq-input"
+              value={restructure.prerequisite}
+              onChange={(e) =>
+                setRestructure((prev) => ({ ...prev, prerequisite: e.target.value }))
+              }
+              placeholder="Prerequisite step"
+              autoFocus
+            />
+          </>
+        )}
+      </Card>
 
       {error && <p className="resurface-error">{error}</p>}
 
