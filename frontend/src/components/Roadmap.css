@@ -521,6 +521,93 @@
   margin-top: 4px;
 }
 
+/* Projects checklist (Phase 24): every project-kind step across the tree, one place to fill in
+   a public URL once built and mark it done — same visual language as the Path/Tree rows. */
+.projects-empty {
+  color: var(--muted);
+  font-size: 1.05rem;
+}
+
+.projects-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.project-row {
+  display: flex;
+  gap: 14px;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+
+.project-row:last-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.project-check {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--faint);
+  font-size: 0.95rem;
+}
+
+.project-row.is-done .project-check {
+  color: var(--brass);
+}
+
+.project-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.project-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.project-text {
+  flex: 1;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.project-row.is-done .project-text {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.project-rationale {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.project-url-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.project-url-input {
+  flex: 1;
+}
+
+.project-url-link {
+  flex-shrink: 0;
+  font-size: 0.9rem;
+}
+
 /* Learning path (Phase 13): an ordered "what's next" traversal, distinct from the tree. */
 .learning-path {
   list-style: none;

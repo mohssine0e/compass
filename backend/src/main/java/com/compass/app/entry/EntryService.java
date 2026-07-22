@@ -129,6 +129,19 @@ public class EntryService {
             }
             entry.setContent(content);
         }
+        if (patch.projectUrl() != null) {
+            // A project step's public-URL field (Phase 24), merged into content like notes/verify.
+            Map<String, Object> content = entry.getContent() != null
+                    ? new HashMap<>(entry.getContent())
+                    : new HashMap<>();
+            String trimmed = patch.projectUrl().trim();
+            if (trimmed.isEmpty()) {
+                content.remove("projectUrl");
+            } else {
+                content.put("projectUrl", trimmed);
+            }
+            entry.setContent(content);
+        }
 
         Entry saved = repository.save(entry);
         // Working a step counts as touching its roadmap, so an actively-progressing roadmap

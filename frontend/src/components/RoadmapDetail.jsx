@@ -19,6 +19,7 @@ import {
 import ExpandModuleModal from './ExpandModuleModal'
 import ExpandModulesBatchModal from './ExpandModulesBatchModal'
 import LearningPathView from './LearningPathView'
+import ProjectsView from './ProjectsView'
 import ModuleProposalModal from './ModuleProposalModal'
 import ProgressBar from './ProgressBar'
 import ReplanModulesModal from './ReplanModulesModal'
@@ -549,6 +550,11 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
             <DepthIcon size={14} />
           </span>
           <span className="node-group-title">{nodeText(node)}</span>
+          {node.missingProjectFlag && (
+            <Badge tone="danger" title="Career-scale roadmap, no project step here yet">
+              no project step
+            </Badge>
+          )}
           <Badge>{p.done}/{p.total}</Badge>
           {isStepContainer && (
             <span onClick={(e) => e.stopPropagation()}>
@@ -681,6 +687,11 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
             <Button variant={view === 'path' ? 'primary' : 'ghost'} onClick={() => setView('path')}>
               Path
             </Button>
+            {roadmap.archetype === 'career_path' && (
+              <Button variant={view === 'projects' ? 'primary' : 'ghost'} onClick={() => setView('projects')}>
+                Projects
+              </Button>
+            )}
             {view === 'tree' && children.length > 1 && (
               <Button variant="ghost" onClick={enterReorder}>
                 Reorder
@@ -721,6 +732,8 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
 
       {view === 'path' && !reorderMode ? (
         <LearningPathView roadmap={roadmap} onOpenStep={setDeepStepId} />
+      ) : view === 'projects' && !reorderMode ? (
+        <ProjectsView roadmap={roadmap} onChanged={load} onOpenStep={setDeepStepId} />
       ) : reorderMode ? (
         <ol className="step-list is-reordering">
           {draftOrder.map((node, index) => (
