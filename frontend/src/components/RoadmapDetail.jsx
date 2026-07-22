@@ -483,7 +483,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
             onDoubleClick={() => setDeepStepId(node.id)}
             title="Double-click for details"
           >
-            {node.content?.text}
+            <span className="step-text-main">{node.content?.text}</span>
             {(node.content?.kind === 'project' ||
               node.content?.weight ||
               node.content?.skeletonOnly ||

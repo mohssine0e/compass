@@ -1429,7 +1429,7 @@ and a career-scale one should read as visibly different kinds of thing, not just
     keyed off a status/severity value) for: the Everything view's type tag (idea vs. roadmap vs.
     task) and/or status, and optionally the roadmap tree's step state marker colors (currently only
     brass-for-current, everything else faint).
-- [ ] Handle long text consistently.
+- [x] Handle long text consistently.
   - Decide on one approach (CSS line-clamp with a "show more" toggle, vs. truncate-to-one-line with
     full text always available on open) and apply it in both `Roadmap.css` (tree/Path rows) and
     anywhere else long AI-generated text renders without truncation today. Fix the existing
