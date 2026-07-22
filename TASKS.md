@@ -1444,7 +1444,7 @@ and a career-scale one should read as visibly different kinds of thing, not just
     faint radial gradient or texture using existing tokens, nothing decorative/loud), or simply
     anchoring content higher on the page (e.g. starting ~120px from the top) rather than dead-center
     of the full viewport height, which is what makes it read as "vacant" at real screen sizes.
-- [ ] Adopt the shared type scale everywhere.
+- [x] Adopt the shared type scale everywhere.
   - Grep every component CSS file for hardcoded `rem`/`px` font-size values on headings/section
     titles and replace with the matching `--text-*` token from `index.css` where one already fits;
     only introduce a new scale step if a real gap is found (unlikely — the scale already spans

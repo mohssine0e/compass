@@ -1,6 +1,6 @@
 .gen-label {
   color: var(--text);
-  font-size: 1.25rem;
+  font-size: var(--text-lg);
 }
 
 .gen-goal {
@@ -11,7 +11,7 @@
 
 .gen-lead {
   color: var(--muted);
-  font-size: 1rem;
+  font-size: var(--text-base);
   margin: 0;
 }
 

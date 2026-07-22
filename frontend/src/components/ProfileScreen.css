@@ -7,7 +7,7 @@
 
 .profile-lead {
   color: var(--muted);
-  font-size: 1rem;
+  font-size: var(--text-base);
   margin: 4px 0 28px;
 }
 
@@ -155,7 +155,7 @@
 
 .resume-group-title {
   color: var(--faint);
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin: 0 0 8px;

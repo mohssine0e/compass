@@ -145,7 +145,7 @@
 .ui-section__title {
   margin: 0 0 8px;
   color: var(--faint);
-  font-size: 0.78rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
