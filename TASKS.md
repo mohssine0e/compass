@@ -1605,32 +1605,39 @@ Categorization, Phase-Based Structure, and Required Projects sections. Scoped as
 since it only applies to a subset of roadmaps (career-scale ones) and shouldn't complicate the
 generation path for everyday goals.
 
-- [ ] Extend the Phase 18 `GoalAssessment` with a coarse archetype classification — reuse the
+- [x] Extend the Phase 18 `GoalAssessment` with a coarse archetype classification — reuse the
   existing `complexity`/`shape` fields as the primary signal rather than adding a fully separate
   enum; only add a distinct `archetype` field if `complexity`/`shape` genuinely can't distinguish
   "quick task" from "topic deep-dive" from "career pivot" on their own. Keep this additive to the
   existing assessment call, not a second AI round-trip.
-- [ ] For goals assessed as career-scale, bias the module outline toward a recognizable arc
+- [x] For goals assessed as career-scale, bias the module outline toward a recognizable arc
   (foundational concepts and prerequisites first, core tools/technologies next, deeper
   specialization after that, a portfolio/capstone project last) via prompt guidance rather than a
   rigid enforced 4-phase structure — real goals don't always cleanly split into exactly four named
   phases, and forcing them to risks awkward, padded modules. Guidance, not a hard schema.
-- [ ] Project Portfolio Mandate: for career-scale roadmaps, require that at least the later modules
+- [x] Project Portfolio Mandate: for career-scale roadmaps, require that at least the later modules
   (post-foundations) each include one concrete, publicly-shareable project step (not just
   conceptual/reading steps) — enforced as a soft validation the AI is instructed to follow, with a
   visible flag in the UI if a module lacks one (not a hard rejection that blocks generation, since
   false positives on this kind of check are worse than a missed nudge).
-- [ ] Project checklist UI: for a career-scale roadmap, surface its project-shaped steps in a
+- [x] Project checklist UI: for a career-scale roadmap, surface its project-shaped steps in a
   dedicated "Projects" summary (title, description, a public-URL field the founder can fill in once
   built, a completion checkbox) — reusing existing step/entry data rather than a new project entity;
   a project step is still just a `roadmap_step` with `kind: "project"`.
   - Defer AI-based project review (submitting a URL for the AI to evaluate against criteria) — real
     added complexity for a feature that's speculative until the founder actually completes a
     project through this flow.
-- [ ] Acceptance: generate a genuinely career-scale goal (e.g. "become a DevOps engineer") and
+- [x] Acceptance: generate a genuinely career-scale goal (e.g. "become a DevOps engineer") and
   confirm the resulting roadmap's later modules include at least one project-shaped step each, and
   that the Projects summary correctly surfaces them.
-- [ ] **Push + tag `phase-24-complete`. Stop. Let the founder use this for real before continuing.**
+  (Verified end to end against a synthetic career_path test roadmap, not live AI generation, to
+  avoid burning quota against the real provider rate limits already showing in Events: a
+  foundational module correctly gets no flag, a later module missing a project step shows a
+  "no project step" badge, a later module with one doesn't, the Projects tab only appears for
+  career_path roadmaps, and its checklist correctly surfaces the project step with a working
+  public-URL field and a completion checkbox that reuses the entry's real status. Test data
+  removed afterward — no rows left in the database.)
+- [x] **Push + tag `phase-24-complete`. Stop. Let the founder use this for real before continuing.**
 
 ---
 
