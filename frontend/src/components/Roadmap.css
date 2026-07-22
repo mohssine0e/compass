@@ -521,12 +521,12 @@
 }
 
 .path-step-resource a {
-  color: var(--brass);
+  color: var(--link);
   text-decoration: none;
 }
 
 .path-step-resource a:hover {
-  border-bottom: 1px solid var(--brass);
+  border-bottom: 1px solid var(--link);
 }
 
 .path-step-time {

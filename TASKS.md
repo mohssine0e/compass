@@ -1368,7 +1368,7 @@ individual screens in Phases 22–23. Full analysis in `UI_UX_NOTES.md` Section 
 the "Visual Distinction for Roadmap Scale" concept from the suggestions doc (a small/quick roadmap
 and a career-scale one should read as visibly different kinds of thing, not just longer lists).
 
-- [ ] Add a distinct "link" color role, separate from `--brass`.
+- [x] Add a distinct "link" color role, separate from `--brass`.
   - Add a new token to `frontend/src/index.css` (e.g. `--link: <some value distinct from brass>` —
     pick something that still reads as "on-brand" against the dark palette but is visually
     distinguishable from the brass accent at a glance; a desaturated blue or teal is the

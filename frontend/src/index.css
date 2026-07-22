@@ -8,6 +8,7 @@
   --faint: #5b6070;
   --brass: #cf9d5b;
   --brass-dim: rgba(207, 157, 91, 0.32);
+  --link: #7fb0c4; /* external/resource links only — brass stays for buttons, nav, chips, progress */
   --danger: #d98a7a;
   --danger-dim: rgba(217, 138, 122, 0.1);
   --radius: 8px;

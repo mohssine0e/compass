@@ -177,13 +177,13 @@
 }
 
 .gen-resource-title {
-  color: var(--brass);
+  color: var(--link);
   text-decoration: none;
   border-bottom: 1px solid transparent;
 }
 
 .gen-resource-title:hover {
-  border-bottom-color: var(--brass);
+  border-bottom-color: var(--link);
 }
 
 .gen-resource-meta {
