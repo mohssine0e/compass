@@ -1,5 +1,6 @@
 package com.compass.app.roadmap;
 
+import com.compass.app.ai.ResourceAiService;
 import com.compass.app.ai.RoadmapAiService;
 import com.compass.app.ai.SearchGroundingService;
 import com.compass.app.entry.Entry;
@@ -8,6 +9,7 @@ import com.compass.app.entry.EntryStatus;
 import com.compass.app.entry.EntryType;
 import com.compass.app.profile.ProfileContext;
 import com.compass.app.profile.ProfileService;
+import com.compass.app.resource.ResourceService;
 import com.compass.app.roadmap.dto.CreateRoadmapRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapResponse;
@@ -38,6 +40,7 @@ public class RoadmapService {
     private final RoadmapAiService roadmapAi;
     private final ProfileService profileService;
     private final SearchGroundingService searchGrounding;
+    private final ResourceService resourceService;
     // Search results arrive relevance-ordered; only the top few are worth spending prompt tokens
     // on (Phase 19) — smaller prompts are faster and cheaper on every provider, especially the
     // slowest tier. Resource discovery separately reads the full uncapped result set.
@@ -49,12 +52,14 @@ public class RoadmapService {
 
     public RoadmapService(EntryRepository repository, RoadmapAiService roadmapAi,
                           ProfileService profileService, SearchGroundingService searchGrounding,
+                          ResourceService resourceService,
                           @org.springframework.beans.factory.annotation.Value(
                                   "${compass.search.max-context-snippets:5}") int maxGroundingSnippets) {
         this.repository = repository;
         this.roadmapAi = roadmapAi;
         this.profileService = profileService;
         this.searchGrounding = searchGrounding;
+        this.resourceService = resourceService;
         this.maxGroundingSnippets = maxGroundingSnippets;
     }
 
@@ -162,15 +167,16 @@ public class RoadmapService {
                 throw new IllegalStateException(
                         "Drafting is unavailable right now — write the steps yourself.");
             }
-            onStage.accept(GenerationStage.FINDING_RESOURCES);
+            // Resources are no longer drafted here (see ResourceController/ResourceService) —
+            // the founder reviews the step structure immediately, and the frontend fetches
+            // resources as a quick follow-up call while the proposal is still open for review.
             List<String> stepTexts = flat.steps().stream().map(RoadmapAiService.DraftStep::text).toList();
-            List<List<RoadmapAiService.Resource>> resources = roadmapAi.suggestResources(
-                    goal, stepTexts, grounding == null ? null : grounding.results(),
-                    avoidedFormats(), preferredFormats(), Set.of());
+            List<List<ResourceAiService.Resource>> noResources = stepTexts.stream()
+                    .map(t -> List.<ResourceAiService.Resource>of()).toList();
             List<RoadmapAiService.CritiqueIssue> issues =
                     critiqueIfWarranted(goal, null, stepTexts, assessment.complexity());
             return GenerateRoadmapResponse.proposal(flat.title(), flat.interpretation(), flat.steps(),
-                    resources, flat.skipped(), sources, assessment, Map.of(), false, issues);
+                    noResources, flat.skipped(), sources, assessment, Map.of(), false, issues);
         }
 
         onStage.accept(GenerationStage.DRAFTING);
@@ -246,8 +252,8 @@ public class RoadmapService {
         List<RoadmapAiService.DraftStep> skeletonSteps = skeletonTitles.stream()
                 .map(text -> new RoadmapAiService.DraftStep(text, "concept", "medium", null, null, null))
                 .toList();
-        List<List<RoadmapAiService.Resource>> noResources = skeletonSteps.stream()
-                .map(s -> List.<RoadmapAiService.Resource>of()).toList();
+        List<List<ResourceAiService.Resource>> noResources = skeletonSteps.stream()
+                .map(s -> List.<ResourceAiService.Resource>of()).toList();
         return GenerateRoadmapResponse.proposal(moduleTitle, null, skeletonSteps, noResources,
                 List.of(), List.of(), null, Map.of(), true);
     }
@@ -316,9 +322,10 @@ public class RoadmapService {
         }
         steps = withBridgeSteps(steps, priorStepTextById);
         List<String> stepTexts = steps.stream().map(RoadmapAiService.DraftStep::text).toList();
-        List<List<RoadmapAiService.Resource>> resources = roadmapAi.suggestResources(
-                moduleTitle, stepTexts, grounding == null ? null : grounding.results(),
-                avoidedFormats(), preferredFormats(), usedResourceUrls(roadmapId));
+        // Module expansion keeps its existing combined steps+resources timing (already solved by
+        // background prefetching — see ModulePrefetchService), unlike the other drafting paths.
+        List<List<ResourceAiService.Resource>> resources = resourceService.suggestResourcesPerStep(
+                moduleTitle, stepTexts, grounding == null ? null : grounding.results(), roadmapId);
         List<RoadmapAiService.CritiqueIssue> issues = critiqueIfWarranted(
                 roadmapTitle, moduleScope, stepTexts, storedComplexity(roadmap));
         return GenerateRoadmapResponse.proposal(moduleTitle, null, steps, resources, List.of(),
@@ -749,30 +756,6 @@ public class RoadmapService {
                 && assessment.get("domain") instanceof String s ? s : null;
     }
 
-    /** Every resource url already attached anywhere in this roadmap's tree (Phase 13 dedup). */
-    @Transactional(readOnly = true)
-    public Set<String> usedResourceUrls(Long roadmapId) {
-        Set<String> urls = new HashSet<>();
-        collectResourceUrls(roadmapId, urls);
-        return urls;
-    }
-
-    @SuppressWarnings("unchecked")
-    private void collectResourceUrls(Long parentId, Set<String> urls) {
-        for (Entry child : repository.findByParentIdOrderByOrderIndexAsc(parentId)) {
-            if (child.getType() == EntryType.ROADMAP_STEP && child.getContent() != null
-                    && child.getContent().get("resources") instanceof List<?> list) {
-                for (Object item : list) {
-                    if (item instanceof Map<?, ?> map && map.get("url") instanceof String url
-                            && !url.isBlank()) {
-                        urls.add(url);
-                    }
-                }
-            }
-            collectResourceUrls(child.getId(), urls);
-        }
-    }
-
     /**
      * Every leaf {@code roadmap_step} anywhere in this roadmap's tree — modules and steps-with-
      * substeps are containers, not leaves, and are skipped. Callers that need "the real units of
@@ -797,32 +780,6 @@ public class RoadmapService {
                 collectLeafSteps(child.getId(), out);
             }
         }
-    }
-
-    /** The formats the founder marked to avoid (confirmed profile only), or empty. */
-    @SuppressWarnings("unchecked")
-    /** The founder's stated avoided resource formats, or empty if none/no confirmed profile. */
-    public List<String> avoidedFormats() {
-        return formatPreferenceList("avoid");
-    }
-
-    /**
-     * The founder's confirmed behaviorally-inferred preferred formats (Phase 20) — a soft bias
-     * for {@code resourceSuggestUser}, never a hard requirement. Only ever set via confirming an
-     * {@code InferredPreference}, never stated directly.
-     */
-    public List<String> preferredFormats() {
-        return formatPreferenceList("prefer");
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<String> formatPreferenceList(String key) {
-        return profileService.confirmedProfile()
-                .map(p -> p.getFormatPreferences())
-                .map(prefs -> prefs.get(key))
-                .filter(a -> a instanceof List)
-                .map(a -> (List<String>) a)
-                .orElseGet(List::of);
     }
 
     // (proposal() maps the AI draft steps to the structured response DTO.)

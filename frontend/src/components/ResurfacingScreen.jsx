@@ -4,11 +4,18 @@ import {
   proposeRestructure,
   recheckResurfacing,
   respondResurfacing,
+  suggestResources,
 } from '../api'
 import { useSpeechRecognition } from '../hooks/useSpeechRecognition'
 import StepProposalEditor, { fromProposedSteps, toDraftSteps } from './StepProposalEditor'
 import { Button, Card } from './ui'
 import './ResurfacingScreen.css'
+
+let rcidCounter = 0
+function nextRcid() {
+  rcidCounter += 1
+  return rcidCounter
+}
 
 // Shown before capture when something stalled is worth an honest look (Phase 2).
 // For a stalled roadmap, the options can also open a restructuring flow (Phase 4).
@@ -29,6 +36,9 @@ function ResurfaceView({ prompt, onDone }) {
   // null | { kind, loading } | { kind, targetStepId, steps }        (break_down)
   //      | { kind, targetStepId, prerequisite, why }                (add_prerequisite)
   const [restructure, setRestructure] = useState(null)
+  // True while resources for a break_down proposal are being found as a separate follow-up call
+  // — the substep structure is shown immediately, resources fill in moments later.
+  const [resourcesPending, setResourcesPending] = useState(false)
   const textareaRef = useRef(null)
 
   const appendSpokenText = useCallback((chunk) => {
@@ -58,12 +68,14 @@ function ResurfaceView({ prompt, onDone }) {
     try {
       const p = await proposeRestructure(entry.id, kind)
       if (p.kind === 'break_down') {
+        const editorSteps = fromProposedSteps(p.steps)
         setRestructure({
           kind,
           targetStepId: p.targetStepId,
           targetStepText: p.targetStepText,
-          steps: fromProposedSteps(p.steps),
+          steps: editorSteps,
         })
+        fetchResourcesFor(editorSteps, p.roadmapId, p.targetStepText)
       } else {
         setRestructure({
           kind,
@@ -76,6 +88,38 @@ function ResurfaceView({ prompt, onDone }) {
     } catch (err) {
       setError(err.message)
       setRestructure(null)
+    }
+  }
+
+  // The break_down proposal's substeps are already shown; find their resources as a quick
+  // follow-up (POST /resources/suggest) instead of making the founder wait for both. Matches by
+  // cid, not array position, so it's still correct even if the founder edits/removes a step
+  // while resources are still being found.
+  async function fetchResourcesFor(stepsSnapshot, roadmapId, scope) {
+    const cids = stepsSnapshot.map((s) => s.cid)
+    const stepTexts = stepsSnapshot.map((s) => s.text)
+    if (!stepTexts.length) return
+    setResourcesPending(true)
+    try {
+      const resourceLists = await suggestResources({ scope: scope || '', stepTexts, roadmapId })
+      setRestructure((prev) =>
+        prev && prev.steps
+          ? {
+              ...prev,
+              steps: prev.steps.map((s) => {
+                const idx = cids.indexOf(s.cid)
+                const found = idx >= 0 ? resourceLists[idx] : null
+                return found && found.length
+                  ? { ...s, resources: found.map((r) => ({ rcid: nextRcid(), ...r })) }
+                  : s
+              }),
+            }
+          : prev
+      )
+    } catch {
+      // Best-effort — a failed resources fetch just leaves steps without suggestions.
+    } finally {
+      setResourcesPending(false)
     }
   }
 
@@ -254,6 +298,7 @@ function RestructureReview({
             <StepProposalEditor
               steps={restructure.steps}
               onChange={(next) => setRestructure((prev) => ({ ...prev, steps: next }))}
+              resourcesPending={resourcesPending}
             />
           </>
         ) : (

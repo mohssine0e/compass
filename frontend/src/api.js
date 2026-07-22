@@ -125,6 +125,19 @@ export function getModulePrefetchStatus(roadmapId) {
   return request(`/roadmaps/${roadmapId}/modules/prefetch-status`)
 }
 
+/**
+ * Resources for an already-drafted, not-yet-persisted batch of steps — the follow-up call for a
+ * proposal shown before resources were ready (flat-goal proposals, reformulate/resurfacing
+ * break-downs). `roadmapId` is null for a brand-new flat-goal proposal. Returns a list aligned by
+ * index to `stepTexts`, each entry a (possibly empty) list of resources for that step.
+ */
+export function suggestResources({ scope, stepTexts, roadmapId }) {
+  return request('/resources/suggest', {
+    method: 'POST',
+    body: JSON.stringify({ scope, stepTexts, roadmapId: roadmapId ?? null }),
+  })
+}
+
 /** Redraft one module's title/scope (Phase 18). Nothing persisted; accept via `updateModule`. */
 export function regenerateModuleScope(roadmapId, moduleId) {
   return request(`/roadmaps/${roadmapId}/modules/${moduleId}/regenerate-scope`, { method: 'POST' })

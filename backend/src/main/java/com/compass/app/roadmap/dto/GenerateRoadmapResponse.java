@@ -1,5 +1,6 @@
 package com.compass.app.roadmap.dto;
 
+import com.compass.app.ai.ResourceAiService;
 import com.compass.app.ai.RoadmapAiService;
 
 import java.util.List;
@@ -78,7 +79,7 @@ public record GenerateRoadmapResponse(
     /** A suggested resource on a proposed step — a real link the user can keep, drop, or replace. */
     public record ProposedResource(String title, String url, String format, String sourceType,
                                    String estimatedTime, String aiGroundingSource) {
-        static ProposedResource from(RoadmapAiService.Resource r) {
+        public static ProposedResource from(ResourceAiService.Resource r) {
             return new ProposedResource(r.title(), r.url(), r.format(), r.sourceType(),
                     r.estimatedTime(), r.aiGroundingSource());
         }
@@ -120,7 +121,7 @@ public record GenerateRoadmapResponse(
      */
     public static GenerateRoadmapResponse proposal(String title, String interpretation,
                                                    List<RoadmapAiService.DraftStep> steps,
-                                                   List<List<RoadmapAiService.Resource>> resources,
+                                                   List<List<ResourceAiService.Resource>> resources,
                                                    List<String> skipped, List<String> sources,
                                                    RoadmapAiService.GoalAssessment assessment,
                                                    Map<Long, String> priorStepTextById) {
@@ -131,7 +132,7 @@ public record GenerateRoadmapResponse(
     /** As above, but flagging a skeleton (titles-only) result (Phase 19) — see the class doc. */
     public static GenerateRoadmapResponse proposal(String title, String interpretation,
                                                    List<RoadmapAiService.DraftStep> steps,
-                                                   List<List<RoadmapAiService.Resource>> resources,
+                                                   List<List<ResourceAiService.Resource>> resources,
                                                    List<String> skipped, List<String> sources,
                                                    RoadmapAiService.GoalAssessment assessment,
                                                    Map<Long, String> priorStepTextById,
@@ -143,7 +144,7 @@ public record GenerateRoadmapResponse(
     /** As above, plus the Phase 20 self-critique issues flagged over this same step list. */
     public static GenerateRoadmapResponse proposal(String title, String interpretation,
                                                    List<RoadmapAiService.DraftStep> steps,
-                                                   List<List<RoadmapAiService.Resource>> resources,
+                                                   List<List<ResourceAiService.Resource>> resources,
                                                    List<String> skipped, List<String> sources,
                                                    RoadmapAiService.GoalAssessment assessment,
                                                    Map<Long, String> priorStepTextById,

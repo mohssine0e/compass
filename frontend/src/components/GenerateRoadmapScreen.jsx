@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { createRoadmap, generateRoadmap } from '../api'
+import { createRoadmap, generateRoadmap, suggestResources } from '../api'
 import { Button, Card } from './ui'
 import StepProposalEditor, { attachIssueCids, fromProposedSteps, toDraftSteps } from './StepProposalEditor'
 import './NewRoadmapScreen.css'
@@ -49,6 +49,10 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
   // Populated instead of `modules` when the assessment (Phase 18) judges the goal small enough
   // for one flat step list rather than named modules — same shape/editor as a module's own steps.
   const [flatSteps, setFlatSteps] = useState([])
+  // True while resources for the flat proposal are being found as a separate follow-up call
+  // (see suggestResources in api.js) — the step structure is shown immediately, resources fill
+  // in moments later rather than one combined wait.
+  const [resourcesPending, setResourcesPending] = useState(false)
   const [issues, setIssues] = useState([])
   const [skipped, setSkipped] = useState([])
   const [sources, setSources] = useState([])
@@ -165,12 +169,40 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
       setFlatSteps(editorSteps)
       setIssues(attachIssueCids(editorSteps, res.issues))
       setPhase('flat')
+      fetchResourcesFor(editorSteps)
     } else {
       const raw = res.modules && res.modules.length ? res.modules : [{ title: '', scope: '' }]
       setModules(raw.map((m) => ({ cid: nextCid(), title: m.title || '', scope: m.scope || '' })))
       setPhase('outline')
     }
     setBusy(false)
+  }
+
+  // The flat proposal's steps are already shown; find their resources as a quick follow-up
+  // (POST /resources/suggest) rather than making the founder wait for both before seeing the
+  // plan at all. Matches by cid, not array position, so it's still correct even if the founder
+  // edits/removes a step while resources are still being found.
+  async function fetchResourcesFor(stepsSnapshot) {
+    const cids = stepsSnapshot.map((s) => s.cid)
+    const stepTexts = stepsSnapshot.map((s) => s.text)
+    setResourcesPending(true)
+    try {
+      const resourceLists = await suggestResources({ scope: goal, stepTexts, roadmapId: null })
+      setFlatSteps((prev) =>
+        prev.map((s) => {
+          const idx = cids.indexOf(s.cid)
+          const found = idx >= 0 ? resourceLists[idx] : null
+          return found && found.length
+            ? { ...s, resources: found.map((r) => ({ rcid: nextCid(), ...r })) }
+            : s
+        })
+      )
+    } catch {
+      // Best-effort — a failed resources fetch just leaves steps without suggestions; the
+      // founder can always add their own via StepProposalEditor.
+    } finally {
+      setResourcesPending(false)
+    }
   }
 
   const cleanModules = modules.filter((m) => m.title.trim())
@@ -388,6 +420,7 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
             skipped={skipped}
             sources={sources}
             issues={issues}
+            resourcesPending={resourcesPending}
           />
           <div className="roadmap-actions">
             {error && <span className="roadmap-error">{error}</span>}

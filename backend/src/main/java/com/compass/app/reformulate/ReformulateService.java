@@ -1,5 +1,6 @@
 package com.compass.app.reformulate;
 
+import com.compass.app.ai.ResourceAiService;
 import com.compass.app.ai.RoadmapAiService;
 import com.compass.app.ai.SearchGroundingService;
 import com.compass.app.entry.Entry;
@@ -9,6 +10,7 @@ import com.compass.app.profile.ProfileContext;
 import com.compass.app.profile.ProfileService;
 import com.compass.app.reformulate.dto.ApplyReformulateRequest;
 import com.compass.app.reformulate.dto.ReformulateProposal;
+import com.compass.app.resource.ResourceService;
 import com.compass.app.roadmap.RoadmapService;
 import com.compass.app.roadmap.dto.GenerateRoadmapResponse;
 import org.springframework.stereotype.Service;
@@ -18,7 +20,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Set;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.UUID;
@@ -38,15 +39,17 @@ public class ReformulateService {
   private final RoadmapAiService roadmapAi;
   private final SearchGroundingService searchGrounding;
   private final ProfileService profileService;
+  private final ResourceService resourceService;
 
   public ReformulateService(EntryRepository repository, RoadmapService roadmapService,
       RoadmapAiService roadmapAi, SearchGroundingService searchGrounding,
-      ProfileService profileService) {
+      ProfileService profileService, ResourceService resourceService) {
     this.repository = repository;
     this.roadmapService = roadmapService;
     this.roadmapAi = roadmapAi;
     this.searchGrounding = searchGrounding;
     this.profileService = profileService;
+    this.resourceService = resourceService;
   }
 
   /** Draft a reformulation of a step — not applied. {@code kind} is break_down / add_prerequisite / easier_resources. */
@@ -77,14 +80,15 @@ public class ReformulateService {
         if (smaller == null) {
           throw new IllegalStateException("Couldn't break this down right now.");
         }
-        List<String> smallerTexts = smaller.stream().map(RoadmapAiService.DraftStep::text).toList();
-        List<List<RoadmapAiService.Resource>> resources = roadmapAi.suggestResources(
-            stepText, smallerTexts, grounding == null ? null : grounding.results(),
-            avoidedFormats(), preferredFormats(), roadmapService.usedResourceUrls(roadmapId));
+        // Resources are no longer drafted here — the founder reviews the substep structure
+        // immediately, and the frontend fetches resources as a quick follow-up call
+        // (POST /resources/suggest) while the proposal is still open for review.
+        List<List<ResourceAiService.Resource>> noResources = smaller.stream()
+            .map(s -> List.<ResourceAiService.Resource>of()).toList();
         // Reuses GenerateRoadmapResponse's own step-building logic rather than duplicating it —
         // a break-down proposal is really just a same-batch (no cross-module) module expansion.
         List<GenerateRoadmapResponse.ProposedStep> proposedSteps = GenerateRoadmapResponse.proposal(
-                null, null, smaller, resources, List.of(), List.of(), null, Map.of())
+                null, null, smaller, noResources, List.of(), List.of(), null, Map.of())
             .steps();
         yield ReformulateProposal.breakDown(roadmapId, stepId, stepText, proposedSteps, note);
       }
@@ -134,11 +138,11 @@ public class ReformulateService {
     if (grounding == null) {
       return List.of();
     }
-    List<List<RoadmapAiService.Resource>> perStep = roadmapAi.suggestResources(
-        stepText, List.of(stepText), grounding.results(), avoidedFormats(), preferredFormats(), Set.of());
+    List<List<ResourceAiService.Resource>> perStep = resourceService.suggestResourcesPerStep(
+        stepText, List.of(stepText), grounding.results(), null);
     List<Map<String, Object>> out = new ArrayList<>();
     if (!perStep.isEmpty()) {
-      for (RoadmapAiService.Resource r : perStep.get(0)) {
+      for (ResourceAiService.Resource r : perStep.get(0)) {
         out.add(resourceToMap(r));
       }
     }
@@ -184,14 +188,6 @@ public class ReformulateService {
     repository.save(step);
   }
 
-  private List<String> avoidedFormats() {
-    return roadmapService.avoidedFormats();
-  }
-
-  private List<String> preferredFormats() {
-    return roadmapService.preferredFormats();
-  }
-
   private String priorStepsText(Long roadmapId, Entry step) {
     if (roadmapId == null) {
       return null;
@@ -209,7 +205,7 @@ public class ReformulateService {
     return sb.toString();
   }
 
-  private static Map<String, Object> resourceToMap(RoadmapAiService.Resource r) {
+  private static Map<String, Object> resourceToMap(ResourceAiService.Resource r) {
     Map<String, Object> map = new LinkedHashMap<>();
     map.put("title", r.title());
     map.put("url", r.url());

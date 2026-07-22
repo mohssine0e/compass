@@ -91,6 +91,11 @@ export function attachIssueCids(editorSteps, issues) {
  * @param {Array} [issues] - Phase 20 self-critique issues, already cid-mapped (see
  *   `attachIssueCids`) — {severity, message, cid, suggestedFix}. The founder accepts (applies
  *   `suggestedFix` to that step, same as editing it by hand) or dismisses each one.
+ * @param {boolean} [resourcesPending] - true while a separate follow-up call (see
+ *   `suggestResources` in api.js) is still finding resources for this proposal — the founder
+ *   sees the step structure immediately and resources fill in moments later, rather than one
+ *   combined wait. A step with no resources yet shows "Finding resources…" instead of reading
+ *   as "nothing here, add your own."
  */
 export default function StepProposalEditor({
   steps,
@@ -99,6 +104,7 @@ export default function StepProposalEditor({
   sources = [],
   skeletonOnly = false,
   issues = [],
+  resourcesPending = false,
 }) {
   const [dismissed, setDismissed] = useState(new Set())
   function update(updater) {
@@ -237,6 +243,7 @@ export default function StepProposalEditor({
             {step.rationale && <p className="gen-rationale">{step.rationale}</p>}
             <StepResources
               step={step}
+              pending={resourcesPending}
               onRemove={(rcid) => removeResource(step.cid, rcid)}
               onMove={(rcid, dir) => moveResource(step.cid, rcid, dir)}
               onAdd={(title, url) => addOwnResource(step.cid, title, url)}
@@ -262,7 +269,7 @@ export default function StepProposalEditor({
 }
 
 // Curated resources for one proposed step (Phase 7.5): remove, reorder, or add your own.
-function StepResources({ step, onRemove, onMove, onAdd }) {
+function StepResources({ step, pending, onRemove, onMove, onAdd }) {
   const [adding, setAdding] = useState(false)
   const [title, setTitle] = useState('')
   const [url, setUrl] = useState('')
@@ -277,6 +284,7 @@ function StepResources({ step, onRemove, onMove, onAdd }) {
 
   return (
     <div className="gen-resources">
+      {pending && resources.length === 0 && <p className="deep-faint">Finding resources…</p>}
       {resources.map((r, i) => (
         <div className="gen-resource" key={r.rcid}>
           <ExternalLink href={r.url}>{r.title}</ExternalLink>

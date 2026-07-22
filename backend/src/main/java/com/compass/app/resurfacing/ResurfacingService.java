@@ -1,6 +1,7 @@
 package com.compass.app.resurfacing;
 
 import com.compass.app.ai.AiVoiceService;
+import com.compass.app.ai.ResourceAiService;
 import com.compass.app.ai.RoadmapAiService;
 import com.compass.app.ai.SearchGroundingService;
 import com.compass.app.entry.Entry;
@@ -250,13 +251,13 @@ public class ResurfacingService {
                 if (smaller == null) {
                     throw new IllegalStateException("Couldn't draft smaller steps right now.");
                 }
-                List<String> smallerTexts = smaller.stream().map(RoadmapAiService.DraftStep::text).toList();
-                List<List<RoadmapAiService.Resource>> resources = roadmapAi.suggestResources(
-                        stepText, smallerTexts, grounding == null ? null : grounding.results(),
-                        roadmapService.avoidedFormats(), roadmapService.preferredFormats(),
-                        roadmapService.usedResourceUrls(roadmap.getId()));
+                // Resources are no longer drafted here — the founder reviews the substep
+                // structure immediately, and the frontend fetches resources as a quick follow-up
+                // call (POST /resources/suggest) while the proposal is still open for review.
+                List<List<ResourceAiService.Resource>> noResources = smaller.stream()
+                        .map(s -> List.<ResourceAiService.Resource>of()).toList();
                 List<GenerateRoadmapResponse.ProposedStep> proposedSteps = GenerateRoadmapResponse.proposal(
-                                null, null, smaller, resources, List.of(), List.of(), null, Map.of())
+                                null, null, smaller, noResources, List.of(), List.of(), null, Map.of())
                         .steps();
                 yield RestructureProposal.breakDown(roadmap.getId(), step.getId(), stepText, proposedSteps);
             }

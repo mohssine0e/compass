@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { applyReformulate, proposeReformulate } from '../api'
+import { applyReformulate, proposeReformulate, suggestResources } from '../api'
 import StepProposalEditor, { fromProposedSteps, toDraftSteps } from './StepProposalEditor'
 import { Badge, Button, ExternalLink } from './ui'
 import './ReformulatePanel.css'
@@ -15,11 +15,20 @@ const KINDS = [
   { kind: 'easier_resources', label: 'Find gentler resources' },
 ]
 
+let rcidCounter = 0
+function nextRcid() {
+  rcidCounter += 1
+  return rcidCounter
+}
+
 export default function ReformulatePanel({ step, atMaxDepth = false, onClose, onApplied }) {
   const [proposal, setProposal] = useState(null) // { kind, ... } | { loading: true }
   const [steps, setSteps] = useState([])
   const [prerequisite, setPrerequisite] = useState('')
   const [resources, setResources] = useState([])
+  // True while resources for a break_down proposal are being found as a separate follow-up call
+  // — the substep structure is shown immediately, resources fill in moments later.
+  const [resourcesPending, setResourcesPending] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
@@ -28,13 +37,42 @@ export default function ReformulatePanel({ step, atMaxDepth = false, onClose, on
     setProposal({ loading: true })
     try {
       const p = await proposeReformulate(step.id, kind)
-      setSteps(kind === 'break_down' ? fromProposedSteps(p.steps) : [])
+      const editorSteps = kind === 'break_down' ? fromProposedSteps(p.steps) : []
+      setSteps(editorSteps)
       setPrerequisite(p.prerequisite || '')
       setResources(p.resources || [])
       setProposal(p)
+      if (kind === 'break_down') fetchResourcesFor(editorSteps, p.roadmapId)
     } catch (err) {
       setError(err.message)
       setProposal(null)
+    }
+  }
+
+  // The break_down proposal's substeps are already shown; find their resources as a quick
+  // follow-up (POST /resources/suggest) instead of making the founder wait for both. Matches by
+  // cid, not array position, so it's still correct even if the founder edits/removes a step
+  // while resources are still being found.
+  async function fetchResourcesFor(stepsSnapshot, roadmapId) {
+    const cids = stepsSnapshot.map((s) => s.cid)
+    const stepTexts = stepsSnapshot.map((s) => s.text)
+    if (!stepTexts.length) return
+    setResourcesPending(true)
+    try {
+      const resourceLists = await suggestResources({ scope: step.content?.text || '', stepTexts, roadmapId })
+      setSteps((prev) =>
+        prev.map((s) => {
+          const idx = cids.indexOf(s.cid)
+          const found = idx >= 0 ? resourceLists[idx] : null
+          return found && found.length
+            ? { ...s, resources: found.map((r) => ({ rcid: nextRcid(), ...r })) }
+            : s
+        })
+      )
+    } catch {
+      // Best-effort — a failed resources fetch just leaves steps without suggestions.
+    } finally {
+      setResourcesPending(false)
     }
   }
 
@@ -92,7 +130,7 @@ export default function ReformulatePanel({ step, atMaxDepth = false, onClose, on
             {proposal.kind === 'break_down' && (
               <>
                 <p className="reformulate-lead">Replace it with these — edit before you keep them.</p>
-                <StepProposalEditor steps={steps} onChange={setSteps} />
+                <StepProposalEditor steps={steps} onChange={setSteps} resourcesPending={resourcesPending} />
               </>
             )}
 
