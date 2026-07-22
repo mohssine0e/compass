@@ -8,6 +8,13 @@
   gap: 18px;
 }
 
+/* Low-content state (Phase 21): the goal prompt starts high on the page rather than centered in
+   the full viewport — same anchoring as Capture, so short phases don't read as vacant. */
+.app-main:has(.roadmap-form) {
+  justify-content: flex-start;
+  padding: clamp(40px, 10vh, 110px) 0 40px;
+}
+
 .roadmap-title {
   width: 100%;
   border: none;

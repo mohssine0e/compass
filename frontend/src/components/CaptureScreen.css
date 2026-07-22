@@ -8,6 +8,13 @@
   gap: 20px;
 }
 
+/* Low-content state (Phase 21): anchor the canvas high instead of dead-center of the viewport —
+   full-height centering is what made it read as vacant. Still a blank canvas, nothing added. */
+.app-main:has(.capture) {
+  justify-content: flex-start;
+  padding: clamp(80px, 16vh, 160px) 0 40px;
+}
+
 .capture-input {
   width: 100%;
   min-height: 96px;

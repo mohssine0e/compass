@@ -1436,7 +1436,7 @@ and a career-scale one should read as visibly different kinds of thing, not just
     mid-word ellipsis cutoff in `AllEntriesScreen`/`AllEntries.css` as part of the same pass (word-
     boundary-aware truncation, e.g. via CSS `text-overflow: ellipsis` plus a max-width that's
     already word-wrapping-safe, or truncate in JS at a word boundary).
-- [ ] Revisit empty/low-content states.
+- [x] Revisit empty/low-content states.
   - Capture, the Draft-with-AI goal prompt, and an empty/one-item Roadmaps list all currently center
     a title + input in a mostly-black viewport. Keep Capture's essential simplicity (must stay fast,
     must stay a blank canvas per CLAUDE.md's low-friction principle) but consider: a narrower
