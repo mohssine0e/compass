@@ -11,6 +11,7 @@ import {
 } from '../api'
 import ExpandModuleModal from './ExpandModuleModal'
 import ReformulatePanel from './ReformulatePanel'
+import { usePolling } from '../hooks/usePolling'
 import '../design/atlas.css'
 import './RoadmapMap.css'
 
@@ -385,28 +386,15 @@ export default function RoadmapMap({ id, onBack, onGone, onOpenClassic }) {
   // Unbuilt modules are already being drafted server-side from the moment they appear, so poll
   // for that rather than making the founder trigger a call that's probably already finished.
   // Polling stops as soon as nothing is unbuilt — no standing timer on a fully-drafted roadmap.
-  useEffect(() => {
-    if (!hasUnbuilt) return undefined
-    let alive = true
-    const tick = async () => {
-      try {
-        const list = await getModulePrefetchStatus(id)
-        if (!alive) return
-        dispatch({
-          type: 'prefetch',
-          prefetch: Object.fromEntries(list.map((s) => [String(s.moduleId), s])),
-        })
-      } catch {
-        // The map is perfectly usable without this; an unreachable poll shouldn't say anything.
-      }
-    }
-    tick()
-    const timer = setInterval(tick, 5000)
-    return () => {
-      alive = false
-      clearInterval(timer)
-    }
-  }, [id, hasUnbuilt])
+  usePolling(
+    hasUnbuilt ? () => getModulePrefetchStatus(id) : null,
+    5000,
+    (list) => dispatch({
+      type: 'prefetch',
+      prefetch: Object.fromEntries(list.map((s) => [String(s.moduleId), s])),
+    }),
+    [id, hasUnbuilt],
+  )
 
   const selected = useMemo(
     () => stations.find((s) => s.node.id === selectedId) ?? null,

@@ -30,21 +30,29 @@ export class TimeoutError extends Error {
   }
 }
 
-// Exported so tests can exercise the timeout/abort contract directly — none of the domain
-// functions below forward an options object (no caller passes a signal yet; see V3-5.4), so
-// there's no other way to reach this from outside the module.
-export async function request(path, options = {}) {
-  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal: callerSignal, ...init } = options
+// A dropped wifi association, a proxy hiccup — one retry after a short pause covers the common
+// transient case without turning a genuine outage into a long silent hang. Never applied to a
+// timeout/abort (see the check below) or to a completed-but-non-2xx response — a 4xx/5xx is the
+// server actually answering, and retrying it would resend a POST that may have already applied.
+const NETWORK_RETRY_DELAY_MS = 400
 
-  // Our own timeout, plus the caller's cancellation (unmount, superseded request) if given.
+// GET responses currently in flight, keyed by path — the roadmap map/detail screens poll a
+// status endpoint every few seconds while the founder can also trigger an action that refetches
+// the same thing; without this, both fire their own request. Only ever GETs: a POST/PATCH/etc.
+// is never safe to silently fold into another caller's in-flight request.
+const inFlightGets = new Map()
+
+function isPlainGet(init) {
+  return !init.method || init.method === 'GET'
+}
+
+async function fetchOnce(path, timeoutMs, callerSignal, init) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   const onCallerAbort = () => controller.abort()
   callerSignal?.addEventListener('abort', onCallerAbort)
-
-  let res
   try {
-    res = await fetch(BASE + path, {
+    return await fetch(BASE + path, {
       headers: { 'Content-Type': 'application/json' },
       ...init,
       signal: controller.signal,
@@ -58,7 +66,60 @@ export async function request(path, options = {}) {
     clearTimeout(timer)
     callerSignal?.removeEventListener('abort', onCallerAbort)
   }
+}
 
+function isRetryableNetworkError(err) {
+  // Anything that isn't our own timeout wrapper or the caller's own cancellation is a genuine
+  // connection-level failure (fetch throws a plain TypeError for those, with no HTTP response
+  // at all) — the only case worth a blind retry.
+  return err.name !== 'TimeoutError' && err.name !== 'AbortError'
+}
+
+function sleep(delayMs) {
+  return new Promise((resolve) => setTimeout(resolve, delayMs))
+}
+
+// Exported so tests can exercise the timeout/abort contract directly — none of the domain
+// functions below forward an options object (no caller passes a signal yet; see V3-5.4), so
+// there's no other way to reach this from outside the module.
+export async function request(path, options = {}) {
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal: callerSignal, ...init } = options
+
+  // Dedup is skipped when the caller supplied its own signal — sharing one in-flight request
+  // across two callers means one caller's abort would cancel the other's, which is worse than
+  // the redundant request this exists to avoid.
+  const dedupeKey = isPlainGet(init) && !callerSignal ? path : null
+  if (dedupeKey && inFlightGets.has(dedupeKey)) {
+    return inFlightGets.get(dedupeKey)
+  }
+
+  const attempt = async () => {
+    try {
+      return await fetchOnce(path, timeoutMs, callerSignal, init)
+    } catch (err) {
+      if (!isRetryableNetworkError(err)) throw err
+      await sleep(NETWORK_RETRY_DELAY_MS)
+      return fetchOnce(path, timeoutMs, callerSignal, init)
+    }
+  }
+
+  const promise = attempt().then((res) => parseResponse(res))
+  if (dedupeKey) {
+    inFlightGets.set(dedupeKey, promise)
+    const cleanup = () => {
+      if (inFlightGets.get(dedupeKey) === promise) inFlightGets.delete(dedupeKey)
+    }
+    // .then(cleanup, cleanup) rather than .finally(cleanup): .finally() returns a *new* derived
+    // promise that nothing here would otherwise observe, so on a rejection it becomes its own
+    // unhandled-rejection warning even though the original `promise` is handled fine by every
+    // real caller. Handling the rejection branch here (as a no-op) keeps that derived promise
+    // resolved instead.
+    promise.then(cleanup, cleanup)
+  }
+  return promise
+}
+
+async function parseResponse(res) {
   if (!res.ok) {
     let detail = `Request failed (${res.status})`
     try {
@@ -149,10 +210,6 @@ export async function generateRoadmap(payload, onStage) {
       throw new Error(job.error || 'Drafting is unavailable right now — write the steps yourself.')
     }
   }
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 /** Draft steps for one module, grounded on its own scope. Nothing persisted. */

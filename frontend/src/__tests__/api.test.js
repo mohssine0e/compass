@@ -109,10 +109,85 @@ describe('request()', () => {
     await expect(pending).rejects.not.toBeInstanceOf(TimeoutError)
   })
 
-  it('a genuine network failure (not an abort) propagates as-is, unwrapped', async () => {
-    fetch.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+  it('a genuine network failure is retried once, transparently, and succeeds if the retry does', async () => {
+    vi.useFakeTimers()
+    fetch
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(jsonResponse([{ id: 1 }]))
 
-    await expect(listEntries()).rejects.toThrow('Failed to fetch')
+    const pending = listEntries()
+    await vi.advanceTimersByTimeAsync(400)
+
+    await expect(pending).resolves.toEqual([{ id: 1 }])
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('a network failure that fails twice propagates as-is, unwrapped, after the one retry', async () => {
+    vi.useFakeTimers()
+    fetch.mockRejectedValue(new TypeError('Failed to fetch'))
+
+    const pending = listEntries()
+    const assertion = expect(pending).rejects.toThrow('Failed to fetch')
+    await vi.advanceTimersByTimeAsync(400)
+
+    await assertion
+    expect(fetch).toHaveBeenCalledTimes(2) // the original attempt plus exactly one retry, not a loop
+  })
+
+  it('a non-ok HTTP response (4xx/5xx) is never retried — the server already answered', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ detail: 'bad request' }, 400))
+
+    await expect(listEntries()).rejects.toThrow('bad request')
+
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('two identical concurrent GETs share one in-flight request', async () => {
+    let resolveFetch
+    fetch.mockImplementationOnce(() => new Promise((resolve) => { resolveFetch = resolve }))
+
+    const first = listEntries()
+    const second = listEntries()
+    resolveFetch(jsonResponse([{ id: 1 }]))
+
+    await Promise.all([first, second])
+
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('a GET after the first has resolved fires its own new request, not a stale shared one', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse([{ id: 1 }]))
+    await listEntries()
+
+    fetch.mockResolvedValueOnce(jsonResponse([{ id: 1 }, { id: 2 }]))
+    const second = await listEntries()
+
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(second).toEqual([{ id: 1 }, { id: 2 }])
+  })
+
+  it('a GET with its own abort signal is never folded into another caller\'s in-flight request', async () => {
+    let resolveFirst
+    fetch.mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve }))
+    fetch.mockResolvedValueOnce(jsonResponse([{ id: 99 }]))
+
+    const first = request('/entries') // no signal — eligible for dedup
+    const second = request('/entries', { signal: new AbortController().signal }) // has one — must not share
+
+    resolveFirst(jsonResponse([{ id: 1 }]))
+    const [firstResult, secondResult] = await Promise.all([first, second])
+
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(firstResult).toEqual([{ id: 1 }])
+    expect(secondResult).toEqual([{ id: 99 }])
+  })
+
+  it('POST requests are never deduped, even to the same path', async () => {
+    fetch.mockResolvedValue(jsonResponse({ id: 1 }))
+
+    await Promise.all([patchEntry(1, { status: 'done' }), patchEntry(1, { status: 'done' })])
+
+    expect(fetch).toHaveBeenCalledTimes(2)
   })
 
   it('getAdminEvents omits unset filters from the query string', async () => {

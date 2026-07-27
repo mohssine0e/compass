@@ -35,6 +35,7 @@ import ModuleProposalModal from './ModuleProposalModal'
 import ProgressBar from './ProgressBar'
 import ReplanModulesModal from './ReplanModulesModal'
 import { truncateAtWord } from '../text'
+import { usePolling } from '../hooks/usePolling'
 import StepDeepView from './StepDeepView'
 import VerifyModal from './VerifyModal'
 import {
@@ -267,26 +268,16 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
 
   // Poll background-draft status while any module here is still unexpanded — stops on its own
   // once every module has steps (hasEmptyModule goes false and the interval is never set again).
-  useEffect(() => {
-    if (!roadmap || !hasEmptyModule(roadmap.children || [])) return
-    let alive = true
-    const tick = () => {
-      getModulePrefetchStatus(roadmap.id)
-        .then((list) => {
-          if (!alive) return
-          const map = {}
-          for (const item of list) map[item.moduleId] = item
-          setPrefetch(map)
-        })
-        .catch(() => {}) // best-effort status only — a failed poll just tries again next tick
-    }
-    tick()
-    const interval = setInterval(tick, 2500)
-    return () => {
-      alive = false
-      clearInterval(interval)
-    }
-  }, [roadmap])
+  usePolling(
+    roadmap && hasEmptyModule(roadmap.children || []) ? () => getModulePrefetchStatus(roadmap.id) : null,
+    2500,
+    (list) => {
+      const map = {}
+      for (const item of list) map[item.moduleId] = item
+      setPrefetch(map)
+    },
+    [roadmap],
+  )
 
   // A module already tracked here (drafting or done in the background) shouldn't also be picked
   // for the manual batch-expand action — that would spend a second real AI call on the same
