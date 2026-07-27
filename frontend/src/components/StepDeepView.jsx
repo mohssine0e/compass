@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { endSession, explainText, getProfile, getStepCovers, patchEntry, startSession } from '../api'
+import { trapTabKey, useDialogAccessibility } from '../hooks/useDialogAccessibility'
 import ReformulatePanel from './ReformulatePanel'
 import { Badge, Button, ExternalLink, IconModule, IconStep, IconSubstep, IconSubSubstep } from './ui'
 import './StepDeepView.css'
@@ -70,6 +71,10 @@ export default function StepDeepView({
     return () => clearInterval(id)
   }, [sessionOpen, sessionStartedAt])
   const panelRef = useRef(null)
+  // Accessibility (V3-7.1): same treatment as the shared `Modal` component — this panel
+  // predates it and grew its own markup, but a dialog is a dialog. See useDialogAccessibility.
+  useDialogAccessibility(panelRef, onClose)
+
   // Text-selection help (Phase 8.5): toolbar at the selection, then a result shown alongside.
   const [selection, setSelection] = useState(null) // { text, top, left }
   const [help, setHelp] = useState(null) // { action, text, loading, response, error }
@@ -208,8 +213,10 @@ export default function StepDeepView({
         ref={panelRef}
         onClick={(e) => e.stopPropagation()}
         onMouseUp={onMouseUp}
+        onKeyDown={(e) => trapTabKey(panelRef, e)}
         role="dialog"
         aria-modal="true"
+        tabIndex={-1}
       >
         <button className="deep-close" onClick={onClose} aria-label="Close">
           ×

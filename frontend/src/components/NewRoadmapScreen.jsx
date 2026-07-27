@@ -57,6 +57,7 @@ export default function NewRoadmapScreen({ onCreated, onCancel }) {
           if (error) setError(null)
         }}
         placeholder="What are you working through?"
+        aria-label="Roadmap title"
         autoFocus
       />
 
@@ -65,6 +66,7 @@ export default function NewRoadmapScreen({ onCreated, onCancel }) {
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
         placeholder="Notes (optional)"
+        aria-label="Notes"
         rows={2}
       />
 
@@ -77,6 +79,7 @@ export default function NewRoadmapScreen({ onCreated, onCancel }) {
               value={step}
               onChange={(e) => setStep(i, e.target.value)}
               placeholder={`Step ${i + 1}`}
+              aria-label={`Step ${i + 1}`}
             />
             <button
               type="button"

@@ -84,6 +84,14 @@
   color: var(--faint);
 }
 
+/* Borderless field floating on the page background — a keyboard focus needs its own visible
+   marker rather than a border-color swap (there's no border to swap). */
+.resurface-input:focus-visible {
+  outline: 1px solid var(--faint);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+
 .resurface-interim {
   margin: 0;
   color: var(--muted);

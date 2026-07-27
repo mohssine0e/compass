@@ -44,6 +44,15 @@
   color: var(--faint);
 }
 
+/* Both are borderless fields floating on the page background, so a keyboard focus needs its
+   own visible marker rather than a border-color swap (there's no border to swap). */
+.roadmap-title:focus-visible,
+.roadmap-notes:focus-visible {
+  outline: 1px solid var(--faint);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+
 .roadmap-steps {
   display: flex;
   flex-direction: column;

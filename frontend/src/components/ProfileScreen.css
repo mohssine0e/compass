@@ -84,6 +84,10 @@
   outline: none;
 }
 
+.skill-confidence:focus-visible {
+  border-color: var(--faint);
+}
+
 /* Compact chip cloud for unrated skills (Phase 23) — a 39-skill resume import stays a wrapped
    cloud instead of a wall of dropdown rows; picking a confidence promotes a skill to the row
    list above. */

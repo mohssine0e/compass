@@ -372,7 +372,10 @@ export default function GenerateRoadmapScreen({ initialGoal, initialResult, onCr
             />
             {busy && (
               <p className="gen-progress">
-                {STAGE_LABELS[stage] || 'Working'}… ({formatElapsed(elapsedSeconds)})
+                {/* Only the stage name is announced (V3-7.3) — the elapsed count ticks every
+                    second and would otherwise get read aloud on every tick. */}
+                <span aria-live="polite">{STAGE_LABELS[stage] || 'Working'}…</span>{' '}
+                <span aria-hidden="true">({formatElapsed(elapsedSeconds)})</span>
               </p>
             )}
             <div className="roadmap-actions">
@@ -483,7 +486,10 @@ export default function GenerateRoadmapScreen({ initialGoal, initialResult, onCr
           </div>
           {busy && (
             <p className="gen-progress">
-              {STAGE_LABELS[stage] || 'Working'}… ({formatElapsed(elapsedSeconds)})
+              {/* Only the stage name is announced (V3-7.3) — the elapsed count ticks every
+                  second and would otherwise get read aloud on every tick. */}
+              <span aria-live="polite">{STAGE_LABELS[stage] || 'Working'}…</span>{' '}
+              <span aria-hidden="true">({formatElapsed(elapsedSeconds)})</span>
             </p>
           )}
           <div className="roadmap-actions">

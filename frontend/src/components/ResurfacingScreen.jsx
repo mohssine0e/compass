@@ -180,7 +180,7 @@ function ResurfaceView({ prompt, onDone }) {
 
       {prompt.note && <p className="resurface-history">{prompt.note}</p>}
 
-      <h1 className="resurface-question">{question}</h1>
+      <h1 className="resurface-question" aria-live="polite">{question}</h1>
 
       <div className="resurface-options">
         {quickOptions.map((o) => (
@@ -382,7 +382,7 @@ function RecheckView({ prompt, onDone }) {
         </>
       ) : (
         <>
-          <h1 className="resurface-question">{question}</h1>
+          <h1 className="resurface-question" aria-live="polite">{question}</h1>
           <textarea
             className="resurface-input recheck-answer"
             value={answer}

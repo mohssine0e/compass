@@ -105,7 +105,7 @@ export default function App() {
           Compass
         </button>
         <nav className="app-nav">
-          <NavLink active={view.name === 'capture'} onClick={() => go('capture')}>
+          <NavLink active={view.name === 'capture'} href={PATHS.capture} onClick={() => go('capture')}>
             Capture
           </NavLink>
           <NavLink
@@ -114,20 +114,21 @@ export default function App() {
               view.name === 'newRoadmap' ||
               view.name === 'generateRoadmap'
             }
+            href={PATHS.roadmaps}
             onClick={() => go('roadmaps')}
           >
             Roadmaps
           </NavLink>
-          <NavLink active={view.name === 'focus'} onClick={() => go('focus')}>
+          <NavLink active={view.name === 'focus'} href={PATHS.focus} onClick={() => go('focus')}>
             Focus
           </NavLink>
-          <NavLink active={view.name === 'review'} onClick={() => go('review')}>
+          <NavLink active={view.name === 'review'} href={PATHS.review} onClick={() => go('review')}>
             Review
           </NavLink>
-          <NavLink active={view.name === 'all'} onClick={() => go('all')}>
+          <NavLink active={view.name === 'all'} href={PATHS.all} onClick={() => go('all')}>
             All
           </NavLink>
-          <NavLink active={view.name === 'profile'} onClick={() => go('profile')}>
+          <NavLink active={view.name === 'profile'} href={PATHS.profile} onClick={() => go('profile')}>
             Profile
           </NavLink>
         </nav>
@@ -212,14 +213,25 @@ export default function App() {
   )
 }
 
-function NavLink({ active, onClick, children }) {
+// A real <a> (V3-7.2), not a <button> styled to look like a link — with V3-5.1 giving every
+// view a real URL, a plain button here meant no middle-click/cmd-click "open in new tab", no
+// right-click "copy link", and no <a> semantics for a screen reader. `onClick` still drives the
+// actual in-app navigation for a plain left-click; a modified click (new tab/window) is left to
+// the browser's own default handling on the href, never intercepted.
+function NavLink({ active, href, onClick, children }) {
   return (
-    <button
+    <a
       className={'nav-link' + (active ? ' is-active' : '')}
-      onClick={onClick}
+      href={href}
+      aria-current={active ? 'page' : undefined}
+      onClick={(e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return
+        e.preventDefault()
+        onClick()
+      }}
     >
       {children}
-    </button>
+    </a>
   )
 }
 

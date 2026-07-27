@@ -29,12 +29,15 @@
 }
 
 .nav-link {
+  display: inline-block;
   background: transparent;
   border: none;
   color: var(--faint);
   font-size: 0.9rem;
   padding: 6px 10px;
   border-radius: 6px;
+  text-decoration: none;
+  cursor: pointer;
   transition: color 0.15s ease, background 0.15s ease;
 }
 

@@ -116,6 +116,10 @@
   outline: none;
 }
 
+.roadmap-verify select:focus-visible {
+  border-color: var(--faint);
+}
+
 .roadmap-empty {
   color: var(--muted);
   font-size: 1.05rem;

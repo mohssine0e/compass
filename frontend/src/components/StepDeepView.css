@@ -189,6 +189,10 @@ button.deep-crumb:hover {
   border-color: var(--faint);
 }
 
+.deep-depends-select:focus-visible {
+  border-color: var(--faint);
+}
+
 .deep-notes-status {
   display: block;
   margin-top: 4px;

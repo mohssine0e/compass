@@ -161,7 +161,9 @@ export default function VerifyModal({ step, onClose, onPassed, onOverride, onCha
               autoFocus
             />
           )}
-          {gap && <p className="verify-gap">{gap}</p>}
+          <div aria-live="polite">
+            {gap && <p className="verify-gap">{gap}</p>}
+          </div>
           {suggestedPrerequisite && !prerequisiteHandled && (
             <div className="verify-prerequisite">
               <p className="verify-prerequisite-text">

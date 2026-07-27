@@ -315,6 +315,7 @@ export default function ProfileScreen() {
             onChange={(e) => setNewSkill(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && addSkill()}
             placeholder="Add a skill (e.g. Python, SQL, React)"
+            aria-label="Add a skill"
           />
           <Button variant="ghost" onClick={addSkill} disabled={!newSkill.trim()}>
             Add
@@ -390,6 +391,7 @@ export default function ProfileScreen() {
             className="resume-file"
             onChange={(e) => uploadResume(e.target.files[0])}
             disabled={uploading}
+            aria-label="Upload resume (PDF or DOCX)"
           />
           {uploading && <span className="profile-hint">Reading…</span>}
         </div>
@@ -432,6 +434,7 @@ export default function ProfileScreen() {
             setSaved(false)
           }}
           placeholder="e.g. I learn best by building something real, and lose interest reading theory with no payoff."
+          aria-label="How you like to learn"
           rows={3}
         />
         <div className="desc-actions">

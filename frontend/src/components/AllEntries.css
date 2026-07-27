@@ -217,6 +217,10 @@
   outline: none;
 }
 
+.all-status-select:focus-visible {
+  border-color: var(--faint);
+}
+
 .all-status-select.status-done {
   color: var(--brass);
 }
