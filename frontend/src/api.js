@@ -30,7 +30,10 @@ export class TimeoutError extends Error {
   }
 }
 
-async function request(path, options = {}) {
+// Exported so tests can exercise the timeout/abort contract directly — none of the domain
+// functions below forward an options object (no caller passes a signal yet; see V3-5.4), so
+// there's no other way to reach this from outside the module.
+export async function request(path, options = {}) {
   const { timeoutMs = DEFAULT_TIMEOUT_MS, signal: callerSignal, ...init } = options
 
   // Our own timeout, plus the caller's cancellation (unmount, superseded request) if given.

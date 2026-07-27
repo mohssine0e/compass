@@ -69,7 +69,7 @@ const nodeText = (node) =>
 
 // Container node ids that are fully complete — collapsed by default so a big roadmap opens
 // anchored on the modules still in play.
-function fullyDoneGroups(nodes, out = []) {
+export function fullyDoneGroups(nodes, out = []) {
   for (const n of nodes) {
     if (n.children && n.children.length > 0) {
       if (n.progress && n.progress.total > 0 && n.progress.done === n.progress.total) {
@@ -85,7 +85,7 @@ function fullyDoneGroups(nodes, out = []) {
 // roadmap opens showing just the module you're in, right now (Phase 21 / RB-4.10's CAREER
 // default). Falls back to collapsing what's fully complete if there's no current step (e.g.
 // everything's already done).
-function collapseToCurrentModule(data) {
+export function collapseToCurrentModule(data) {
   const children = data.children || []
   if (data.progress?.currentStepId == null) {
     return new Set(fullyDoneGroups(children))
@@ -111,7 +111,7 @@ function collapseToCurrentModule(data) {
 // the current module. Unknown tier (a roadmap from before RB-2, or a failed classification)
 // falls back to today's pre-RB-4 behavior. The founder's own manual choices (RB-4.10's
 // `collapseOverrides`, persisted server-side) always win over whatever the default computed.
-function seedCollapsed(data) {
+export function seedCollapsed(data) {
   const children = data.children || []
   let base
   if (data.shape !== 'nested') {
@@ -133,7 +133,7 @@ function seedCollapsed(data) {
 
 // True if any module anywhere in the tree has no steps of its own yet — worth polling
 // background-draft status for. Once every module's expanded, this goes false and polling stops.
-function hasEmptyModule(nodes) {
+export function hasEmptyModule(nodes) {
   for (const n of nodes) {
     if (n.type === 'roadmap' && (!n.children || n.children.length === 0)) return true
     if (n.children && n.children.length > 0 && hasEmptyModule(n.children)) return true
@@ -144,7 +144,7 @@ function hasEmptyModule(nodes) {
 // RB-4.9: node + its direct parent id, by id, across the whole tree — lets a dependency edge be
 // checked for "done?" and "same module as the step that depends on it?" without a server round
 // trip (everything needed is already in the loaded roadmap tree).
-function nodeIndexOf(nodes, parentId = null, map = new Map()) {
+export function nodeIndexOf(nodes, parentId = null, map = new Map()) {
   for (const n of nodes) {
     map.set(n.id, { node: n, parentId })
     if (n.children) nodeIndexOf(n.children, n.id, map)
@@ -154,7 +154,7 @@ function nodeIndexOf(nodes, parentId = null, map = new Map()) {
 
 // Only real step->step dependencies count for blocking — a step depending on something from a
 // different module is a reminder, never a gate (RB-4.9).
-function dependencyInfo(node, nodeIndex) {
+export function dependencyInfo(node, nodeIndex) {
   if (!node.dependsOn) return null
   const dep = nodeIndex.get(node.dependsOn)
   const self = nodeIndex.get(node.id)
@@ -168,7 +168,7 @@ function dependencyInfo(node, nodeIndex) {
 
 // The estimated-time rollup (Phase 18) is minutes; render it the way the resource estimates
 // that feed it are already written ("~1h 30 min", "~45 min").
-function formatMinutes(total) {
+export function formatMinutes(total) {
   const hours = Math.floor(total / 60)
   const minutes = total % 60
   if (hours === 0) return `${minutes} min`
@@ -1362,7 +1362,7 @@ function toStepShape(node) {
   return node
 }
 
-function findNode(nodes, targetId) {
+export function findNode(nodes, targetId) {
   for (const n of nodes) {
     if (n.id === targetId) return n
     if (n.children) {
@@ -1375,7 +1375,7 @@ function findNode(nodes, targetId) {
 
 // Ancestor chain from the top level down to (excluding) the target node, in order — feeds the
 // deep view's breadcrumb (Phase 21). Null if the target isn't in the tree.
-function findNodePath(nodes, targetId, trail = []) {
+export function findNodePath(nodes, targetId, trail = []) {
   for (const n of nodes) {
     if (n.id === targetId) return trail
     if (n.children) {
@@ -1388,7 +1388,7 @@ function findNodePath(nodes, targetId, trail = []) {
 
 // Nesting depth of a node (0 = top-level, matching NodeRenderer's depth prop) — used to disable
 // "break it down" once a step is already at the substep nesting cap (Phase 20).
-function findNodeDepth(nodes, targetId, depth = 0) {
+export function findNodeDepth(nodes, targetId, depth = 0) {
   for (const n of nodes) {
     if (n.id === targetId) return depth
     if (n.children) {

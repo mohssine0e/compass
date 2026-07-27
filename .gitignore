@@ -31,3 +31,8 @@ dist/
 
 # hidden folders
 .*/
+
+# ...except CI, which has to be tracked to run at all (V3-1.3/1.5).
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml
