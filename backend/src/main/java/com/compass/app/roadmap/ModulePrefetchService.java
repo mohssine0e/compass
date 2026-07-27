@@ -95,6 +95,30 @@ public class ModulePrefetchService {
         jobs.values().removeIf(j -> j.finishedAt() != null && j.finishedAt().isBefore(cutoff));
     }
 
+    /**
+     * Self-heals a roadmap whose generation never completed (V3-3.5) — the actual gap
+     * {@code GenerationJobService}'s in-memory job map correctly leaves alone. A server restart
+     * mid-expansion doesn't lose a job, it loses the tracking *of* one: the modules it already
+     * persisted with no steps yet are real rows in the database, but {@link #jobs} — also
+     * in-memory — has no record of them anymore, so nothing ever prompts a retry and they sit
+     * unbuilt until the founder happens to open one by hand.
+     *
+     * <p>Same shape as {@link SkeletonRetryService}'s periodic re-attempt of a different failure
+     * mode (a skeleton that never got upgraded) — extended here to plain unexpanded modules
+     * rather than a new mechanism. {@link #prefetchAll} already no-ops on a module id it's
+     * already tracking, so a module currently drafting or recently failed (within
+     * {@value #RETENTION}) is left alone rather than doubled up.
+     */
+    @Scheduled(fixedRate = 600_000)
+    void selfHealSweep() {
+        for (var roadmap : roadmapService.listRoadmaps()) {
+            List<Long> unexpanded = roadmapService.unexpandedModuleIds(roadmap.getId());
+            if (!unexpanded.isEmpty()) {
+                prefetchAll(roadmap.getId(), unexpanded);
+            }
+        }
+    }
+
     private static String friendlyMessage(Throwable ex) {
         Throwable cause = unwrap(ex);
         if (cause instanceof IllegalArgumentException || cause instanceof IllegalStateException) {
