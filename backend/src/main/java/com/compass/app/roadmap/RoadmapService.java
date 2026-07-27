@@ -291,7 +291,7 @@ public class RoadmapService {
      * nested. A {@code null} tier (classification failed, or never ran) keeps today's
      * independently-assessed shape as the fallback, unchanged.
      */
-    private static RoadmapAiService.GoalAssessment reconcileShapeWithTier(
+    static RoadmapAiService.GoalAssessment reconcileShapeWithTier(
             RoadmapAiService.GoalAssessment assessment, String tier) {
         if (tier == null) {
             return assessment;
@@ -717,7 +717,7 @@ public class RoadmapService {
     }
 
     /** A loose, no-false-confidence text similarity check — flag only, never block (RB-3.8). */
-    private static boolean similarTitle(String a, String b) {
+    static boolean similarTitle(String a, String b) {
         if (a == null || b == null) {
             return false;
         }
@@ -868,10 +868,10 @@ public class RoadmapService {
     // no deeper. Counted from the root, not by role, so a flat roadmap's step(1)/substep(2)
     // naturally gets one more level of break-down room than a nested one, which is fine: the cap
     // is about total nesting, not about labeling every level "module" or "step".
-    private static final int MAX_STEP_DEPTH = 3;
+    static final int MAX_STEP_DEPTH = 3;
 
     /** How many parents up to the root roadmap (root itself is depth 0). */
-    private int depthOf(Entry entry) {
+    int depthOf(Entry entry) {
         if (entry.getParentId() == null) {
             return 0;
         }
