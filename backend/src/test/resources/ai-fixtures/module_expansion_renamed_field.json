@@ -1,0 +1,13 @@
+{
+  "steps": [
+    {
+      "text": "Read the Rust Book chapter on ownership",
+      "kind": "nonsense_kind",
+      "weight": "gigantic",
+      "rationale": "kind/weight are outside the accepted enum — must fall back to the documented default rather than carrying through junk."
+    },
+    {
+      "title": "This step uses 'title' instead of 'text' — must be dropped, not crash."
+    }
+  ]
+}

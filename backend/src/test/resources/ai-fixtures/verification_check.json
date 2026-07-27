@@ -1,0 +1,3 @@
+{
+  "question": "You just implemented a custom Drop for a struct holding a raw file handle. Walk through what happens, in order, when the struct goes out of scope inside a panic unwind."
+}

@@ -1,0 +1,17 @@
+{
+  "steps": [
+    {
+      "text": "Read the Rust Book chapter on ownership",
+      "kind": "concept",
+      "weight": "medium",
+      "rationale": "Foundational — everything else in the module builds on this."
+    },
+    {
+      "text": "Implement a small linked list that fights the borrow checker on purpose",
+      "kind": "project",
+      "weight": "large",
+      "dependsOnIndex": 0,
+      "rationale": "Concrete practice with the exact pain point ownership rules exist to catch."
+    }
+  ]
+}

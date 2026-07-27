@@ -1,0 +1,10 @@
+{
+  "question": "Which of these best describes Rust's borrow checker rule for mutable references?",
+  "options": [
+    "Any number of mutable references are allowed at once",
+    "At most one mutable reference, and no immutable ones, at the same time",
+    "Mutable references are only checked at runtime",
+    "Mutable references require unsafe"
+  ],
+  "correctIndex": 1
+}

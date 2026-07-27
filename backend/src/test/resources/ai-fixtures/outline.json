@@ -1,0 +1,10 @@
+{
+  "title": "Learn Rust Systems Programming",
+  "interpretation": "Focusing on ownership, concurrency, and building a small systems-level project rather than web frameworks.",
+  "modules": [
+    { "title": "Ownership & Borrowing", "scope": "Core memory-safety model: ownership, borrowing, lifetimes." },
+    { "title": "Concurrency", "scope": "Threads, channels, and the Send/Sync traits." },
+    { "title": "Capstone: A Small CLI Tool", "scope": "Apply everything in one real project." }
+  ],
+  "skipped": ["Basic syntax — profile shows prior C++ experience"]
+}

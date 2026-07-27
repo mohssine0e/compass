@@ -1,0 +1,5 @@
+{
+  "tier": "MASSIVE",
+  "confidence": 0.9,
+  "reasoning": "A tier value outside the TASK/MINI/TOPIC/CAREER enum — the whole classification must be treated as failed, not silently coerced."
+}

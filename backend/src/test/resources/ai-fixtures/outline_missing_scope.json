@@ -1,0 +1,10 @@
+{
+  "title": "Learn Rust Systems Programming",
+  "interpretation": null,
+  "modules": [
+    { "title": "Ownership & Borrowing" },
+    { "title": "" },
+    { "scope": "A module the model forgot to title — must be dropped, not kept with a blank title." }
+  ],
+  "skipped": []
+}

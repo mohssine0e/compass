@@ -1,0 +1,4 @@
+{
+  "passed": false,
+  "gap": "You described dropping the file handle, but never addressed what happens to it specifically during an unwind versus a normal return."
+}
