@@ -525,80 +525,86 @@ export default function RoadmapMap({ id, onBack, onGone, onOpenClassic }) {
   return (
     <div className="atlas rm">
       <header className="rm-bar">
-        <button type="button" className="a-btn a-btn--quiet" onClick={onBack}>
-          ← Roadmaps
-        </button>
-        <div className="rm-bar__title">
-          <h1>{roadmap.title}</h1>
-          <p className="rm-bar__stat a-num">
-            {currentIndex >= 0 ? `stop ${currentIndex + 1}` : 'not started'} of {stations.length}
-            <span aria-hidden="true"> · </span>
-            {legs.length} legs
-            {roadmap.archetype && (
-              <>
-                <span aria-hidden="true"> · </span>
-                {roadmap.archetype.replace(/_/g, ' ')}
-              </>
-            )}
-            {progress.estimatedTotalMinutes > 0 && (
-              <>
-                <span aria-hidden="true"> · </span>
-                {Math.round(progress.estimatedTotalMinutes / 60)}h est
-              </>
-            )}
-            {progress.paceSessions > 0 && progress.paceMultiplier && (
-              <>
-                <span aria-hidden="true"> · </span>
-                {progress.paceMultiplier < 1 ? 'ahead of' : 'behind'} estimate
-              </>
-            )}
-            {/* Proved and merely-ticked are counted separately on purpose. */}
-            {counts.verified > 0 && (
-              <>
-                <span aria-hidden="true"> · </span>
-                {counts.verified} proved
-              </>
-            )}
-            {counts.claimed + counts.due > 0 && (
-              <>
-                <span aria-hidden="true"> · </span>
-                <span className="rm-bar__soft">{counts.claimed + counts.due} unproven</span>
-              </>
-            )}
-          </p>
-        </div>
-        <div className="rm-bar__lenses" role="group" aria-label="Filter the map">
-          {LENSES.map((l) => (
-            <button
-              key={l.id}
-              type="button"
-              className={'rm-lens' + (lens === l.id ? ' is-on' : '')}
-              aria-pressed={lens === l.id}
-              onClick={() => dispatch({ type: 'lens', lens: l.id })}
-            >
-              {l.label}
-            </button>
-          ))}
-          {currentIndex >= 0 && (
-            <button
-              type="button"
-              className="rm-lens"
-              onClick={() => dispatch({ type: 'select', id: stations[currentIndex].node.id })}
-            >
-              Jump to now
-            </button>
-          )}
-          <button type="button" className="rm-lens" onClick={() => downloadRoadmapExport(id)}>
-            Export JSON
+        <div className="rm-bar__row">
+          <button type="button" className="a-btn a-btn--quiet" onClick={onBack}>
+            ← Roadmaps
           </button>
-          {/* The list view still owns the structural edits the map doesn't do — reordering,
-              replanning what's left, re-tiering, inserting a module. It had no link from here
-              at all, which made those reachable only by typing the URL. */}
-          {onOpenClassic && (
-            <button type="button" className="rm-lens" onClick={onOpenClassic}>
-              Edit structure
+          <div className="rm-bar__title">
+            <h1>{roadmap.title}</h1>
+            <p className="rm-bar__stat a-num">
+              {currentIndex >= 0 ? `stop ${currentIndex + 1}` : 'not started'} of {stations.length}
+              <span aria-hidden="true"> · </span>
+              {legs.length} legs
+              {roadmap.archetype && (
+                <>
+                  <span aria-hidden="true"> · </span>
+                  {roadmap.archetype.replace(/_/g, ' ')}
+                </>
+              )}
+              {progress.estimatedTotalMinutes > 0 && (
+                <>
+                  <span aria-hidden="true"> · </span>
+                  {Math.round(progress.estimatedTotalMinutes / 60)}h est
+                </>
+              )}
+              {progress.paceSessions > 0 && progress.paceMultiplier && (
+                <>
+                  <span aria-hidden="true"> · </span>
+                  {progress.paceMultiplier < 1 ? 'ahead of' : 'behind'} estimate
+                </>
+              )}
+              {/* Proved and merely-ticked are counted separately on purpose. */}
+              {counts.verified > 0 && (
+                <>
+                  <span aria-hidden="true"> · </span>
+                  {counts.verified} proved
+                </>
+              )}
+              {counts.claimed + counts.due > 0 && (
+                <>
+                  <span aria-hidden="true"> · </span>
+                  <span className="rm-bar__soft">{counts.claimed + counts.due} unproven</span>
+                </>
+              )}
+            </p>
+          </div>
+
+          <div className="rm-bar__lenses" role="group" aria-label="Filter the map">
+            {LENSES.map((l) => (
+              <button
+                key={l.id}
+                type="button"
+                className={'rm-lens' + (lens === l.id ? ' is-on' : '')}
+                aria-pressed={lens === l.id}
+                onClick={() => dispatch({ type: 'lens', lens: l.id })}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="rm-bar__actions">
+            {currentIndex >= 0 && (
+              <button
+                type="button"
+                className="a-btn a-btn--quiet"
+                onClick={() => dispatch({ type: 'select', id: stations[currentIndex].node.id })}
+              >
+                Jump to now
+              </button>
+            )}
+            <button type="button" className="a-btn a-btn--quiet" onClick={() => downloadRoadmapExport(id)}>
+              Export
             </button>
-          )}
+            {/* The list view still owns the structural edits the map doesn't do — reordering,
+                replanning what's left, re-tiering, inserting a module. It had no link from here
+                at all, which made those reachable only by typing the URL. */}
+            {onOpenClassic && (
+              <button type="button" className="a-btn a-btn--quiet" onClick={onOpenClassic}>
+                Edit structure
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="rm-bar__legs" aria-label="Legs">
@@ -847,6 +853,7 @@ export default function RoadmapMap({ id, onBack, onGone, onOpenClassic }) {
       {selectedNode && (
         <StopCard
           stop={selectedNode}
+          legIndex={selected?.legIndex ?? 0}
           isCurrent={selectedNode.id === currentStepId}
           index={stations.findIndex((s) => s.node.id === selectedNode.id) + 1}
           total={stations.length}
@@ -901,7 +908,7 @@ export default function RoadmapMap({ id, onBack, onGone, onOpenClassic }) {
  * open and back to the map on close, so keyboard use doesn't get stranded behind the overlay.
  */
 function StopCard({
-  stop, isCurrent, index, total, canVerify, check, busy, error, notice, reformulating,
+  stop, legIndex, isCurrent, index, total, canVerify, check, busy, error, notice, reformulating,
   canFindResources, onClose, onStatus, onStartCheck, onFindResources, onReformulate,
   onReformulated, onDismissNotice, onPick, onAnswer, onSubmit, onCloseCheck,
 }) {
@@ -921,7 +928,13 @@ function StopCard({
   const covers = stop.content?.covers ?? []
 
   return (
-    <aside className="rm-card" aria-label="Stop detail" tabIndex={-1} ref={ref}>
+    <aside
+      className="rm-card"
+      aria-label="Stop detail"
+      tabIndex={-1}
+      ref={ref}
+      style={{ '--leg': `var(--a-leg-${(legIndex % 6) + 1})` }}
+    >
       <div className="rm-card__head">
         <p className="a-eyebrow a-num">
           Stop {index} / {total}

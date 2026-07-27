@@ -17,19 +17,35 @@
 
 .rm-bar {
   display: flex;
-  align-items: center;
-  gap: var(--a-4);
+  flex-direction: column;
+  gap: var(--a-2);
   flex: none;
   border-bottom: 1px solid var(--a-line);
   background: var(--a-panel);
   padding: var(--a-3) var(--a-5);
 }
 
+/* Row 1: where you are and what you can do to the view. Row 2 (.rm-bar__legs, below) is a
+   separate, full-width strip — giving the leg list its own lane keeps it scannable instead of
+   being squeezed into whatever space the filters didn't use. */
+.rm-bar__row {
+  display: flex;
+  align-items: center;
+  gap: var(--a-4);
+  min-width: 0;
+}
+
+.rm-bar__title {
+  min-width: 0;
+}
+
 .rm-bar__title h1 {
   margin: 0;
+  overflow: hidden;
   font-size: var(--a-t-lg);
   font-weight: var(--a-w-semi);
   line-height: 1.25;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -37,15 +53,15 @@
   margin: 2px 0 0;
   color: var(--a-ink-3);
   font-size: var(--a-t-small);
+  white-space: nowrap;
 }
 
 .rm-bar__legs {
   display: flex;
-  gap: var(--a-1);
+  gap: var(--a-2);
   overflow-x: auto;
-  flex: 1 1 auto;
-  min-width: 0;
-  padding-bottom: 2px;
+  padding: 2px 2px var(--a-1);
+  scrollbar-width: thin;
 }
 
 .rm-legchip {
@@ -56,19 +72,21 @@
   border: 1px solid var(--a-line);
   border-radius: 999px;
   background: transparent;
-  padding: 3px var(--a-3) 3px var(--a-2);
-  max-width: 190px;
+  padding: 4px var(--a-3) 4px var(--a-2);
+  max-width: 220px;
   color: var(--a-ink-2);
   font-size: var(--a-t-micro);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
-  transition: border-color var(--a-fast) var(--a-ease), color var(--a-fast) var(--a-ease);
+  transition: border-color var(--a-fast) var(--a-ease), color var(--a-fast) var(--a-ease),
+    background var(--a-fast) var(--a-ease);
 }
 
 .rm-legchip:hover {
   border-color: var(--leg);
+  background: var(--a-panel-2);
   color: var(--a-ink);
 }
 
@@ -84,15 +102,20 @@
   color: var(--a-attention);
 }
 
+/* Filters: a toggle group, so it reads as one connected control rather than loose buttons. */
 .rm-bar__lenses {
   display: flex;
-  gap: var(--a-1);
+  gap: 2px;
   flex: none;
   margin-left: auto;
+  border: 1px solid var(--a-line);
+  border-radius: 999px;
+  background: var(--a-canvas);
+  padding: 2px;
 }
 
 .rm-lens {
-  border: 1px solid var(--a-line);
+  border: 0;
   border-radius: 999px;
   background: transparent;
   padding: 3px var(--a-3);
@@ -100,18 +123,33 @@
   font-size: var(--a-t-micro);
   white-space: nowrap;
   cursor: pointer;
-  transition: border-color var(--a-fast) var(--a-ease), color var(--a-fast) var(--a-ease);
+  transition: background var(--a-fast) var(--a-ease), color var(--a-fast) var(--a-ease);
 }
 
 .rm-lens:hover {
-  border-color: var(--a-accent-line);
   color: var(--a-ink);
 }
 
 .rm-lens.is-on {
-  border-color: var(--a-accent);
   background: var(--a-accent-soft);
   color: var(--a-ink);
+}
+
+/* Actions: one-shot commands (export, jump, edit), deliberately not styled as filter pills —
+   they don't have an on/off state, so they shouldn't look like they do. */
+.rm-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--a-1);
+  flex: none;
+  padding-left: var(--a-3);
+  border-left: 1px solid var(--a-line);
+}
+
+.rm-bar__actions .a-btn {
+  min-height: 26px;
+  padding: 0 var(--a-2);
+  font-size: var(--a-t-small);
 }
 
 /* ── The map ──────────────────────────────────────────────────────────────── */
@@ -120,6 +158,10 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
+  /* A faint lift off the flat canvas colour — just enough that the route reads as a surface,
+     not a void. Fixed attachment so it doesn't visibly pan as the route scrolls under it. */
+  background: radial-gradient(ellipse 1200px 640px at 50% 0%, var(--a-panel) 0%, var(--a-canvas) 70%);
+  background-attachment: fixed;
   /* Room at the bottom so the docked card never covers the last stops. */
   padding: var(--a-6) var(--a-5) 320px;
 }
@@ -415,7 +457,7 @@
 }
 
 .rm-bundle.is-unbuilt .rm-bundle__count {
-  fill: var(--a-ink-faint);
+  fill: var(--a-ink-3);
 }
 
 .rm-label--leg {
@@ -445,12 +487,12 @@
 }
 
 .rm-label__unbuilt {
-  color: var(--a-ink-faint);
+  color: var(--a-ink-3);
   font-size: var(--a-t-micro);
 }
 
 .rm-label--leg.is-unbuilt .rm-label__legname {
-  color: var(--a-ink-dim);
+  color: var(--a-ink-2);
 }
 
 /* ── Docked stop card ─────────────────────────────────────────────────────── */
@@ -462,7 +504,9 @@
   bottom: var(--a-5);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   border: 1px solid var(--a-line-strong);
+  border-top: 2px solid var(--leg);
   border-radius: var(--a-radius-lg);
   background: var(--a-panel);
   box-shadow: var(--a-shadow-pop);
@@ -511,6 +555,7 @@
   flex: 1;
   overflow-y: auto;
   padding: var(--a-5) var(--a-4);
+  scrollbar-width: thin;
 }
 
 .rm-card__why {
@@ -557,7 +602,7 @@
 
 .rm-card__empty {
   margin: var(--a-2) 0 0;
-  color: var(--a-ink-faint);
+  color: var(--a-ink-3);
   font-size: var(--a-t-small);
   line-height: 1.5;
 }
@@ -574,7 +619,7 @@
 }
 
 .rm-card__link:disabled {
-  color: var(--a-ink-faint);
+  color: var(--a-ink-3);
   cursor: default;
 }
 
@@ -722,14 +767,17 @@
 /* ── Narrow ───────────────────────────────────────────────────────────────── */
 
 @media (max-width: 700px) {
-  .rm-bar {
+  .rm-bar__row {
     flex-wrap: wrap;
   }
 
-  .rm-bar__legs {
-    order: 3;
-    width: 100%;
+  .rm-bar__lenses {
     margin-left: 0;
+  }
+
+  .rm-bar__actions {
+    padding-left: 0;
+    border-left: 0;
   }
 
   .rm-card {
