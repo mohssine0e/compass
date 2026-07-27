@@ -13,6 +13,7 @@ import FocusScreen from './components/FocusScreen'
 import ReviewScreen from './components/ReviewScreen'
 import ResurfacingScreen from './components/ResurfacingScreen'
 import ErrorBoundary from './components/ErrorBoundary'
+import Button from './components/ui/Button'
 import { getNextResurfacing } from './api'
 import './App.css'
 
@@ -32,6 +33,9 @@ const PATHS = {
   profile: '/profile',
   events: '/events',
   classifyTest: '/classify-test',
+  // V3-9.1: developer tools, deliberately not in the primary nav of an app whose stated design
+  // goal is opening directly into capture — reachable by typing the URL, same as any other view.
+  debug: '/debug',
 }
 
 // Views that take the whole viewport instead of the centred reading column.
@@ -126,12 +130,6 @@ export default function App() {
           <NavLink active={view.name === 'profile'} onClick={() => go('profile')}>
             Profile
           </NavLink>
-          <NavLink active={view.name === 'events'} onClick={() => go('events')}>
-            Events
-          </NavLink>
-          <NavLink active={view.name === 'classifyTest'} onClick={() => go('classifyTest')}>
-            Classify test
-          </NavLink>
         </nav>
       </header>
 
@@ -205,6 +203,9 @@ export default function App() {
         {view.name === 'profile' && <ProfileScreen />}
         {view.name === 'events' && <AdminEventsScreen />}
         {view.name === 'classifyTest' && <ClassifyTestScreen />}
+        {view.name === 'debug' && (
+          <DebugScreen onOpenEvents={() => go('events')} onOpenClassifyTest={() => go('classifyTest')} />
+        )}
         </ErrorBoundary>
       </main>
     </div>
@@ -219,5 +220,24 @@ function NavLink({ active, onClick, children }) {
     >
       {children}
     </button>
+  )
+}
+
+// V3-9.1: the two developer tools that used to sit in the primary nav — Events and the RB-1
+// tier-classifier debug screen — moved behind this one unobtrusive entry point instead. Neither
+// is part of the real app flow; a founder using Compass for months should never need to know
+// this screen exists.
+function DebugScreen({ onOpenEvents, onOpenClassifyTest }) {
+  return (
+    <div style={{ maxWidth: 480 }}>
+      <h1 className="screen-title">Debug</h1>
+      <p style={{ color: 'var(--muted)', marginBottom: 'var(--space-5)' }}>
+        Developer tools, not part of the real app flow.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', alignItems: 'flex-start' }}>
+        <Button onClick={onOpenEvents}>Events</Button>
+        <Button onClick={onOpenClassifyTest}>Classify test</Button>
+      </div>
+    </div>
   )
 }
