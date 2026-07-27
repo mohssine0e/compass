@@ -6,7 +6,8 @@ import com.fasterxml.jackson.annotation.JsonValue;
 /** Who a {@link SystemEvent} is about: an AI provider, or the system itself. */
 public enum EventSource {
     AI_PROVIDER("ai_provider"),
-    SYSTEM("system");
+    SYSTEM("system"),
+    FOUNDER("founder");
 
     private final String value;
 

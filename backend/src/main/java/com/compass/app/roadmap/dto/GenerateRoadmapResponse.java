@@ -20,6 +20,14 @@ import java.util.Map;
  *   <li>{@code proposal} → {@code title}, {@code interpretation}, {@code steps}, {@code skipped},
  *       and {@code assessment} hold a draft the user edits and owns. Used both for a small goal's
  *       flat step list (Phase 18) and for one module's expanded steps (Phase 13).</li>
+ *   <li>{@code routed_to_task} (RB-2) → the goal classified as TASK with high confidence, so no
+ *       roadmap was drafted at all — {@code routedTask} holds the already-created task entry's
+ *       id, text, and self-talk-voice acknowledgment, exactly as if it had been captured
+ *       directly. Nothing else on this record is populated.</li>
+ *   <li>{@code topic_match} (RB-3) → the goal matched (exact/subtopic/prerequisite) against a
+ *       topic the founder already has a roadmap for — {@code topicMatch} holds the candidate and
+ *       the founder's options; no generation has run yet. Resubmit with
+ *       {@link GenerateRoadmapRequest#skipTopicMatch()} to proceed as a genuinely new goal.</li>
  * </ul>
  * Nothing is persisted here — the user accepts by creating a roadmap / adding module steps the
  * normal way. When an accepted outline/flat proposal is turned into a real roadmap, its
@@ -30,6 +38,12 @@ import java.util.Map;
  * whole heavy provider chain and this is the emergency fallback instead — titles only, no
  * kind/weight/resources/dependencies. Carried through to accepted steps so the UI can flag them
  * ("basic outline — details pending") and a background retry can find and fill them in later.
+ *
+ * <p>{@code tier} (RB-2, nullable) is the TASK/MINI/TOPIC/CAREER classification, set on every
+ * shape once classified on the first turn — including {@code needs_clarification}, so the
+ * frontend can echo it back on {@link GenerateRoadmapRequest#tier()} for later turns without a
+ * second classification call — and finally round-tripped via {@code CreateRoadmapRequest} to be
+ * stored on the created roadmap entry. Not yet used to change generation behavior (that's RB-4).
  */
 public record GenerateRoadmapResponse(
         String status,
@@ -42,8 +56,44 @@ public record GenerateRoadmapResponse(
         List<String> sources,
         ProposedAssessment assessment,
         boolean skeletonOnly,
-        List<ProposedIssue> issues
+        List<ProposedIssue> issues,
+        String tier,
+        RoutedTask routedTask,
+        TopicMatch topicMatch
 ) {
+    /** The already-created task entry a TASK-tier goal was routed to instead of a roadmap (RB-2). */
+    public record RoutedTask(Long entryId, String text, String acknowledgment) {
+    }
+
+    /**
+     * A Canonical Topic Match candidate (RB-3) — {@code matchType} is exact|subtopic|prerequisite
+     * (never "new"; a "new" result just continues generation unchanged, no response shape for
+     * it). {@code candidateRoadmapId} is nullable (the topic's roadmap may since have been
+     * deleted/re-tiered) — a null value means "open existing" isn't offered, only "start new."
+     */
+    public record TopicMatch(String matchType, double confidence, String reasoning,
+                             Long candidateTopicId, String candidateName, Long candidateRoadmapId,
+                             List<String> candidateSubtopics) {
+    }
+
+    /** A TASK-tier goal, routed straight to the existing task-creation path — no roadmap drafted. */
+    public static GenerateRoadmapResponse routedToTask(Long entryId, String text, String acknowledgment) {
+        return new GenerateRoadmapResponse("routed_to_task", null, null, null, null, null, null,
+                null, null, false, List.of(), null, new RoutedTask(entryId, text, acknowledgment), null);
+    }
+
+    /** A Canonical Topic Match found something worth the founder's decision (RB-3) — nothing generated yet. */
+    public static GenerateRoadmapResponse topicMatch(TopicMatch match) {
+        return new GenerateRoadmapResponse("topic_match", null, null, null, null, null, null,
+                null, null, false, List.of(), null, null, match);
+    }
+
+    /** A copy of this response with {@code tier} set (RB-2) — every shape can carry it forward. */
+    public GenerateRoadmapResponse withTier(String tier) {
+        return new GenerateRoadmapResponse(status, questions, title, interpretation, modules, steps,
+                skipped, sources, assessment, skeletonOnly, issues, tier, routedTask, topicMatch);
+    }
+
     /**
      * One flagged issue from the Phase 20 self-critique pass over a step-list proposal —
      * ordering, clarity, missing prerequisites, technical accuracy, or a gap against scope.
@@ -101,7 +151,8 @@ public record GenerateRoadmapResponse(
 
     public static GenerateRoadmapResponse needsClarification(List<String> questions) {
         return new GenerateRoadmapResponse(
-                "needs_clarification", questions, null, null, null, null, null, null, null, false, List.of());
+                "needs_clarification", questions, null, null, null, null, null, null, null, false,
+                List.of(), null, null, null);
     }
 
     /** A top-level module outline (Phase 13) — no steps yet; each module is expanded on demand. */
@@ -111,7 +162,7 @@ public record GenerateRoadmapResponse(
                                                    RoadmapAiService.GoalAssessment assessment) {
         List<ProposedModule> proposedModules = modules.stream().map(ProposedModule::from).toList();
         return new GenerateRoadmapResponse("outline", null, title, interpretation, proposedModules,
-                null, skipped, sources, ProposedAssessment.from(assessment), false, List.of());
+                null, skipped, sources, ProposedAssessment.from(assessment), false, List.of(), null, null, null);
     }
 
     /**
@@ -164,6 +215,7 @@ public record GenerateRoadmapResponse(
         List<ProposedIssue> issues = critiqueIssues == null ? List.of()
                 : critiqueIssues.stream().map(ProposedIssue::from).toList();
         return new GenerateRoadmapResponse("proposal", null, title, interpretation, null,
-                proposedSteps, skipped, sources, ProposedAssessment.from(assessment), skeletonOnly, issues);
+                proposedSteps, skipped, sources, ProposedAssessment.from(assessment), skeletonOnly,
+                issues, null, null, null);
     }
 }

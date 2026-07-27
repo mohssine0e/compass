@@ -25,11 +25,14 @@ public class AiVoiceService {
     private final AiProperties props;
     private final OpenAiCompatibleChatClient chat;
     private final EventService events;
+    private final ProviderHealth health;
 
-    public AiVoiceService(AiProperties props, OpenAiCompatibleChatClient chat, EventService events) {
+    public AiVoiceService(AiProperties props, OpenAiCompatibleChatClient chat, EventService events,
+                          ProviderHealth health) {
         this.props = props;
         this.chat = chat;
         this.events = events;
+        this.health = health;
     }
 
     @PostConstruct
@@ -107,7 +110,9 @@ public class AiVoiceService {
      * records the feature-level fall-back to the plain path too.
      */
     private String generate(String feature, String system, String user) {
-        for (AiProperties.Provider provider : props.providersFor(AiTier.FAST)) {
+        // Benched providers are skipped (see ProviderHealth) — an acknowledgment must feel
+        // instant, and it's the call most often paying for a dead provider in the chain.
+        for (AiProperties.Provider provider : health.callOrder(props.providersFor(AiTier.FAST))) {
             String line = tryProvider(provider, system, user);
             if (line != null) {
                 return line;
@@ -157,13 +162,16 @@ public class AiVoiceService {
         try {
             long timeout = provider.getTimeoutSecondsOverride() != null
                     ? provider.getTimeoutSecondsOverride() : props.getTimeoutSeconds();
+            long startedAt = System.currentTimeMillis();
             String line = chat.complete(provider, timeout, props.getMaxTokens(), system, user);
             if (line == null || line.isBlank()) {
                 return null;
             }
+            health.recordSuccess(provider, System.currentTimeMillis() - startedAt);
             // Models sometimes wrap the line in quotes despite the instruction; strip them.
             return stripQuotes(line.trim());
         } catch (RuntimeException ex) {
+            health.recordFailure(provider, ex);
             log.warn("AI provider ({}) failed: {}", provider.getModel(), ex.getMessage());
             events.aiWarning(AiFailures.category(ex),
                     provider.getModel() + " failed: " + AiFailures.reason(ex), null);

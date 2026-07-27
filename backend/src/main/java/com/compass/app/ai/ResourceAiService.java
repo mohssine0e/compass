@@ -13,16 +13,21 @@ import java.util.Set;
  * The AI layer for finding learning resources for already-drafted steps (Phase 7.5) — split out
  * of {@link RoadmapAiService} so step-structure generation and resource generation are two
  * distinct, independently-timed concerns (structure can be shown to the founder before resources
- * are ready; see {@code com.compass.app.resource.ResourceService}). Same HEAVY-tier call as
- * before this split, unchanged prompt.
+ * are ready; see {@code com.compass.app.resource.ResourceService}).
+ *
+ * <p>Asked of the FAST tier in small batches with its own token ceiling — see the notes on
+ * {@link #suggestResources} and {@link #collectBatch} for why each of those matters. Together
+ * they're the difference between this feature working and it silently returning nothing.
  */
 @Service
 public class ResourceAiService {
 
     private final AiJsonGenerator ai;
+    private final AiProperties props;
 
-    public ResourceAiService(AiJsonGenerator ai) {
+    public ResourceAiService(AiJsonGenerator ai, AiProperties props) {
         this.ai = ai;
+        this.props = props;
     }
 
     private static final Set<String> FORMATS =
@@ -66,11 +71,45 @@ public class ResourceAiService {
 
         Set<String> avoid = avoidFormats == null ? Set.of() : new HashSet<>(avoidFormats);
         Set<String> used = excludeUrls == null ? new HashSet<>() : new HashSet<>(excludeUrls);
-        JsonNode json = ai.generate(AiTier.HEAVY, "resource suggestions", PromptTemplates.RESOURCE_SUGGEST_SYSTEM,
-                PromptTemplates.resourceSuggestUser(goal, stepTexts, results.toString(), avoidFormats,
-                        preferFormats, List.copyOf(used)));
+        // Asked in small batches rather than one call for the whole module. A module expands to
+        // ten-plus steps, and three resources each — every one carrying a full url — made this
+        // the largest structured reply in the app, reliably running into the token ceiling and
+        // arriving truncated. One unusable reply then cost *every* step its resources, which is
+        // why almost nothing in the roadmap had any. Smaller asks land intact, and a batch that
+        // still fails only costs its own few steps.
+        for (int from = 0; from < stepTexts.size(); from += STEPS_PER_CALL) {
+            int to = Math.min(from + STEPS_PER_CALL, stepTexts.size());
+            collectBatch(goal, stepTexts.subList(from, to), from, results.toString(),
+                    avoidFormats, preferFormats, realUrls, avoid, used, perStep);
+        }
+        return perStep;
+    }
+
+    // Small enough that a batch's reply comfortably fits the generation token budget, large
+    // enough that a module is still only a handful of calls.
+    private static final int STEPS_PER_CALL = 4;
+
+    /**
+     * One batch's worth of suggestions, written into {@code perStep} at the batch's real offset.
+     * {@code used} carries across batches so a url picked for an earlier step is never repeated
+     * for a later one — the same dedup guarantee the single-call version gave (Phase 13).
+     */
+    private void collectBatch(String goal, List<String> batchTexts, int offset, String results,
+                              List<String> avoidFormats, List<String> preferFormats,
+                              Set<String> realUrls, Set<String> avoid, Set<String> used,
+                              List<List<Resource>> perStep) {
+        // FAST, not HEAVY. This call picks three links out of a list of search results that were
+        // already fetched and already summarised — it isn't the kind of reasoning the heavy tier
+        // exists for. Running it there meant competing for the same scarce Gemini Pro quota that
+        // roadmap drafting needs, and losing: in practice the heavy chain was exhausted or
+        // erroring most times resources were asked for. The fast chain is twice as deep and far
+        // likelier to answer, which for this feature matters more than model strength.
+        JsonNode json = ai.generate(AiTier.FAST, "resource suggestions", PromptTemplates.RESOURCE_SUGGEST_SYSTEM,
+                PromptTemplates.resourceSuggestUser(goal, batchTexts, results, avoidFormats,
+                        preferFormats, List.copyOf(used)),
+                props.getResourceMaxTokens());
         if (json == null || json.get("steps") == null || !json.get("steps").isArray()) {
-            return perStep;
+            return;
         }
 
         for (JsonNode stepNode : json.get("steps")) {
@@ -78,8 +117,9 @@ public class ResourceAiService {
             if (indexNode == null || !indexNode.isInt()) {
                 continue;
             }
-            int index = indexNode.asInt();
-            if (index < 0 || index >= perStep.size()) {
+            // The model indexes within the batch it was shown; translate back to the real step.
+            int index = offset + indexNode.asInt();
+            if (indexNode.asInt() < 0 || indexNode.asInt() >= batchTexts.size()) {
                 continue;
             }
             List<Resource> resources = perStep.get(index);
@@ -93,7 +133,6 @@ public class ResourceAiService {
                 }
             }
         }
-        return perStep;
     }
 
     private static Resource toResource(JsonNode node, Set<String> realUrls, Set<String> avoid) {

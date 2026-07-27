@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { createRoadmap, generateRoadmap, suggestResources } from '../api'
+import { createRoadmap, generateRoadmap, insertModule, proposeSubtopicModule, suggestResources } from '../api'
 import { Button, Card } from './ui'
 import StepProposalEditor, { attachIssueCids, fromProposedSteps, toDraftSteps } from './StepProposalEditor'
 import './NewRoadmapScreen.css'
@@ -26,6 +26,17 @@ function formatElapsed(seconds) {
   return `${Math.floor(seconds / 60)}m ${seconds % 60}s`
 }
 
+// RB-3.6: a match-type-specific lead line for the Canonical Topic Match decision prompt.
+function topicMatchLead(match) {
+  const name = match.candidateName
+  if (match.matchType === 'exact') return `You already have a roadmap for this — "${name}".`
+  if (match.matchType === 'subtopic') return `This looks like part of "${name}", which you already have.`
+  if (match.matchType === 'prerequisite') {
+    return `This looks like it should come before "${name}", which you already have.`
+  }
+  return `This looks related to "${name}", which you already have.`
+}
+
 // AI drafts a roadmap's top-level shape from a goal; the user edits and owns it before it's
 // kept (Phase 4, reshaped by Phases 13 and 17). Up to four phases: state a goal → answer 0–4
 // goal-specific clarifying questions → optionally one genuine follow-up round → edit the
@@ -34,7 +45,7 @@ function formatElapsed(seconds) {
 // adaptive per goal, not a fixed pair — a narrow goal with a rich profile can skip straight to
 // the outline; a founder in a hurry can always skip ahead and let the system state its
 // assumptions instead (see `skipAndDraft`).
-export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual, onCancel }) {
+export default function GenerateRoadmapScreen({ initialGoal, initialResult, onCreated, onManual, onCancel }) {
   const [phase, setPhase] = useState('goal') // goal | questions | outline | flat
   const [goal, setGoal] = useState(initialGoal || '')
   const [questions, setQuestions] = useState([])
@@ -59,6 +70,19 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
   // The shared goal-scope read (Phase 18) that sized this draft — round-tripped on create so a
   // later module-expand call reads the same numbers instead of re-guessing.
   const [assessment, setAssessment] = useState(null)
+  // TASK/MINI/TOPIC/CAREER classification (RB-2) — computed by the backend on the first turn,
+  // echoed back on later turns of the same goal so it isn't re-classified, and round-tripped on
+  // create so it lands on the roadmap entry. Not shown anywhere yet.
+  const [tier, setTier] = useState(null)
+  // Set only when the goal classified as TASK — the backend already created the task entry and
+  // this holds its acknowledgment line; no roadmap was drafted (RB-2.2).
+  const [routedTask, setRoutedTask] = useState(null)
+  // Set only when a Canonical Topic Match found something worth a decision (RB-3) — nothing
+  // generated yet. { matchType, confidence, reasoning, candidateTopicId, candidateName,
+  // candidateRoadmapId, candidateSubtopics }.
+  const [topicMatch, setTopicMatch] = useState(null)
+  // The AI-drafted module proposal for a confirmed SUBTOPIC match (RB-3.8), pending accept.
+  const [subtopicProposal, setSubtopicProposal] = useState(null)
   const [busy, setBusy] = useState(false)
   // Live progress while busy (Phase 18): which backend stage is running, plus a ticking
   // elapsed-time count so a slow AI call reads as "still working," not "stuck."
@@ -78,6 +102,18 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
     return () => clearInterval(id)
   }, [busy])
 
+  // RB-6.4: the unified intake card already ran classify + clarify and resolved an outline for
+  // a TOPIC/CAREER goal — hand off here instead of re-drafting from scratch. showResult is a
+  // function declaration (hoisted), so referencing it before its later definition is safe.
+  useEffect(() => {
+    if (initialResult) {
+      setTier(initialResult.tier || null)
+      showResult(initialResult)
+    }
+    // Only ever meant to run once, on mount, from whatever the intake card already resolved.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   function fail(err) {
     setError(err.message)
     setUnavailable(/unavailable/i.test(err.message))
@@ -91,10 +127,19 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
     setStage(null)
     try {
       const res = await generateRoadmap(
-        { goal: goal.trim(), clarifications: null, skipFollowUp: false },
+        { goal: goal.trim(), clarifications: null, skipFollowUp: false, tier: null },
         setStage
       )
-      if (res.status === 'outline' || res.status === 'proposal') {
+      setTier(res.tier || null)
+      if (res.status === 'routed_to_task') {
+        setRoutedTask(res.routedTask)
+        setPhase('task')
+        setBusy(false)
+      } else if (res.status === 'topic_match') {
+        setTopicMatch(res.topicMatch)
+        setPhase('topicMatch')
+        setBusy(false)
+      } else if (res.status === 'outline' || res.status === 'proposal') {
         showResult(res)
       } else {
         setPriorClarifications([])
@@ -118,12 +163,77 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
     setStage(null)
     try {
       const res = await generateRoadmap(
-        { goal: goal.trim(), clarifications: [], skipFollowUp: true },
+        { goal: goal.trim(), clarifications: [], skipFollowUp: true, tier: null },
         setStage
       )
       showResult(res)
     } catch (err) {
       fail(err)
+    }
+  }
+
+  // RB-3: the founder confirmed this is genuinely a new topic despite the surface similarity —
+  // resubmit with skipTopicMatch so the same match prompt doesn't just show again.
+  async function startSeparateGoal() {
+    if (busy) return
+    setBusy(true)
+    setError(null)
+    setStage(null)
+    setTopicMatch(null)
+    try {
+      const res = await generateRoadmap(
+        { goal: goal.trim(), clarifications: null, skipFollowUp: false, tier, skipTopicMatch: true },
+        setStage
+      )
+      setTier(res.tier || tier)
+      if (res.status === 'outline' || res.status === 'proposal') {
+        showResult(res)
+      } else {
+        setPriorClarifications([])
+        setIsFollowUpRound(false)
+        setQuestions(res.questions || [])
+        setAnswers((res.questions || []).map(() => ''))
+        setPhase('questions')
+        setBusy(false)
+      }
+    } catch (err) {
+      fail(err)
+    }
+  }
+
+  // RB-3.7: an EXACT (or PREREQUISITE, same treatment) match — open the existing roadmap
+  // directly, no generation at all.
+  function openMatchedRoadmap() {
+    if (topicMatch?.candidateRoadmapId) {
+      onCreated?.(topicMatch.candidateRoadmapId)
+    }
+  }
+
+  // RB-3.8: SUBTOPIC confirmed — draft one module scoped to this goal, to review before adding.
+  async function proposeSubtopic() {
+    if (!topicMatch?.candidateRoadmapId || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      const proposal = await proposeSubtopicModule(topicMatch.candidateRoadmapId, goal.trim())
+      setSubtopicProposal(proposal)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function acceptSubtopic() {
+    if (!subtopicProposal || !topicMatch?.candidateRoadmapId || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await insertModule(topicMatch.candidateRoadmapId, subtopicProposal.title, subtopicProposal.scope, null)
+      onCreated?.(topicMatch.candidateRoadmapId)
+    } catch (err) {
+      setError(err.message)
+      setBusy(false)
     }
   }
 
@@ -136,9 +246,10 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
       const roundAnswers = questions.map((q, i) => ({ question: q, answer: answers[i] || '' }))
       const clarifications = [...priorClarifications, ...roundAnswers]
       const res = await generateRoadmap(
-        { goal: goal.trim(), clarifications, skipFollowUp: isFollowUpRound },
+        { goal: goal.trim(), clarifications, skipFollowUp: isFollowUpRound, tier },
         setStage
       )
+      setTier(res.tier || tier)
       if (res.status === 'needs_clarification' && !isFollowUpRound) {
         // A genuine follow-up round, conditioned on what was just answered — show it, then cap
         // at one more round (the next submit sends skipFollowUp: true regardless of the answer).
@@ -217,11 +328,12 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
     try {
       const roadmap = await createRoadmap(
         phase === 'flat'
-          ? { title: title.trim(), draftSteps: toDraftSteps(flatSteps), assessment }
+          ? { title: title.trim(), draftSteps: toDraftSteps(flatSteps), assessment, tier }
           : {
               title: title.trim(),
               modules: cleanModules.map((m) => ({ title: m.title.trim(), scope: m.scope.trim() || null })),
               assessment,
+              tier,
             }
       )
       onCreated?.(roadmap.id)
@@ -284,6 +396,68 @@ export default function GenerateRoadmapScreen({ initialGoal, onCreated, onManual
               )}
             </div>
           </Card>
+        </>
+      )}
+
+      {phase === 'task' && routedTask && (
+        <>
+          <p className="gen-lead">
+            This read as a task, not a roadmap — no plan needed for it.
+          </p>
+          <p className="gen-task-ack">{routedTask.acknowledgment || routedTask.text}</p>
+          <div className="roadmap-actions">
+            <Button variant="primary" onClick={onCancel}>
+              Back to roadmaps
+            </Button>
+          </div>
+        </>
+      )}
+
+      {phase === 'topicMatch' && topicMatch && (
+        <>
+          <p className="gen-lead">{topicMatchLead(topicMatch)}</p>
+          <p className="gen-interpretation">{topicMatch.reasoning}</p>
+
+          {subtopicProposal ? (
+            <>
+              <p className="gen-lead">Add this module to “{topicMatch.candidateName}”?</p>
+              <Card className="gen-step">
+                <strong>{subtopicProposal.title}</strong>
+                {subtopicProposal.scope && <span>{subtopicProposal.scope}</span>}
+                {subtopicProposal.possibleDuplicate && (
+                  <span className="roadmap-error">
+                    This looks similar to a module already there — check before adding.
+                  </span>
+                )}
+              </Card>
+              <div className="roadmap-actions">
+                {error && <span className="roadmap-error">{error}</span>}
+                <Button variant="ghost" onClick={() => setSubtopicProposal(null)} disabled={busy}>
+                  Back
+                </Button>
+                <Button variant="primary" onClick={acceptSubtopic} disabled={busy}>
+                  {busy ? 'Adding…' : 'Add module'}
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div className="roadmap-actions">
+              {error && <span className="roadmap-error">{error}</span>}
+              <Button variant="ghost" onClick={startSeparateGoal} disabled={busy}>
+                {busy ? 'Working…' : 'Start a separate one'}
+              </Button>
+              {topicMatch.matchType === 'subtopic' && topicMatch.candidateRoadmapId && (
+                <Button variant="primary" onClick={proposeSubtopic} disabled={busy}>
+                  {busy ? 'Drafting…' : 'Add as a module'}
+                </Button>
+              )}
+              {topicMatch.matchType !== 'subtopic' && topicMatch.candidateRoadmapId && (
+                <Button variant="primary" onClick={openMatchedRoadmap} disabled={busy}>
+                  Open existing roadmap
+                </Button>
+              )}
+            </div>
+          )}
         </>
       )}
 

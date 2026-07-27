@@ -76,6 +76,13 @@
   padding-left: 6px;
 }
 
+/* A same-module dependency that isn't done yet — this one actually blocks (RB-4.9), unlike the
+   plain reminder above. */
+.step-needs.is-blocked {
+  color: var(--danger);
+  border-left-color: var(--danger);
+}
+
 .step-text-openable {
   cursor: pointer;
 }
@@ -727,4 +734,32 @@
 
 .path-empty {
   color: var(--muted);
+}
+
+/* Re-tier proposal review (RB-2.5) — a plain list, nothing fancy; the point is a quick glance
+   before confirming, not a rich editor. */
+.retier-groups {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.retier-group {
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.retier-group-scope {
+  color: var(--muted);
+}
+
+.retier-group-count {
+  color: var(--faint);
+  font-size: 0.85rem;
 }

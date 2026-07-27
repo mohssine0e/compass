@@ -336,3 +336,10 @@
   color: var(--text);
   font-size: 0.95rem;
 }
+
+/* V3-0.2 — the export affordance. Plain and unadorned: it's a safety net, not a feature. */
+.profile-export-note {
+  margin: 0 0 var(--space-3);
+  color: var(--muted);
+  font-size: var(--text-sm);
+}

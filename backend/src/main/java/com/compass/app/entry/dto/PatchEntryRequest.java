@@ -16,6 +16,13 @@ import java.util.Map;
  * <p>{@code projectUrl} (Phase 24) merges into content like {@code notes}/{@code verify} — a
  * blank string clears it. Meant for a {@code kind: "project"} step's public-URL field in the
  * Projects checklist, but not restricted to that; the field is just carried through generically.
+ *
+ * <p>{@code collapseOverrides} (RB-4.10, roadmap entries only) merges into content the same way
+ * — the founder's manual collapse/expand choices, keyed by node id (as a string, JSON map keys
+ * are always strings) to {@code true} (collapsed) or {@code false} (expanded), layered on top of
+ * the tier-based default the frontend computes on load. Sent as the full current map each time
+ * (whole-map replace), not a per-key merge — simpler, and the frontend always has the full map
+ * in memory already since it's rendering from it.
  */
 public record PatchEntryRequest(
         EntryStatus status,
@@ -25,6 +32,7 @@ public record PatchEntryRequest(
         String notes,
         String verify,
         Map<String, Object> content,
-        String projectUrl
+        String projectUrl,
+        Map<String, Boolean> collapseOverrides
 ) {
 }

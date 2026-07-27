@@ -64,6 +64,17 @@
   line-height: 1.5;
 }
 
+/* The task-routing acknowledgment (RB-2.2) — same brass-accent callout as .gen-interpretation,
+   since it's the same "here's what happened" moment, just for a task instead of a draft. */
+.gen-task-ack {
+  margin: 0;
+  padding: 10px 14px;
+  border-left: 2px solid var(--brass);
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
 .gen-skipped {
   border-left: 2px solid var(--line);
   padding: 4px 0 4px 14px;

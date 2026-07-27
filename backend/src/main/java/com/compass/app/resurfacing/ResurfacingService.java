@@ -1,5 +1,6 @@
 package com.compass.app.resurfacing;
 
+import com.compass.app.config.ConflictException;
 import com.compass.app.ai.AiVoiceService;
 import com.compass.app.ai.ResourceAiService;
 import com.compass.app.ai.RoadmapAiService;
@@ -154,12 +155,21 @@ public class ResurfacingService {
         return step != null && !roadmapService.isAtMaxStepDepth(step.getId());
     }
 
-    /** The first not-done, not-dropped step of a roadmap — where you actually are — or null. */
+    /**
+     * The first not-done, not-dropped <em>leaf</em> step of a roadmap — where you actually are.
+     *
+     * <p>This used to take the first unfinished direct child, which on a nested roadmap is a
+     * <em>module</em>, not a step. Modules store {@code {title, scope}} and no {@code text}, so
+     * {@link #currentStepTextOf} then read a field that was always absent and the resurfacing
+     * question fell back to generic phrasing for every TOPIC and CAREER roadmap — precisely the
+     * "genericness breaks the illusion" failure CLAUDE.md §2 calls out. It also meant
+     * {@link #canBreakDownCurrentStep} was depth-checking a module instead of a step.
+     */
     Entry currentStepOf(Entry entry) {
         if (entry == null || entry.getType() != com.compass.app.entry.EntryType.ROADMAP) {
             return null;
         }
-        return repository.findByParentIdOrderByOrderIndexAsc(entry.getId()).stream()
+        return roadmapService.leafStepsOf(entry.getId()).stream()
                 .filter(s -> s.getStatus() != EntryStatus.DONE && s.getStatus() != EntryStatus.DROPPED)
                 .findFirst()
                 .orElse(null);
@@ -237,7 +247,7 @@ public class ResurfacingService {
         return switch (kind == null ? "" : kind) {
             case "break_down" -> {
                 if (roadmapService.isAtMaxStepDepth(step.getId())) {
-                    throw new IllegalStateException("This is already broken down as far as it goes.");
+                    throw new ConflictException("This is already broken down as far as it goes.");
                 }
                 String profileContext = profileService.confirmedProfile()
                         .map(p -> ProfileContext.forModulePrompt(p, title, stepText))
@@ -265,7 +275,7 @@ public class ResurfacingService {
                 RoadmapAiService.Prerequisite p =
                         roadmapAi.proposePrerequisite(title, stepText, priorStepsText(roadmap.getId(), step), null);
                 if (p == null) {
-                    throw new IllegalStateException("Nothing obvious is missing first — this may just need doing.");
+                    throw new ConflictException("Nothing obvious is missing first — this may just need doing.");
                 }
                 yield RestructureProposal.prerequisite(
                         roadmap.getId(), step.getId(), stepText, p.step(), p.why());

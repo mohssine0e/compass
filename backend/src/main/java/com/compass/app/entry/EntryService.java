@@ -4,6 +4,7 @@ import com.compass.app.ai.ReviewAiService;
 import com.compass.app.entry.dto.CreateEntryRequest;
 import com.compass.app.entry.dto.EndSessionRequest;
 import com.compass.app.entry.dto.PatchEntryRequest;
+import com.compass.app.events.EventService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,16 +22,24 @@ public class EntryService {
 
     private final EntryRepository repository;
     private final ReviewAiService reviewAi;
+    private final EventService events;
 
-    public EntryService(EntryRepository repository, ReviewAiService reviewAi) {
+    public EntryService(EntryRepository repository, ReviewAiService reviewAi, EventService events) {
         this.repository = repository;
         this.reviewAi = reviewAi;
+        this.events = events;
     }
 
     /** All entries, newest first. */
     @Transactional(readOnly = true)
     public List<Entry> listAll() {
         return repository.findAllByOrderByCreatedAtDesc();
+    }
+
+    /** Every completed roadmap step, most recently updated first (RB-5.3). */
+    @Transactional(readOnly = true)
+    public List<Entry> completedSteps() {
+        return repository.findByTypeAndStatusOrderByUpdatedAtDesc(EntryType.ROADMAP_STEP, EntryStatus.DONE);
     }
 
     /**
@@ -142,12 +151,32 @@ public class EntryService {
             }
             entry.setContent(content);
         }
+        if (patch.collapseOverrides() != null) {
+            // The founder's manual collapse/expand choices (RB-4.10), merged into content like
+            // notes/verify — whole-map replace, not a per-key merge (see PatchEntryRequest doc).
+            Map<String, Object> content = entry.getContent() != null
+                    ? new HashMap<>(entry.getContent())
+                    : new HashMap<>();
+            if (patch.collapseOverrides().isEmpty()) {
+                content.remove("collapseOverrides");
+            } else {
+                content.put("collapseOverrides", patch.collapseOverrides());
+            }
+            entry.setContent(content);
+        }
 
         Entry saved = repository.save(entry);
         // Working a step counts as touching its roadmap, so an actively-progressing roadmap
         // isn't mistaken for a stalled one by the resurfacing engine.
         if (saved.getParentId() != null) {
             repository.touchUpdatedAt(saved.getParentId(), Instant.now());
+        }
+        // Brief completion log (RB-4.12) — a sentence, not a stack trace, same discipline as
+        // every other system_events entry (CLAUDE.md Section 2). Only roadmap steps, not every
+        // entry type, since that's what RB-4.12 actually asks for.
+        if (patch.status() == EntryStatus.DONE && saved.getType() == EntryType.ROADMAP_STEP) {
+            events.info("step_completed", "step marked done: " + stringOf(saved, "text"),
+                    Map.of("stepId", saved.getId()));
         }
         return saved;
     }

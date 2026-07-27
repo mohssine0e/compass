@@ -1,0 +1,95 @@
+.classify-test {
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 24px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.classify-test-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+.classify-test-error {
+  color: var(--danger);
+  font-size: var(--text-sm);
+  margin-top: var(--space-2);
+}
+
+.classify-test-summary {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.classify-test-result {
+  margin-top: var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+
+.classify-test-confidence {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.classify-test-reasoning {
+  flex-basis: 100%;
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.classify-test-table-wrap {
+  margin-top: var(--space-4);
+  overflow-x: auto;
+}
+
+.classify-test-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.classify-test-table th {
+  text-align: left;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.72rem;
+  font-weight: var(--weight-medium);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.classify-test-table td {
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+  vertical-align: top;
+}
+
+/* Same severity-left-border convention as the Events screen: neutral by default, an accent
+   only when something needs attention — here, a clear-cut case that classified wrong.
+   (Applied to the first cell, not the <tr> — table rows don't render their own border with
+   border-collapse: collapse.) */
+.classify-test-row td:first-child {
+  border-left: 2px solid transparent;
+}
+
+.classify-test-row.is-fail td:first-child {
+  border-left-color: var(--danger);
+}
+
+.classify-test-row-reasoning {
+  color: var(--muted);
+  min-width: 260px;
+}

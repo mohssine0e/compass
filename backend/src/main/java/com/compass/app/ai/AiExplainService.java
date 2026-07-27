@@ -31,7 +31,7 @@ public class AiExplainService {
   /** Help for the selected text, or {@code null} when unavailable / unusable. */
   public String help(String action, String selectedText, String stepText,
       String profileContext, String depth, String language) {
-    String act = ACTIONS.contains(action) ? action : "explain";
+    String act = action != null && ACTIONS.contains(action) ? action : "explain";
     JsonNode json = ai.generate(AiTier.FAST, "in-content " + act, PromptTemplates.EXPLAIN_SYSTEM,
         PromptTemplates.explainUser(act, selectedText, stepText, profileContext, depth, language));
     if (json == null) {

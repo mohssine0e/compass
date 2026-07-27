@@ -25,6 +25,8 @@ export default function StepDeepView({
   step,
   atMaxDepth = false,
   breadcrumb = null,
+  allSteps = [],
+  dependencyCrossModule = false,
   onNavigate,
   onClose,
   onChanged,
@@ -35,6 +37,9 @@ export default function StepDeepView({
   const [notes, setNotes] = useState(content.notes || '')
   const [savedNotes, setSavedNotes] = useState(content.notes || '')
   const [savingNotes, setSavingNotes] = useState(false)
+  // Founder-facing dependency edit (RB-4.9) — the AI already sets this at generation time;
+  // this is the manual edit surface, reusing the same PATCH /entries/{id} field it already reads.
+  const [savingDepends, setSavingDepends] = useState(false)
   const [sessionOpen, setSessionOpen] = useState(hasOpenSession(content))
   const [sessionStartedAt, setSessionStartedAt] = useState(openSessionStart(content))
   const [elapsed, setElapsed] = useState(0)
@@ -137,6 +142,21 @@ export default function StepDeepView({
       setError(err.message)
     } finally {
       setSavingNotes(false)
+    }
+  }
+
+  // RB-4.9: `0` is the backend's documented "clear the prerequisite" sentinel — null means
+  // "leave unchanged" there, so an actual clear needs a real (non-positive) value instead.
+  async function setDependsOn(newId) {
+    setSavingDepends(true)
+    setError(null)
+    try {
+      await patchEntry(step.id, { dependsOn: newId || 0 })
+      onChanged?.()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSavingDepends(false)
     }
   }
 
@@ -310,6 +330,28 @@ export default function StepDeepView({
                 </li>
               ))}
             </ul>
+          )}
+        </section>
+
+        <section className="deep-section">
+          <h3 className="deep-section-title">Dependencies</h3>
+          <select
+            className="deep-depends-select"
+            value={step.dependsOn || ''}
+            onChange={(e) => setDependsOn(e.target.value ? Number(e.target.value) : null)}
+            disabled={savingDepends}
+          >
+            <option value="">None</option>
+            {allSteps
+              .filter((s) => s.id !== step.id)
+              .map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.text}
+                </option>
+              ))}
+          </select>
+          {dependencyCrossModule && (
+            <p className="deep-faint">This is a step from a different module — not a blocker here.</p>
           )}
         </section>
 

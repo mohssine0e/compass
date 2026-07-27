@@ -122,3 +122,69 @@
   font-size: 0.82rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+
+/* Provider health (V3-2.3) — a compact status strip above the event list. */
+.providers {
+  margin-bottom: var(--space-6);
+}
+
+.providers-title {
+  margin: 0 0 var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.providers-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.provider-row {
+  display: grid;
+  grid-template-columns: minmax(7rem, auto) 4rem 1fr auto auto;
+  align-items: baseline;
+  gap: var(--space-3);
+  border-left: 2px solid var(--line);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.provider-row.is-ok {
+  border-left-color: var(--brass-dim);
+}
+
+.provider-row.is-benched {
+  border-left-color: var(--danger);
+}
+
+.provider-row.is-unconfigured {
+  opacity: 0.5;
+}
+
+.provider-name {
+  color: var(--text);
+}
+
+.provider-tier {
+  color: var(--faint);
+}
+
+.provider-row.is-benched .provider-state {
+  color: var(--danger);
+}
+
+.provider-timing,
+.provider-counts {
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .provider-row {
+    grid-template-columns: 1fr auto;
+    row-gap: var(--space-1);
+  }
+}

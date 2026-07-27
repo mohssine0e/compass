@@ -1,0 +1,126 @@
+/* Unified intake card (RB-6/RB-7).
+   Was Tailwind utilities scoped to this one screen; ported to the app's own token system so
+   there's one styling story instead of two. Every value below comes from index.css's --*
+   tokens — no raw px/colors, same rule the rest of the app follows. */
+
+/* RB-6.3: the one shared morph every card-stage change plays — one transform for every
+   type, not a bespoke transition per case. */
+@keyframes intake-morph {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.intake-morph {
+  animation: intake-morph 250ms ease-out;
+}
+
+/* RB-6.2 — the tentative "what this looks like" label under the input while typing. Faint and
+   slow to appear on purpose: it's a hint the system is following along, not a verdict. */
+.intake-ambient {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-normal);
+  color: var(--faint);
+  opacity: 0.7;
+  transition: opacity 300ms ease;
+}
+
+.intake-loading {
+  padding: var(--space-3) 0;
+  font-size: var(--text-sm);
+  font-style: italic;
+  color: var(--muted);
+}
+
+.intake-done {
+  padding: var(--space-1) 0;
+}
+
+/* Right-aligned action row for the card stages that own their own footer (troubleshoot,
+   practice) rather than reusing .roadmap-actions. */
+.intake-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-3);
+}
+
+.intake-practice-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.intake-practice-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  padding: 6px var(--space-3);
+  text-align: left;
+  font-size: var(--text-sm);
+  color: var(--text);
+  transition: border-color 120ms ease;
+}
+
+.intake-practice-chip:hover {
+  border-color: var(--brass-dim);
+}
+
+.intake-subtopic-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--space-3);
+}
+
+.intake-subtopic-scope {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.intake-subtopic-warning {
+  margin-top: var(--space-1);
+}
+
+/* RB-7 — the resolved-card trail. A light session strip, deliberately quiet: faint, one line
+   each, capped at five by the component. */
+.intake-trail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: var(--space-5) 0 0;
+  padding: var(--space-3) 0 0;
+  border-top: 1px solid var(--line);
+  list-style: none;
+}
+
+.intake-trail-item {
+  overflow: hidden;
+  font-size: var(--text-xs);
+  color: var(--faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.intake-trail-link {
+  width: 100%;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 120ms ease;
+}
+
+.intake-trail-link:hover {
+  color: var(--muted);
+}

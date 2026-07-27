@@ -3,18 +3,26 @@ package com.compass.app.ai;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.MediaType;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Minimal client for any OpenAI-compatible {@code /chat/completions} endpoint (Gemini,
- * Groq, NVIDIA NIM, …). One call, short timeout, plain text back.
+ * Minimal client for any OpenAI-compatible {@code /chat/completions} endpoint (Gemini, Groq,
+ * NVIDIA NIM, …). One call, short timeout, plain text back.
+ *
+ * <p>Clients are built once and cached, over a single shared {@link HttpClient} that owns the
+ * connection pool. The previous version called {@code RestClient.builder()...build()} inside
+ * every request with a {@code SimpleClientHttpRequestFactory} (JDK {@code HttpURLConnection},
+ * no pooling), so every AI call paid a fresh TCP connect and TLS handshake to a remote API —
+ * on the order of 100–300ms, on a path where the whole fast-tier budget is 6 seconds.
  */
 @Component
 class OpenAiCompatibleChatClient {
@@ -26,16 +34,21 @@ class OpenAiCompatibleChatClient {
     // parsing it ourselves sidesteps that content-type mismatch entirely.
     private final ObjectMapper mapper = new ObjectMapper();
 
+    // One pool for every provider. Connect timeout lives here; the per-call read timeout is set
+    // on the request factory, which is why clients are keyed by timeout as well as by provider.
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
+
+    private final Map<String, RestClient> clients = new ConcurrentHashMap<>();
+
     /**
-     * Single completion. Returns the assistant's text, or throws on any HTTP/timeout error
-     * so the caller can fail over to another provider.
+     * Single completion. Returns the assistant's text, or throws {@link AiCallException} on any
+     * HTTP/timeout error so the caller can bench the provider and fail over to another.
      */
     String complete(AiProperties.Provider provider, long timeoutSeconds, int maxTokens,
                     String system, String user) {
-        RestClient client = RestClient.builder()
-                .baseUrl(provider.getBaseUrl())
-                .requestFactory(timeoutFactory(timeoutSeconds))
-                .build();
+        RestClient client = clientFor(provider, timeoutSeconds);
 
         // NIM reasoning models (e.g. NVIDIA's Nemotron Super) spend a chunk of max_tokens on an
         // internal "thinking" trace before the real answer; skip it since only the final JSON
@@ -69,10 +82,16 @@ class OpenAiCompatibleChatClient {
                     .retrieve()
                     .body(byte[].class);
         } catch (org.springframework.web.client.RestClientResponseException ex) {
-            // Surface the real status + body so a 4xx/5xx from the provider (e.g. a rate-limit
-            // page) is diagnosable instead of hiding behind a generic conversion-error message.
-            throw new IllegalStateException(provider.getModel() + " returned " + ex.getStatusCode()
-                    + ": " + ex.getResponseBodyAsString(), ex);
+            // Carry the real status through so the circuit breaker can tell a 429 (back off) from
+            // a 401 (bad key, say it once) from a 500 (blip) — the body is kept in the message so
+            // it's still diagnosable, e.g. a rate-limit page naming the reset window.
+            int status = ex.getStatusCode().value();
+            throw new AiCallException(AiCallException.kindForStatus(status), status,
+                    provider.getModel() + " returned " + status + ": " + ex.getResponseBodyAsString(), ex);
+        } catch (org.springframework.web.client.ResourceAccessException ex) {
+            // Connect/read timeouts and other I/O failures surface here.
+            throw new AiCallException(AiCallException.kindOf(ex), null,
+                    provider.getModel() + " unreachable: " + AiFailures.reason(ex), ex);
         }
 
         String raw = rawBytes == null || rawBytes.length == 0
@@ -84,7 +103,10 @@ class OpenAiCompatibleChatClient {
         try {
             response = mapper.readValue(raw, ChatResponse.class);
         } catch (Exception ex) {
-            throw new IllegalStateException("Unparseable response from " + provider.getModel(), ex);
+            // The provider answered — this is our problem, not its availability. BAD_RESPONSE
+            // deliberately does not bench it.
+            throw new AiCallException(AiCallException.Kind.BAD_RESPONSE, null,
+                    "Unparseable response from " + provider.getModel(), ex);
         }
 
         if (response == null || response.choices() == null || response.choices().isEmpty()) {
@@ -94,12 +116,19 @@ class OpenAiCompatibleChatClient {
         return choice.message() != null ? choice.message().content() : null;
     }
 
-    private static SimpleClientHttpRequestFactory timeoutFactory(long timeoutSeconds) {
-        int millis = (int) Duration.ofSeconds(timeoutSeconds).toMillis();
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(millis);
-        factory.setReadTimeout(millis);
-        return factory;
+    // Keyed by provider *and* timeout: the read timeout is fixed per factory, and the same
+    // provider is called with different budgets (fast-json vs generation vs skeleton). All of
+    // them share the one HttpClient above, so this multiplies factories, never connection pools.
+    private RestClient clientFor(AiProperties.Provider provider, long timeoutSeconds) {
+        String key = provider.getName() + "|" + provider.getBaseUrl() + "|" + timeoutSeconds;
+        return clients.computeIfAbsent(key, k -> {
+            JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
+            factory.setReadTimeout(Duration.ofSeconds(timeoutSeconds));
+            return RestClient.builder()
+                    .baseUrl(provider.getBaseUrl())
+                    .requestFactory(factory)
+                    .build();
+        });
     }
 
     // Only the fields we read; everything else in the OpenAI response is ignored.

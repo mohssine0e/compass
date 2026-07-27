@@ -42,6 +42,21 @@ public class ReviewAiService {
   }
 
   /**
+   * A one-time self-talk-voice reflection when a CAREER roadmap's progress rolls up to 100%
+   * (RB-4.7) — same review-mechanism pattern as {@link #weeklyReview}, triggered once instead of
+   * on a recurring schedule. {@code null} when unavailable.
+   */
+  public String careerCompletionReflection(String roadmapTitle) {
+    JsonNode json = ai.generate(AiTier.FAST, "career completion reflection",
+        PromptTemplates.CAREER_COMPLETION_SYSTEM, PromptTemplates.careerCompletionUser(roadmapTitle));
+    if (json == null) {
+      return null;
+    }
+    String reflection = AiJsonGenerator.text(json.get("reflection"));
+    return reflection == null || reflection.isBlank() ? null : reflection.trim();
+  }
+
+  /**
    * Proposed theme clusters over a list of idea texts (Phase 14) — for the founder to rename or
    * drop before anything is tagged. Indices are validated against {@code ideaTexts.size()} and
    * deduplicated so no idea appears in two themes; empty list when unavailable or nothing clusters.

@@ -1,20 +1,33 @@
 package com.compass.app.roadmap;
 
+import com.compass.app.ai.AiVoiceService;
+import com.compass.app.ai.EmbeddingService;
 import com.compass.app.ai.ResourceAiService;
+import com.compass.app.ai.ReviewAiService;
 import com.compass.app.ai.RoadmapAiService;
 import com.compass.app.ai.SearchGroundingService;
+import com.compass.app.ai.Tier;
 import com.compass.app.entry.Entry;
 import com.compass.app.entry.EntryRepository;
+import com.compass.app.entry.EntryService;
 import com.compass.app.entry.EntryStatus;
 import com.compass.app.entry.EntryType;
+import com.compass.app.entry.dto.CreateEntryRequest;
+import com.compass.app.events.EventService;
 import com.compass.app.profile.ProfileContext;
 import com.compass.app.profile.ProfileService;
 import com.compass.app.resource.ResourceService;
+import com.compass.app.roadmap.dto.ApplyReTierProposalRequest;
 import com.compass.app.roadmap.dto.CreateRoadmapRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapResponse;
 import com.compass.app.roadmap.dto.ModuleExpansionResult;
+import com.compass.app.roadmap.dto.ReTierRequest;
+import com.compass.app.roadmap.dto.ReTierResponse;
 import com.compass.app.roadmap.dto.ReplanModuleItem;
+import com.compass.app.topic.CanonicalTopic;
+import com.compass.app.topic.CanonicalTopicRepository;
+import com.compass.app.topic.TopicMatcherService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,7 +40,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * Roadmaps are just entries: a {@code roadmap} row plus ordered {@code roadmap_step}
@@ -41,18 +53,33 @@ public class RoadmapService {
     private final ProfileService profileService;
     private final SearchGroundingService searchGrounding;
     private final ResourceService resourceService;
+    private final EntryService entryService;
+    private final AiVoiceService aiVoice;
+    private final EventService events;
+    private final TopicMatcherService topicMatcher;
+    private final CanonicalTopicRepository canonicalTopics;
+    private final EmbeddingService embeddings;
+    private final ReviewAiService reviewAi;
     // Search results arrive relevance-ordered; only the top few are worth spending prompt tokens
     // on (Phase 19) — smaller prompts are faster and cheaper on every provider, especially the
     // slowest tier. Resource discovery separately reads the full uncapped result set.
     private final int maxGroundingSnippets;
+    // A TASK classification below this confidence falls through to the normal roadmap pipeline
+    // instead of short-circuiting (RB-2.2) — a wrongly-skipped roadmap is a worse failure than an
+    // unnecessary small roadmap drafted for something that was actually just a task.
+    private static final double TASK_ROUTE_CONFIDENCE = 0.75;
     // Bounds concurrency for expandModulesBatch (Phase 19) so a batch of many modules doesn't
-    // trip rate limits across the whole provider chain at once.
-    private static final int MAX_CONCURRENT_EXPANSIONS = 4;
-    private final ExecutorService expansionExecutor = Executors.newFixedThreadPool(MAX_CONCURRENT_EXPANSIONS);
+    // trip rate limits across the whole provider chain at once. Owned by AsyncConfig now, not
+    // created here, so Spring drains it on shutdown instead of leaving threads mid-AI-call.
+    private final ExecutorService expansionExecutor;
 
     public RoadmapService(EntryRepository repository, RoadmapAiService roadmapAi,
                           ProfileService profileService, SearchGroundingService searchGrounding,
-                          ResourceService resourceService,
+                          ResourceService resourceService, EntryService entryService,
+                          AiVoiceService aiVoice, EventService events,
+                          TopicMatcherService topicMatcher, CanonicalTopicRepository canonicalTopics,
+                          EmbeddingService embeddings, ReviewAiService reviewAi,
+                          ExecutorService expansionExecutor,
                           @org.springframework.beans.factory.annotation.Value(
                                   "${compass.search.max-context-snippets:5}") int maxGroundingSnippets) {
         this.repository = repository;
@@ -60,6 +87,14 @@ public class RoadmapService {
         this.profileService = profileService;
         this.searchGrounding = searchGrounding;
         this.resourceService = resourceService;
+        this.entryService = entryService;
+        this.topicMatcher = topicMatcher;
+        this.canonicalTopics = canonicalTopics;
+        this.embeddings = embeddings;
+        this.reviewAi = reviewAi;
+        this.aiVoice = aiVoice;
+        this.events = events;
+        this.expansionExecutor = expansionExecutor;
         this.maxGroundingSnippets = maxGroundingSnippets;
     }
 
@@ -106,7 +141,39 @@ public class RoadmapService {
                 .map(ProfileContext::forPrompt)
                 .orElse(null);
 
+        // RB-2.1: classify BEFORE anything else runs — never after, never in parallel — so a
+        // TASK-tier goal never triggers clarifying questions in the first place. Only on the very
+        // first turn (clarifications == null); later turns echo back req.tier() instead of paying
+        // for a second classification call. A failed classification (null) isn't fatal — it just
+        // means no tier gets stored and every goal continues through today's unchanged pipeline,
+        // same as any other best-effort AI signal in this codebase.
+        String tier = req.tier();
         if (req.clarifications() == null) {
+            RoadmapAiService.TierClassification classification = roadmapAi.classifyTier(goal, profileContext);
+            if (classification != null) {
+                tier = classification.tier().name();
+                logClassification(classification);
+                if (classification.tier() == Tier.TASK && classification.confidence() >= TASK_ROUTE_CONFIDENCE) {
+                    return routeToTask(goal);
+                }
+            }
+
+            // RB-3.5: right after RB-2's size classification confirms non-TASK, before clarifying
+            // questions — same short-circuit-early reasoning as RB-2. Skipped on the founder's
+            // explicit say-so (already saw this match, chose to proceed as new) or when the
+            // matcher itself can't run (no embeddings configured, or no topics stored yet) —
+            // either way, falls through to today's unchanged pipeline rather than blocking on it.
+            if (!req.skipTopicMatch()) {
+                TopicMatcherService.MatchResult match = topicMatcher.match(goal);
+                if (match != null && !"new".equals(match.matchType())) {
+                    return GenerateRoadmapResponse.topicMatch(new GenerateRoadmapResponse.TopicMatch(
+                            match.matchType(), match.confidence(), match.reasoning(),
+                            match.topic().getId(), match.topic().getCanonicalName(),
+                            match.topic().getRoadmapEntryId(), match.topic().getSubtopics()))
+                            .withTier(tier);
+                }
+            }
+
             onStage.accept(GenerationStage.CLARIFYING);
             List<String> questions = roadmapAi.clarifyingQuestions(goal, profileContext);
             if (questions == null) {
@@ -116,9 +183,9 @@ public class RoadmapService {
             if (questions.isEmpty()) {
                 // Nothing genuinely worth asking — draft straight away rather than showing an
                 // empty question form; the outline prompt states its assumptions plainly instead.
-                return draft(goal, "", profileContext, onStage);
+                return draft(goal, "", profileContext, onStage, tier);
             }
-            return GenerateRoadmapResponse.needsClarification(questions);
+            return GenerateRoadmapResponse.needsClarification(questions).withTier(tier);
         }
 
         String firstRoundQa = formatClarifications(req.clarifications());
@@ -128,11 +195,35 @@ public class RoadmapService {
             // followUps == null means the follow-up check itself failed (unavailable/error) —
             // treat that the same as "nothing to add" rather than blocking drafting on it.
             if (followUps != null && !followUps.isEmpty()) {
-                return GenerateRoadmapResponse.needsClarification(followUps);
+                return GenerateRoadmapResponse.needsClarification(followUps).withTier(tier);
             }
         }
 
-        return draft(goal, firstRoundQa, profileContext, onStage);
+        return draft(goal, firstRoundQa, profileContext, onStage, tier);
+    }
+
+    /**
+     * TASK-tier routing (RB-2.2): skip the roadmap pipeline entirely and reuse the existing
+     * direct-capture task path — same entry creation, same self-talk-voice acknowledgment, as if
+     * the founder had captured the goal as a task themselves.
+     */
+    private GenerateRoadmapResponse routeToTask(String goal) {
+        Entry task = entryService.create(new CreateEntryRequest(EntryType.TASK, goal, null, null, null, null));
+        String ack = aiVoice.acknowledge(task);
+        return GenerateRoadmapResponse.routedToTask(task.getId(), goal, ack);
+    }
+
+    /**
+     * Brief system_events entry per classification (RB-2.4) — what makes the lighter,
+     * spot-check-only testing approach actually workable going forward: a glance at
+     * {@code /admin/events} shows real classification behavior over time without re-running the
+     * full RB-1 battery.
+     */
+    private void logClassification(RoadmapAiService.TierClassification c) {
+        String outcome = c.tier() == Tier.TASK && c.confidence() >= TASK_ROUTE_CONFIDENCE
+                ? "routed to task entry" : "continuing to roadmap pipeline";
+        events.info("tier_classification", "goal classified as " + c.tier()
+                + " (" + String.format(java.util.Locale.ROOT, "%.2f", c.confidence()) + ") — " + outcome, null);
     }
 
     /**
@@ -143,7 +234,7 @@ public class RoadmapService {
      * than blocking generation on it.
      */
     private GenerateRoadmapResponse draft(String goal, String clarificationsText, String profileContext,
-                                          java.util.function.Consumer<GenerationStage> onStage) {
+                                          java.util.function.Consumer<GenerationStage> onStage, String tier) {
         // Ground once, in real sources when a search key is configured; null (and no sources)
         // when it isn't, and generation proceeds ungrounded. Shared by assessment and drafting.
         SearchGroundingService.Grounding grounding = searchGrounding.ground(goal);
@@ -156,6 +247,7 @@ public class RoadmapService {
         if (assessment == null) {
             assessment = new RoadmapAiService.GoalAssessment(3, null, null, null, "nested", "topic_deep_dive");
         }
+        assessment = reconcileShapeWithTier(assessment, tier);
         String assessmentContext = RoadmapAiService.assessmentContext(assessment);
 
         if ("flat".equals(assessment.shape())) {
@@ -174,21 +266,43 @@ public class RoadmapService {
             List<List<ResourceAiService.Resource>> noResources = stepTexts.stream()
                     .map(t -> List.<ResourceAiService.Resource>of()).toList();
             List<RoadmapAiService.CritiqueIssue> issues =
-                    critiqueIfWarranted(goal, null, stepTexts, assessment.complexity());
+                    critiqueIfWarranted(goal, null, stepTexts, assessment.complexity(), tier);
             return GenerateRoadmapResponse.proposal(flat.title(), flat.interpretation(), flat.steps(),
-                    noResources, flat.skipped(), sources, assessment, Map.of(), false, issues);
+                    noResources, flat.skipped(), sources, assessment, Map.of(), false, issues)
+                    .withTier(tier);
         }
 
         onStage.accept(GenerationStage.DRAFTING);
         RoadmapAiService.RoadmapOutline outline = roadmapAi.moduleOutline(
                 goal, clarificationsText, profileContext, groundingContext, assessmentContext,
-                assessment.domain());
+                assessment.domain(), tier);
         if (outline == null) {
             throw new IllegalStateException(
                     "Drafting is unavailable right now — write the steps yourself.");
         }
         return GenerateRoadmapResponse.outline(outline.title(), outline.interpretation(),
-                outline.modules(), outline.skipped(), sources, assessment);
+                outline.modules(), outline.skipped(), sources, assessment)
+                .withTier(tier);
+    }
+
+    /**
+     * RB-4.1: once RB-2's classifier confidently placed a goal in a tier, {@code shape} is
+     * DERIVED from it rather than independently re-guessed — MINI is flat, TOPIC/CAREER are
+     * nested. A {@code null} tier (classification failed, or never ran) keeps today's
+     * independently-assessed shape as the fallback, unchanged.
+     */
+    private static RoadmapAiService.GoalAssessment reconcileShapeWithTier(
+            RoadmapAiService.GoalAssessment assessment, String tier) {
+        if (tier == null) {
+            return assessment;
+        }
+        String derivedShape = "MINI".equals(tier) ? "flat"
+                : ("TOPIC".equals(tier) || "CAREER".equals(tier)) ? "nested" : null;
+        if (derivedShape == null || derivedShape.equals(assessment.shape())) {
+            return assessment;
+        }
+        return new RoadmapAiService.GoalAssessment(assessment.complexity(), assessment.estimatedTotalHours(),
+                assessment.domain(), assessment.priorLevel(), derivedShape, assessment.archetype());
     }
 
     /**
@@ -327,7 +441,7 @@ public class RoadmapService {
         List<List<ResourceAiService.Resource>> resources = resourceService.suggestResourcesPerStep(
                 moduleTitle, stepTexts, grounding == null ? null : grounding.results(), roadmapId);
         List<RoadmapAiService.CritiqueIssue> issues = critiqueIfWarranted(
-                roadmapTitle, moduleScope, stepTexts, storedComplexity(roadmap));
+                roadmapTitle, moduleScope, stepTexts, storedComplexity(roadmap), storedTier(roadmap));
         return GenerateRoadmapResponse.proposal(moduleTitle, null, steps, resources, List.of(),
                 sources, null, priorStepTextById, false, issues);
     }
@@ -454,6 +568,12 @@ public class RoadmapService {
         return raw instanceof Map<?, ?> map && map.get("complexity") instanceof Number n ? n.intValue() : 3;
     }
 
+    /** The roadmap's stored tier (RB-2.3), or null if never classified. */
+    private static String storedTier(Entry roadmap) {
+        Object raw = roadmap.getContent() != null ? roadmap.getContent().get("tier") : null;
+        return raw instanceof String s ? s : null;
+    }
+
     // Below this many steps, a self-critique pass isn't worth the call — too little content for
     // ordering/gap issues to mean anything (Phase 20).
     private static final int MIN_STEPS_FOR_CRITIQUE = 5;
@@ -465,13 +585,17 @@ public class RoadmapService {
      * Self-critique a just-drafted step list (Phase 20), or skip and return no issues when it's
      * not worth the call: too few steps to say anything meaningful, or the AI is unavailable
      * (best-effort — a failed/skipped critique never blocks the draft it would have reviewed).
+     * Escalates to the heavy tier either on assessed complexity (as before) or unconditionally
+     * for {@code tier: "CAREER"} (RB-4.5) — a career-scale roadmap's validation matters enough to
+     * always get the deeper pass, not just when complexity happens to also be high.
      */
     private List<RoadmapAiService.CritiqueIssue> critiqueIfWarranted(
-            String goal, String scope, List<String> stepTexts, int complexity) {
+            String goal, String scope, List<String> stepTexts, int complexity, String tier) {
         if (stepTexts.size() < MIN_STEPS_FOR_CRITIQUE || !roadmapAi.isAvailable()) {
             return List.of();
         }
-        return roadmapAi.critique(goal, scope, stepTexts, complexity >= HEAVY_CRITIQUE_COMPLEXITY);
+        boolean heavy = complexity >= HEAVY_CRITIQUE_COMPLEXITY || "CAREER".equals(tier);
+        return roadmapAi.critique(goal, scope, stepTexts, heavy);
     }
 
     /** Accept a module's expanded steps (Phase 13) — same shape and validation as roadmap steps. */
@@ -564,6 +688,46 @@ public class RoadmapService {
             throw new IllegalStateException("Couldn't draft a new module right now — add it yourself.");
         }
         return GenerateRoadmapResponse.ProposedModule.from(proposed);
+    }
+
+    /**
+     * Draft one new module scoped to a specific subtopic (RB-3.8) — reached from a confirmed
+     * Canonical Topic Match's SUBTOPIC decision. Same "propose" half as {@link #proposeNewModule},
+     * biased toward the given focus instead of a free choice of gap; accept the same way, via
+     * {@link #insertModule} — direct reuse of Phase 18's existing insert-module mechanic, not a
+     * new insertion path. {@code possibleDuplicate} is a soft, non-blocking flag (RB-3.8's
+     * "lightweight duplication check") — never a reason to reject the proposal outright.
+     */
+    @Transactional(readOnly = true)
+    public SubtopicModuleProposal proposeSubtopicModule(Long roadmapId, String focusGoal) {
+        Entry roadmap = getRoadmap(roadmapId);
+        if (!roadmapAi.isAvailable()) {
+            throw new IllegalStateException("Drafting is unavailable right now — add it yourself.");
+        }
+        List<Entry> existingModules = repository.findByParentIdOrderByOrderIndexAsc(roadmapId).stream()
+                .filter(e -> e.getType() == EntryType.ROADMAP).toList();
+        RoadmapAiService.OutlineModule proposed = roadmapAi.proposeModule(stringOf(roadmap, "title"),
+                siblingModulesContext(roadmapId, null), storedAssessmentContext(roadmap), focusGoal);
+        if (proposed == null) {
+            throw new IllegalStateException("Couldn't draft a new module right now — add it yourself.");
+        }
+        boolean possibleDuplicate = existingModules.stream().anyMatch(m -> similarTitle(
+                stringOf(m, "title"), proposed.title()));
+        return new SubtopicModuleProposal(proposed.title(), proposed.scope(), possibleDuplicate);
+    }
+
+    /** A loose, no-false-confidence text similarity check — flag only, never block (RB-3.8). */
+    private static boolean similarTitle(String a, String b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        String na = a.trim().toLowerCase(java.util.Locale.ROOT);
+        String nb = b.trim().toLowerCase(java.util.Locale.ROOT);
+        return na.equals(nb) || na.contains(nb) || nb.contains(na);
+    }
+
+    /** One proposed module scoped to a subtopic (RB-3.8), plus a soft duplication flag. */
+    public record SubtopicModuleProposal(String title, String scope, boolean possibleDuplicate) {
     }
 
     /** Insert a new, empty module at {@code position} (Phase 18) — accept half of {@link #proposeNewModule}. */
@@ -708,14 +872,11 @@ public class RoadmapService {
 
     /** How many parents up to the root roadmap (root itself is depth 0). */
     private int depthOf(Entry entry) {
-        int depth = 0;
-        Long parentId = entry.getParentId();
-        while (parentId != null) {
-            depth++;
-            Entry parent = repository.findById(parentId).orElse(null);
-            parentId = parent == null ? null : parent.getParentId();
+        if (entry.getParentId() == null) {
+            return 0;
         }
-        return depth;
+        // One recursive query instead of a findById per level (V3-3.1).
+        return repository.findAncestors(entry.getId()).size();
     }
 
     /**
@@ -744,14 +905,10 @@ public class RoadmapService {
         if (node == null) {
             return null;
         }
-        Entry root = node;
-        while (root.getParentId() != null) {
-            Entry parent = repository.findById(root.getParentId()).orElse(null);
-            if (parent == null) {
-                break;
-            }
-            root = parent;
-        }
+        // findAncestors returns nearest-first, so the last element is the root (V3-3.1) — one
+        // query rather than one per level.
+        List<Entry> ancestors = repository.findAncestors(nodeId);
+        Entry root = ancestors.isEmpty() ? node : ancestors.get(ancestors.size() - 1);
         return root.getContent() != null && root.getContent().get("assessment") instanceof Map<?, ?> assessment
                 && assessment.get("domain") instanceof String s ? s : null;
     }
@@ -764,22 +921,17 @@ public class RoadmapService {
      */
     @Transactional(readOnly = true)
     public List<Entry> leafStepsOf(Long roadmapId) {
-        List<Entry> leaves = new ArrayList<>();
-        collectLeafSteps(roadmapId, leaves);
-        return leaves;
-    }
-
-    private void collectLeafSteps(Long parentId, List<Entry> out) {
-        for (Entry child : repository.findByParentIdOrderByOrderIndexAsc(parentId)) {
-            List<Entry> grandchildren = repository.findByParentIdOrderByOrderIndexAsc(child.getId());
-            if (grandchildren.isEmpty()) {
-                if (child.getType() == EntryType.ROADMAP_STEP) {
-                    out.add(child);
-                }
-            } else {
-                collectLeafSteps(child.getId(), out);
-            }
-        }
+        // The whole subtree in one query, walked in memory (V3-3.1). The old version recursed
+        // with a query per node, so a career roadmap cost 60+ round trips to build this list.
+        List<Entry> descendants = repository.findDescendants(roadmapId);
+        Set<Long> parents = descendants.stream()
+                .map(Entry::getParentId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        return descendants.stream()
+                .filter(e -> e.getType() == EntryType.ROADMAP_STEP)
+                .filter(e -> !parents.contains(e.getId()))
+                .toList();
     }
 
     // (proposal() maps the AI draft steps to the structured response DTO.)
@@ -815,6 +967,9 @@ public class RoadmapService {
         if (req.assessment() != null) {
             content.put("assessment", assessmentMap(req.assessment()));
         }
+        if (req.tier() != null && !req.tier().isBlank()) {
+            content.put("tier", req.tier());
+        }
 
         Entry roadmap = new Entry();
         roadmap.setType(EntryType.ROADMAP);
@@ -846,7 +1001,43 @@ public class RoadmapService {
             createModules(roadmap.getId(), req.modules());
         }
 
+        saveCanonicalTopic(roadmap, title);
         return roadmap;
+    }
+
+    /**
+     * Save this newly-created roadmap as a Canonical Topic (RB-3.9) so a future goal can match
+     * against it. Best-effort: an embedding failure just skips this, never blocks roadmap
+     * creation — same pattern as every other AI call in this codebase. A title collision (same
+     * slug already used) also just skips rather than erroring, since re-creating "the same"
+     * roadmap under a slightly different title is a normal, harmless thing to do.
+     */
+    private void saveCanonicalTopic(Entry roadmap, String title) {
+        String topicId = slugify(title);
+        if (topicId.isEmpty() || canonicalTopics.findByTopicId(topicId).isPresent()) {
+            return;
+        }
+        List<Double> embedding = embeddings.embed(title);
+        if (embedding == null) {
+            return;
+        }
+        CanonicalTopic topic = new CanonicalTopic();
+        topic.setTopicId(topicId);
+        topic.setCanonicalName(title);
+        topic.setEmbedding(embedding);
+        topic.setCreatedFrom(title);
+        topic.setRoadmapEntryId(roadmap.getId());
+        canonicalTopics.save(topic);
+    }
+
+    private static String slugify(String text) {
+        if (text == null) {
+            return "";
+        }
+        String slug = text.trim().toLowerCase(java.util.Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("(^-|-$)", "");
+        return slug.length() <= 128 ? slug : slug.substring(0, 128);
     }
 
     /** The stored form of an accepted assessment (Phase 18) for the roadmap's content JSONB. */
@@ -995,6 +1186,84 @@ public class RoadmapService {
     }
 
     /**
+     * The one-time CAREER completion reflection (RB-4.7): checked after a step is marked done,
+     * cheap enough to call every time — a no-op unless this roadmap is {@code tier: "CAREER"},
+     * every leaf step is DONE, and it hasn't already reflected once. {@code null} means nothing
+     * new to show (not complete yet, not CAREER, already reflected, or the AI call failed).
+     */
+    @Transactional
+    public String checkCareerCompletion(Long roadmapId) {
+        Entry roadmap = getRoadmap(roadmapId);
+        if (!"CAREER".equals(storedTier(roadmap))
+                || roadmap.getContent() != null && roadmap.getContent().get("completionReflection") != null) {
+            return null;
+        }
+        List<Entry> leaves = leafStepsOf(roadmapId);
+        if (leaves.isEmpty() || leaves.stream().anyMatch(s -> s.getStatus() != EntryStatus.DONE)) {
+            return null;
+        }
+        String reflection = reviewAi.careerCompletionReflection(stringOf(roadmap, "title"));
+        if (reflection == null) {
+            return null;
+        }
+        Map<String, Object> content = new HashMap<>(
+                roadmap.getContent() != null ? roadmap.getContent() : Map.of());
+        content.put("completionReflection", reflection);
+        content.put("completionReflectedAt", Instant.now().toString());
+        roadmap.setContent(content);
+        repository.save(roadmap);
+        return reflection;
+    }
+
+    /**
+     * Two-way completion sync (RB-4.8) and module completion rollup (RB-4.12), one shared
+     * mechanism: both a step-with-substeps and a module are just a container whose children can
+     * roll up into it. Call after marking {@code stepId} done — a no-op otherwise (only
+     * completion propagates; un-marking done never cascades, so undoing one substep doesn't
+     * silently un-complete a whole module).
+     * <ul>
+     *   <li>Parent → children: every substep of a just-completed container marks done too.</li>
+     *   <li>Children → parent: if this step's own parent is a real container (a step with
+     *       substeps, or a module — never the top-level roadmap itself, which only completes via
+     *       {@link #checkCareerCompletion}'s explicit CAREER-only path) and every sibling is now
+     *       done, the parent marks done too.</li>
+     * </ul>
+     */
+    @Transactional
+    public void syncStepCompletion(Long stepId) {
+        Entry step = repository.findById(stepId)
+                .filter(s -> s.getType() == EntryType.ROADMAP_STEP)
+                .orElseThrow(() -> new java.util.NoSuchElementException("No step " + stepId));
+        if (step.getStatus() != EntryStatus.DONE) {
+            return;
+        }
+
+        for (Entry child : repository.findByParentIdOrderByOrderIndexAsc(stepId)) {
+            if (child.getStatus() != EntryStatus.DONE) {
+                child.setStatus(EntryStatus.DONE);
+                repository.save(child);
+            }
+        }
+
+        if (step.getParentId() == null) {
+            return;
+        }
+        Entry parent = repository.findById(step.getParentId()).orElse(null);
+        boolean parentIsRealContainer = parent != null
+                && (parent.getType() == EntryType.ROADMAP_STEP
+                        || (parent.getType() == EntryType.ROADMAP && parent.getParentId() != null));
+        if (!parentIsRealContainer || parent.getStatus() == EntryStatus.DONE) {
+            return;
+        }
+        List<Entry> siblings = repository.findByParentIdOrderByOrderIndexAsc(parent.getId());
+        boolean allDone = !siblings.isEmpty() && siblings.stream().allMatch(s -> s.getStatus() == EntryStatus.DONE);
+        if (allDone) {
+            parent.setStatus(EntryStatus.DONE);
+            repository.save(parent);
+        }
+    }
+
+    /**
      * Active top-level roadmaps (archived excluded), newest first. Child roadmaps (modules,
      * Phase 13) have a parent and are shown inside their root, never as their own list entry.
      */
@@ -1032,6 +1301,274 @@ public class RoadmapService {
         getRoadmap(roadmapId); // 404 if it isn't a roadmap
         repository.deleteAll(stepsOf(roadmapId));
         repository.deleteById(roadmapId);
+    }
+
+    /**
+     * The re-tier escape hatch (RB-2.5) — a founder-triggered correction when the classifier got
+     * a goal's scale wrong. Never automatic; always the founder's own action, logged as such
+     * ({@code source: founder}). Which path runs is decided by the roadmap's REAL current
+     * structure (does it have modules with their own steps, or is it a flat list?), not by the
+     * stored {@code tier} field — a roadmap created before RB-2.3, or one whose classification
+     * failed, still re-tiers correctly this way.
+     */
+    @Transactional
+    public ReTierResponse reTier(Long roadmapId, ReTierRequest request) {
+        Entry roadmap = getRoadmap(roadmapId);
+        Tier newTier = parseTier(request.tier());
+        List<Entry> topChildren = repository.findByParentIdOrderByOrderIndexAsc(roadmapId);
+        // A module is type ROADMAP (see createModules); a flat roadmap's direct children are
+        // leaf ROADMAP_STEPs instead. Checking the TYPE, not whether a module already has
+        // children, matters because an accepted-but-not-yet-expanded module is still a real
+        // module (Type ROADMAP, zero children) — not a flat step to be swept into a grouping call.
+        boolean currentlyNested = topChildren.stream().anyMatch(c -> c.getType() == EntryType.ROADMAP);
+
+        if (newTier == Tier.TASK) {
+            return reTierToTask(roadmap);
+        }
+        if (newTier == Tier.MINI) {
+            return currentlyNested ? flattenToMini(roadmap, topChildren) : relabelOnly(roadmap, newTier);
+        }
+        // newTier is TOPIC or CAREER — both a nested (modules-then-steps) shape.
+        if (!currentlyNested && !topChildren.isEmpty()) {
+            // Only MINI → TOPIC is a defined single-step grouping transition (RB-2.5) — a flat
+            // roadmap going straight to CAREER goes through TOPIC first, same as any other
+            // adjacent-tier move, rather than inventing an ungrouped MINI → CAREER path.
+            if (newTier == Tier.CAREER) {
+                throw new IllegalArgumentException(
+                        "Re-tier to TOPIC first, then TOPIC → CAREER — there's no direct MINI → CAREER path.");
+            }
+            return proposeRegroup(roadmap, topChildren);
+        }
+        if (newTier == Tier.CAREER && currentlyNested) {
+            // Already nested; offer the optional arc-order proposal rather than forcing one —
+            // the founder can also just confirm an empty/no-op reorder if the current order is
+            // already fine (see applyReTierProposal's arc_order handling).
+            return proposeArcOrder(roadmap, topChildren);
+        }
+        // Already nested, target TOPIC (e.g. from CAREER), or no steps at all yet either way —
+        // nothing structural to change; phases aren't a real stored entity (RB-4.3), so CAREER →
+        // TOPIC has nothing to strip beyond the label itself.
+        return relabelOnly(roadmap, newTier);
+    }
+
+    /** Confirm a previously-returned re-tier proposal (RB-2.5), applying the founder's groups/order. */
+    @Transactional
+    public ReTierResponse applyReTierProposal(Long roadmapId, ApplyReTierProposalRequest request) {
+        Entry roadmap = getRoadmap(roadmapId);
+        if ("regroup".equals(request.kind())) {
+            return applyRegroup(roadmap, request.groups());
+        }
+        if ("arc_order".equals(request.kind())) {
+            return applyArcOrder(roadmap, request.groups());
+        }
+        throw new IllegalArgumentException("Unknown re-tier proposal kind: " + request.kind());
+    }
+
+    private static Tier parseTier(String raw) {
+        try {
+            return Tier.valueOf(raw == null ? "" : raw.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Unknown tier: " + raw);
+        }
+    }
+
+    /** Update just the stored {@code tier} label — no structural change (RB-2.5). */
+    private ReTierResponse relabelOnly(Entry roadmap, Tier newTier) {
+        String from = stringOf(roadmap, "tier");
+        setTierContent(roadmap, newTier);
+        events.founderAction("re_tier", "roadmap re-tiered from " + (from == null ? "unset" : from)
+                + " to " + newTier + " — label only, no structural change",
+                Map.of("roadmapId", roadmap.getId()));
+        return ReTierResponse.applied(roadmap.getId());
+    }
+
+    private void setTierContent(Entry roadmap, Tier tier) {
+        Map<String, Object> content = new HashMap<>(
+                roadmap.getContent() != null ? roadmap.getContent() : Map.of());
+        content.put("tier", tier.name());
+        roadmap.setContent(content);
+        repository.save(roadmap);
+    }
+
+    /** Convert a whole roadmap to a task (RB-2.5): archive it, create a task with its title. */
+    private ReTierResponse reTierToTask(Entry roadmap) {
+        String title = stringOf(roadmap, "title");
+        Entry task = entryService.create(new CreateEntryRequest(EntryType.TASK, title, null, null, null, null));
+        String ack = aiVoice.acknowledge(task);
+        roadmap.setStatus(EntryStatus.ARCHIVED);
+        repository.save(roadmap);
+        events.founderAction("re_tier", "roadmap re-tiered to TASK — archived, converted to a task entry",
+                Map.of("roadmapId", roadmap.getId(), "taskEntryId", task.getId()));
+        return ReTierResponse.taskConversion(task.getId(), title, ack);
+    }
+
+    /**
+     * Flatten a nested roadmap to MINI (RB-2.5): every leaf step (already-existing rows, kept
+     * as-is — completion status survives automatically since nothing is recreated) is reparented
+     * directly under the roadmap in order; the now-empty module rows are removed. The original
+     * module titles are logged, not silently lost, in case the founder wants to reconstruct them.
+     */
+    private ReTierResponse flattenToMini(Entry roadmap, List<Entry> topChildren) {
+        List<Entry> leaves = leafStepsOf(roadmap.getId());
+        Set<Long> leafIds = leaves.stream().map(Entry::getId).collect(java.util.stream.Collectors.toSet());
+        List<Entry> emptiedModules = topChildren.stream()
+                .filter(c -> !leafIds.contains(c.getId()))
+                .toList();
+
+        int order = 0;
+        for (Entry leaf : leaves) {
+            leaf.setParentId(roadmap.getId());
+            leaf.setOrderIndex(order++);
+            repository.save(leaf);
+        }
+        // Archived, not deleted (RB-2.5): parentId stays put (so it's still found and cleaned up
+        // if the whole roadmap is later deleted) but ARCHIVED status hides it from the rendered
+        // tree (see RoadmapNodeResponse.of) — the row survives with its title/scope intact,
+        // reversible if a re-tier turns out to be the wrong call, unlike a hard delete.
+        for (Entry module : emptiedModules) {
+            module.setStatus(EntryStatus.ARCHIVED);
+            repository.save(module);
+        }
+        setTierContent(roadmap, Tier.MINI);
+        List<String> moduleTitles = emptiedModules.stream()
+                .map(c -> stringOf(c, "title")).filter(t -> t != null && !t.isBlank()).toList();
+        List<Long> moduleIds = emptiedModules.stream().map(Entry::getId).toList();
+        events.founderAction("re_tier", "roadmap re-tiered to MINI — archived "
+                + emptiedModules.size() + " module(s) (titles: " + String.join(", ", moduleTitles) + ")",
+                Map.of("roadmapId", roadmap.getId(), "archivedModuleIds", moduleIds));
+        return ReTierResponse.applied(roadmap.getId());
+    }
+
+    /** AI-assisted grouping proposal for MINI → TOPIC (RB-2.5) — nothing applied yet. */
+    private ReTierResponse proposeRegroup(Entry roadmap, List<Entry> flatSteps) {
+        String title = stringOf(roadmap, "title");
+        List<RoadmapAiService.StepForGrouping> steps = flatSteps.stream()
+                .map(s -> new RoadmapAiService.StepForGrouping(s.getId(), stringOf(s, "text")))
+                .toList();
+        List<RoadmapAiService.RegroupedModule> groups = roadmapAi.regroupSteps(title, steps);
+        if (groups == null) {
+            throw new IllegalStateException(
+                    "Couldn't propose a grouping right now — try again shortly.");
+        }
+        List<ReTierResponse.Group> proposed = groups.stream()
+                .map(g -> new ReTierResponse.Group(g.title(), g.scope(), g.stepIds(), null))
+                .toList();
+        return ReTierResponse.proposal("regroup", proposed);
+    }
+
+    /** AI-assisted arc-order proposal for TOPIC → CAREER (RB-2.5) — nothing applied yet. */
+    private ReTierResponse proposeArcOrder(Entry roadmap, List<Entry> modules) {
+        String title = stringOf(roadmap, "title");
+        List<RoadmapAiService.ModuleForArc> forArc = modules.stream()
+                .map(m -> new RoadmapAiService.ModuleForArc(m.getId(), stringOf(m, "title"), stringOf(m, "scope")))
+                .toList();
+        List<RoadmapAiService.ArcPosition> order = roadmapAi.proposeCareerArc(title, forArc);
+        if (order == null) {
+            throw new IllegalStateException(
+                    "Couldn't propose an arc order right now — try again shortly.");
+        }
+        List<ReTierResponse.Group> proposed = order.stream()
+                .map(p -> new ReTierResponse.Group(null, null, List.of(p.moduleId()), p.phaseLabel()))
+                .toList();
+        return ReTierResponse.proposal("arc_order", proposed);
+    }
+
+    /**
+     * Apply a confirmed regroup proposal (RB-2.5, MINI → TOPIC/CAREER): create one new module per
+     * group, reparenting its referenced (already-existing) steps under it — their completion
+     * status survives untouched since they're the same rows, just moved. Any step the founder's
+     * confirmed groups leave out still lands somewhere (a catch-all "Ungrouped" module) rather
+     * than being silently dropped; a step that was already DONE and got left out gets its own
+     * brief log entry too, since that's the case actually worth the founder's attention.
+     */
+    private ReTierResponse applyRegroup(Entry roadmap, List<ReTierResponse.Group> groups) {
+        List<Entry> allSteps = repository.findByParentIdOrderByOrderIndexAsc(roadmap.getId());
+        Map<Long, Entry> stepsById = allSteps.stream()
+                .collect(java.util.stream.Collectors.toMap(Entry::getId, s -> s));
+        Set<Long> grouped = new HashSet<>();
+
+        int moduleOrder = 0;
+        for (ReTierResponse.Group g : groups) {
+            List<Entry> members = new ArrayList<>();
+            for (Long stepId : g.entryIds() == null ? List.<Long>of() : g.entryIds()) {
+                Entry step = stepsById.get(stepId);
+                if (step != null) {
+                    members.add(step);
+                    grouped.add(stepId);
+                }
+            }
+            if (members.isEmpty()) {
+                continue;
+            }
+            createModuleWithSteps(roadmap.getId(), moduleOrder++, g.title(), g.scope(), members);
+        }
+
+        List<Entry> leftOver = allSteps.stream().filter(s -> !grouped.contains(s.getId())).toList();
+        List<String> droppedDoneTitles = leftOver.stream()
+                .filter(s -> s.getStatus() == EntryStatus.DONE)
+                .map(s -> stringOf(s, "text"))
+                .toList();
+        if (!leftOver.isEmpty()) {
+            createModuleWithSteps(roadmap.getId(), moduleOrder, "Ungrouped",
+                    "Steps the proposed grouping didn't place — sorted here instead of dropped.", leftOver);
+        }
+
+        // Regroup is only ever proposed for MINI → TOPIC (reTier() rejects a direct MINI →
+        // CAREER grouping) — TOPIC is always the right target tier to store here.
+        setTierContent(roadmap, Tier.TOPIC);
+        String msg = "roadmap re-tiered to TOPIC — regrouped " + allSteps.size() + " step(s) into "
+                + (moduleOrder + (leftOver.isEmpty() ? 0 : 1)) + " module(s)"
+                + (droppedDoneTitles.isEmpty() ? "" : "; completed step(s) left out of the proposed"
+                        + " groups, sorted into Ungrouped instead: " + String.join(", ", droppedDoneTitles));
+        events.founderAction("re_tier", msg, Map.of("roadmapId", roadmap.getId()));
+        return ReTierResponse.applied(roadmap.getId());
+    }
+
+    /** Create one module under a roadmap with the given already-existing steps reparented into it. */
+    private void createModuleWithSteps(Long roadmapId, int orderIndex, String title, String scope,
+                                       List<Entry> steps) {
+        Entry module = new Entry();
+        module.setType(EntryType.ROADMAP); // a module is type ROADMAP, same as createModules()
+        module.setStatus(EntryStatus.IN_MOTION);
+        module.setParentId(roadmapId);
+        module.setOrderIndex(orderIndex);
+        Map<String, Object> moduleContent = new HashMap<>();
+        moduleContent.put("title", title == null || title.isBlank() ? "Module" : title);
+        if (scope != null && !scope.isBlank()) {
+            moduleContent.put("scope", scope);
+        }
+        module.setContent(moduleContent);
+        module = repository.save(module);
+        int stepOrder = 0;
+        for (Entry step : steps) {
+            step.setParentId(module.getId());
+            step.setOrderIndex(stepOrder++);
+            repository.save(step);
+        }
+    }
+
+    /**
+     * Apply a confirmed arc-order proposal (RB-2.5, TOPIC → CAREER): reorder the existing modules
+     * — nothing is renamed, created, or dropped, {@code phaseLabel} was informational only.
+     */
+    private ReTierResponse applyArcOrder(Entry roadmap, List<ReTierResponse.Group> order) {
+        List<Entry> modules = repository.findByParentIdOrderByOrderIndexAsc(roadmap.getId());
+        Map<Long, Entry> byId = modules.stream()
+                .collect(java.util.stream.Collectors.toMap(Entry::getId, m -> m));
+        int i = 0;
+        for (ReTierResponse.Group g : order) {
+            Long moduleId = g.entryIds() == null || g.entryIds().isEmpty() ? null : g.entryIds().get(0);
+            Entry module = moduleId == null ? null : byId.get(moduleId);
+            if (module == null) {
+                continue;
+            }
+            module.setOrderIndex(i++);
+            repository.save(module);
+        }
+        setTierContent(roadmap, Tier.CAREER);
+        events.founderAction("re_tier", "roadmap re-tiered to CAREER — reordered "
+                + i + " module(s) into the confirmed arc", Map.of("roadmapId", roadmap.getId()));
+        return ReTierResponse.applied(roadmap.getId());
     }
 
     @Transactional(readOnly = true)
@@ -1127,7 +1664,33 @@ public class RoadmapService {
         }
 
         createDraftSteps(original.getId(), clean);
+        inheritResources(original);
         repository.touchUpdatedAt(roadmapId, Instant.now());
+    }
+
+    /**
+     * RB-4.8: substeps inherit the parent's own resources — a substep with no resources of its
+     * own (the common case; resource discovery for a break-down proposal isn't run today) gets
+     * the same material its parent already had, rather than starting from nothing. A substep the
+     * founder (or resource discovery) already gave real resources to is left alone.
+     */
+    @SuppressWarnings("unchecked")
+    private void inheritResources(Entry original) {
+        Object parentResources = original.getContent() != null ? original.getContent().get("resources") : null;
+        if (!(parentResources instanceof List<?> list) || list.isEmpty()) {
+            return;
+        }
+        for (Entry substep : repository.findByParentIdOrderByOrderIndexAsc(original.getId())) {
+            Object existing = substep.getContent() != null ? substep.getContent().get("resources") : null;
+            if (existing instanceof List<?> existingList && !existingList.isEmpty()) {
+                continue;
+            }
+            Map<String, Object> content = new HashMap<>(
+                    substep.getContent() != null ? substep.getContent() : Map.of());
+            content.put("resources", new ArrayList<>((List<Map<String, Object>>) list));
+            substep.setContent(content);
+            repository.save(substep);
+        }
     }
 
     /**
@@ -1235,9 +1798,10 @@ public class RoadmapService {
     }
 
     /**
-     * Turn accepted resource inputs into stored resource maps: keep only ones with a real url
-     * and title, give each a stable id (generated if the client didn't send one), and start
-     * user_rating null. Drops anything malformed.
+     * Turn accepted resource inputs into stored resource maps, dropping anything malformed. The
+     * shape itself is defined once in {@link ResourceService#storedResource} — the backfill path
+     * writes the same maps, and two hand-written copies of the same field names would eventually
+     * disagree.
      */
     private static List<Map<String, Object>> buildResources(List<CreateRoadmapRequest.ResourceInput> inputs) {
         List<Map<String, Object>> resources = new ArrayList<>();
@@ -1245,28 +1809,14 @@ public class RoadmapService {
             return resources;
         }
         for (CreateRoadmapRequest.ResourceInput r : inputs) {
-            if (r == null || r.title() == null || r.title().isBlank()
-                    || r.url() == null || r.url().isBlank()) {
+            if (r == null) {
                 continue;
             }
-            Map<String, Object> map = new java.util.LinkedHashMap<>();
-            map.put("id", r.id() != null && !r.id().isBlank() ? r.id() : java.util.UUID.randomUUID().toString());
-            map.put("title", r.title().trim());
-            map.put("url", r.url().trim());
-            if (r.format() != null && !r.format().isBlank()) {
-                map.put("format", r.format());
+            Map<String, Object> map = ResourceService.storedResource(r.id(), r.title(), r.url(),
+                    r.format(), r.sourceType(), r.estimatedTime(), r.aiGroundingSource());
+            if (map != null) {
+                resources.add(map);
             }
-            if (r.sourceType() != null && !r.sourceType().isBlank()) {
-                map.put("sourceType", r.sourceType());
-            }
-            if (r.estimatedTime() != null && !r.estimatedTime().isBlank()) {
-                map.put("estimatedTime", r.estimatedTime().trim());
-            }
-            if (r.aiGroundingSource() != null && !r.aiGroundingSource().isBlank()) {
-                map.put("aiGroundingSource", r.aiGroundingSource().trim());
-            }
-            map.put("userRating", null);
-            resources.add(map);
         }
         return resources;
     }

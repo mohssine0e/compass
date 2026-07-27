@@ -44,6 +44,15 @@ public class EntryController {
     }
 
     /**
+     * Every completed roadmap step, most recently updated first (RB-5.3) — feeds the unified
+     * intake's PRACTICE/REVIEW picker.
+     */
+    @GetMapping("/completed-steps")
+    public List<EntryResponse> completedSteps() {
+        return service.completedSteps().stream().map(EntryResponse::from).toList();
+    }
+
+    /**
      * Propose theme clusters over not-yet-themed ideas (Phase 14). Nothing is tagged — the
      * founder confirms/renames, then tags each accepted idea via the normal patch endpoint.
      */

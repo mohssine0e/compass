@@ -95,6 +95,44 @@ public class RoadmapAiService {
 
     private static final Set<String> ARCHETYPES = Set.of("quick_task", "topic_deep_dive", "career_path");
 
+    /**
+     * Sort a goal into TASK / MINI / TOPIC / CAREER (RB-1) — an isolated, standalone function.
+     * Deliberately NOT called from {@link com.compass.app.roadmap.RoadmapService#generate} or
+     * anywhere else in the real app yet; this phase only proves the classifier is reliable via
+     * the debug screen and the 26-goal validation set in {@code TASKS_v2.md}. {@code null} on
+     * failure (unavailable / both providers fail / unparseable reply).
+     */
+    public TierClassification classifyTier(String goal, String profileContext) {
+        JsonNode json = ai.generate(AiTier.FAST, "tier classification",
+                PromptTemplates.TIER_CLASSIFY_SYSTEM, PromptTemplates.tierClassifyUser(goal, profileContext));
+        if (json == null) {
+            return null;
+        }
+        String tierRaw = AiJsonGenerator.text(json.get("tier"));
+        Tier tier;
+        try {
+            tier = tierRaw == null ? null : Tier.valueOf(tierRaw.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            tier = null;
+        }
+        if (tier == null) {
+            return null;
+        }
+        JsonNode confidenceNode = json.get("confidence");
+        double confidence = confidenceNode != null && confidenceNode.isNumber()
+                ? Math.max(0.0, Math.min(1.0, confidenceNode.asDouble())) : 0.0;
+        String reasoning = AiJsonGenerator.text(json.get("reasoning"));
+        return new TierClassification(tier, confidence, reasoning == null ? "" : reasoning.trim());
+    }
+
+    /**
+     * The result of {@link #classifyTier} (RB-1): the chosen {@link Tier}, a 0.0-1.0 confidence
+     * score, and 1-3 plain sentences of reasoning. Never shown to the founder directly at this
+     * stage — read only by the RB-1 debug screen.
+     */
+    public record TierClassification(Tier tier, double confidence, String reasoning) {
+    }
+
     /** A plain-text summary of an assessment for other prompts to read; {@code null} if none. */
     public static String assessmentContext(GoalAssessment a) {
         if (a == null) {
@@ -124,15 +162,23 @@ public class RoadmapAiService {
     public RoadmapOutline moduleOutline(String goal, String clarifications, String profileContext,
                                         String groundingContext, String assessmentContext,
                                         String domain) {
+        return moduleOutline(goal, clarifications, profileContext, groundingContext,
+                assessmentContext, domain, null);
+    }
+
+    /** As above, plus {@code tier} (RB-4.2/4.3) — biases the outline's arc and module-count rail. */
+    public RoadmapOutline moduleOutline(String goal, String clarifications, String profileContext,
+                                        String groundingContext, String assessmentContext,
+                                        String domain, String tier) {
         String cacheKey = AiGenerationCache.key("outline", goal, clarifications, profileContext,
-                groundingContext, assessmentContext, domain);
+                groundingContext, assessmentContext, domain, tier);
         RoadmapOutline cached = cache.get(cacheKey);
         if (cached != null) {
             return cached;
         }
         JsonNode json = ai.generate(AiTier.HEAVY, "roadmap outline", PromptTemplates.OUTLINE_SYSTEM,
                 PromptTemplates.outlineUser(goal, clarifications, profileContext, groundingContext,
-                        assessmentContext, domain));
+                        assessmentContext, domain, tier));
         if (json == null) {
             return null;
         }
@@ -234,9 +280,94 @@ public class RoadmapAiService {
      */
     public OutlineModule proposeModule(String roadmapTitle, String existingModulesContext,
                                        String assessmentContext) {
+        return proposeModule(roadmapTitle, existingModulesContext, assessmentContext, null);
+    }
+
+    /**
+     * As above, plus {@code focusHint} (RB-3.8) — the specific subtopic goal text a confirmed
+     * Canonical Topic Match asked for, so the module drafted is about that specifically rather
+     * than a free choice of gap.
+     */
+    public OutlineModule proposeModule(String roadmapTitle, String existingModulesContext,
+                                       String assessmentContext, String focusHint) {
         JsonNode json = ai.generate(AiTier.HEAVY, "module insertion", PromptTemplates.INSERT_MODULE_SYSTEM,
-                PromptTemplates.insertModuleUser(roadmapTitle, existingModulesContext, assessmentContext));
+                PromptTemplates.insertModuleUser(roadmapTitle, existingModulesContext, assessmentContext, focusHint));
         return oneModule(json);
+    }
+
+    /**
+     * Group existing flat steps into named modules (RB-2.5, MINI → TOPIC re-tier). Reorganizes
+     * steps that already exist by real entry id — never invents new step content. {@code null}
+     * on failure; the caller falls back to leaving the roadmap flat rather than guessing a
+     * grouping.
+     */
+    public List<RegroupedModule> regroupSteps(String roadmapTitle, List<StepForGrouping> steps) {
+        List<String> lines = steps.stream().map(s -> s.id() + ": " + s.text()).toList();
+        JsonNode json = ai.generate(AiTier.FAST, "step regrouping", PromptTemplates.REGROUP_STEPS_SYSTEM,
+                PromptTemplates.regroupStepsUser(roadmapTitle, lines));
+        if (json == null || json.get("groups") == null || !json.get("groups").isArray()) {
+            return null;
+        }
+        List<RegroupedModule> groups = new ArrayList<>();
+        for (JsonNode node : json.get("groups")) {
+            String title = AiJsonGenerator.text(node.get("title"));
+            if (title == null || title.isBlank()) {
+                continue;
+            }
+            String scope = AiJsonGenerator.text(node.get("scope"));
+            List<Long> stepIds = new ArrayList<>();
+            JsonNode idsNode = node.get("stepIds");
+            if (idsNode != null && idsNode.isArray()) {
+                for (JsonNode idNode : idsNode) {
+                    if (idNode.isIntegralNumber()) {
+                        stepIds.add(idNode.asLong());
+                    }
+                }
+            }
+            groups.add(new RegroupedModule(title.trim(), scope == null ? null : scope.trim(), stepIds));
+        }
+        return groups.isEmpty() ? null : groups;
+    }
+
+    /** One existing step offered to {@link #regroupSteps} — its real id and text. */
+    public record StepForGrouping(Long id, String text) {
+    }
+
+    /** One proposed module grouping existing steps by their real ids (RB-2.5). */
+    public record RegroupedModule(String title, String scope, List<Long> stepIds) {
+    }
+
+    /**
+     * Propose an order for existing modules reflecting a Foundations/Tooling/Specialization/
+     * Portfolio arc (RB-2.5, TOPIC → CAREER re-tier) — reorders only, never renames or drops a
+     * module. {@code null} on failure; the caller falls back to leaving the current order.
+     */
+    public List<ArcPosition> proposeCareerArc(String roadmapTitle, List<ModuleForArc> modules) {
+        List<String> lines = modules.stream()
+                .map(m -> m.id() + ": " + m.title() + (m.scope() == null ? "" : " — " + m.scope())).toList();
+        JsonNode json = ai.generate(AiTier.HEAVY, "career arc ordering", PromptTemplates.CAREER_ARC_SYSTEM,
+                PromptTemplates.careerArcUser(roadmapTitle, lines));
+        if (json == null || json.get("order") == null || !json.get("order").isArray()) {
+            return null;
+        }
+        List<ArcPosition> order = new ArrayList<>();
+        for (JsonNode node : json.get("order")) {
+            JsonNode idNode = node.get("moduleId");
+            if (idNode == null || !idNode.isIntegralNumber()) {
+                continue;
+            }
+            String phaseLabel = AiJsonGenerator.text(node.get("phaseLabel"));
+            order.add(new ArcPosition(idNode.asLong(), phaseLabel));
+        }
+        return order.isEmpty() ? null : order;
+    }
+
+    /** One existing module offered to {@link #proposeCareerArc} — its real id, title, and scope. */
+    public record ModuleForArc(Long id, String title, String scope) {
+    }
+
+    /** One module's proposed position in the arc order (RB-2.5) — informational phaseLabel only. */
+    public record ArcPosition(Long moduleId, String phaseLabel) {
     }
 
     /**

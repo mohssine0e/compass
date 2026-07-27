@@ -1,0 +1,746 @@
+/* Route map. The map is the screen — the detail card docks over it rather than
+   replacing it, so you never lose your position on the line. */
+
+.rm {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.rm-loading {
+  padding: var(--a-10);
+  color: var(--a-ink-3);
+}
+
+/* ── Top bar ──────────────────────────────────────────────────────────────── */
+
+.rm-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--a-4);
+  flex: none;
+  border-bottom: 1px solid var(--a-line);
+  background: var(--a-panel);
+  padding: var(--a-3) var(--a-5);
+}
+
+.rm-bar__title h1 {
+  margin: 0;
+  font-size: var(--a-t-lg);
+  font-weight: var(--a-w-semi);
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.rm-bar__stat {
+  margin: 2px 0 0;
+  color: var(--a-ink-3);
+  font-size: var(--a-t-small);
+}
+
+.rm-bar__legs {
+  display: flex;
+  gap: var(--a-1);
+  overflow-x: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-bottom: 2px;
+}
+
+.rm-legchip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--a-2);
+  flex: none;
+  border: 1px solid var(--a-line);
+  border-radius: 999px;
+  background: transparent;
+  padding: 3px var(--a-3) 3px var(--a-2);
+  max-width: 190px;
+  color: var(--a-ink-2);
+  font-size: var(--a-t-micro);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: border-color var(--a-fast) var(--a-ease), color var(--a-fast) var(--a-ease);
+}
+
+.rm-legchip:hover {
+  border-color: var(--leg);
+  color: var(--a-ink);
+}
+
+.rm-legchip__swatch {
+  flex: none;
+  border-radius: 2px;
+  background: var(--leg);
+  width: 10px;
+  height: 3px;
+}
+
+.rm-bar__soft {
+  color: var(--a-attention);
+}
+
+.rm-bar__lenses {
+  display: flex;
+  gap: var(--a-1);
+  flex: none;
+  margin-left: auto;
+}
+
+.rm-lens {
+  border: 1px solid var(--a-line);
+  border-radius: 999px;
+  background: transparent;
+  padding: 3px var(--a-3);
+  color: var(--a-ink-2);
+  font-size: var(--a-t-micro);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color var(--a-fast) var(--a-ease), color var(--a-fast) var(--a-ease);
+}
+
+.rm-lens:hover {
+  border-color: var(--a-accent-line);
+  color: var(--a-ink);
+}
+
+.rm-lens.is-on {
+  border-color: var(--a-accent);
+  background: var(--a-accent-soft);
+  color: var(--a-ink);
+}
+
+/* ── The map ──────────────────────────────────────────────────────────────── */
+
+.rm-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  /* Room at the bottom so the docked card never covers the last stops. */
+  padding: var(--a-6) var(--a-5) 320px;
+}
+
+.rm-map {
+  position: relative;
+  width: 100%;
+}
+
+.rm-map:focus-visible {
+  outline: 2px solid var(--a-accent);
+  outline-offset: 6px;
+  border-radius: var(--a-radius-lg);
+}
+
+.rm-svg {
+  display: block;
+  overflow: visible;
+}
+
+/* Track: covered track takes the leg's colour at full strength, track ahead is a
+   faint neutral. Distance left is meant to be visible. */
+.rm-track {
+  fill: none;
+  stroke: var(--a-line);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.rm-track.is-covered {
+  stroke: var(--leg);
+  stroke-width: 3;
+  opacity: 0.85;
+}
+
+/* Prerequisite arcs: context, not the route. Faint until one end is selected. */
+.rm-arc {
+  fill: none;
+  stroke: var(--a-accent);
+  stroke-width: 1.5;
+  opacity: 0.75;
+  animation: rm-arc-in var(--a-slow) var(--a-ease);
+}
+
+@keyframes rm-arc-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ── Stations ─────────────────────────────────────────────────────────────── */
+
+.rm-stop {
+  cursor: pointer;
+}
+
+.rm-stop__mark {
+  fill: var(--a-canvas);
+  stroke: var(--a-line-strong);
+  stroke-width: 2.5;
+  transition: fill var(--a-fast) var(--a-ease), stroke var(--a-fast) var(--a-ease);
+}
+
+.rm-stop:hover .rm-stop__mark {
+  stroke: var(--leg);
+}
+
+/* Proved: solid, ticked. */
+.rm-stop.is-verified .rm-stop__mark {
+  fill: var(--leg);
+  stroke: var(--leg);
+}
+
+/* Self-marked: filled, but hollow-cored and dashed. You said it's done; the map
+   records that without claiming it knows. This is the distinction the whole
+   product is built around, so it gets a real visual difference rather than a
+   shade. */
+.rm-stop.is-claimed .rm-stop__mark {
+  fill: var(--leg);
+  fill-opacity: 0.32;
+  stroke: var(--leg);
+  stroke-dasharray: 3 2.5;
+}
+
+.rm-stop__core {
+  fill: var(--a-canvas);
+}
+
+/* Due for a spaced recheck — going stale, not undone. */
+.rm-stop.is-due .rm-stop__mark {
+  fill: var(--leg);
+  fill-opacity: 0.32;
+  stroke: var(--leg);
+}
+
+.rm-stop__due {
+  fill: none;
+  stroke: var(--a-attention);
+  stroke-width: 2;
+}
+
+.rm-stop.is-dropped .rm-stop__mark {
+  stroke-dasharray: 2 3;
+  opacity: 0.5;
+}
+
+/* Has resources gathered — a small mark, because it changes whether the stop is
+   ready to start. */
+.rm-stop__res {
+  fill: var(--a-link);
+}
+
+/* Lens dimming keeps the route intact instead of removing stops from it: a map
+   with holes in the line is no longer a map of the journey. */
+.rm-stop.is-dim {
+  opacity: 0.22;
+}
+
+.rm-label.is-dim {
+  opacity: 0.28;
+}
+
+.rm-stop__tick {
+  stroke: var(--a-canvas);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.rm-stop.is-selected .rm-stop__mark {
+  stroke: var(--a-ink);
+  stroke-width: 3;
+}
+
+/* "You are here" — the one animated thing on the map, because it's the one thing
+   you look for first.
+
+   The ring is drawn statically and the pulse is a separate element on top. The
+   obvious version (animate the ring itself from opacity .7 to 0) disappears
+   completely under prefers-reduced-motion, because the global guard collapses
+   the duration to 0.01ms and leaves it parked on the final keyframe — i.e. the
+   most important marker on the screen becomes invisible for exactly the users
+   who opted out of motion. */
+.rm-stop__ring {
+  fill: none;
+  stroke: var(--a-accent);
+  stroke-width: 2;
+}
+
+.rm-stop__halo {
+  fill: none;
+  stroke: var(--a-accent);
+  stroke-width: 2;
+  opacity: 0;
+  /* Animate the radius, not a CSS transform. `transform: scale()` on an SVG child
+     resolves its origin against the user-space coordinate system rather than the
+     circle's own centre, so the halo detached from its station and drifted across
+     the map. Geometry properties have no such ambiguity. */
+  animation: rm-pulse 2.4s ease-out infinite;
+}
+
+@keyframes rm-pulse {
+  0% {
+    r: 11px;
+    opacity: 0.6;
+  }
+  70%,
+  100% {
+    r: 21px;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rm-stop__halo {
+    display: none;
+  }
+}
+
+.rm-stop__idx {
+  fill: var(--a-ink-3);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+/* ── Labels & leg names (real DOM over the SVG) ───────────────────────────── */
+
+.rm-label {
+  position: absolute;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  transform: translateX(-50%);
+  border: 0;
+  border-radius: var(--a-radius);
+  background: none;
+  padding: 2px var(--a-1);
+  color: var(--a-ink-2);
+  font-size: var(--a-t-micro);
+  line-height: 1.35;
+  text-align: center;
+  cursor: pointer;
+  transition: color var(--a-fast) var(--a-ease);
+}
+
+.rm-label:hover {
+  color: var(--a-ink);
+}
+
+.rm-label.is-selected {
+  background: var(--a-accent-soft);
+  color: var(--a-ink);
+  font-weight: var(--a-w-medium);
+}
+
+.rm-legname {
+  position: absolute;
+  transform: translateX(-50%);
+  border: 1px solid var(--a-line);
+  border-left: 3px solid var(--leg);
+  border-radius: var(--a-radius);
+  background: var(--a-panel);
+  padding: 3px var(--a-2);
+  max-width: 230px;
+  color: var(--a-ink);
+  font-size: var(--a-t-small);
+  font-weight: var(--a-w-semi);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+/* ── Collapsed leg: a stack, so it reads as "several stops in here" ───────── */
+
+.rm-bundle {
+  cursor: pointer;
+}
+
+.rm-bundle__back,
+.rm-bundle__mid {
+  fill: var(--a-canvas);
+  stroke: var(--a-line);
+  stroke-width: 1.5;
+}
+
+.rm-bundle__front {
+  fill: var(--a-panel-2);
+  stroke: var(--leg);
+  stroke-width: 2;
+  transition: fill var(--a-fast) var(--a-ease);
+}
+
+.rm-bundle:hover .rm-bundle__front {
+  fill: var(--leg);
+  fill-opacity: 0.25;
+}
+
+.rm-bundle.is-complete .rm-bundle__front {
+  fill: var(--leg);
+  fill-opacity: 0.4;
+}
+
+.rm-bundle__count {
+  fill: var(--a-ink);
+  font-size: 10px;
+  font-weight: var(--a-w-semi);
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+/* Phase 24's soft signal: a career-scale module with no project step in it. */
+.rm-bundle__flag {
+  fill: var(--a-attention);
+}
+
+/* A module that has no steps yet: the same stack, drawn as an outline. It stays on the route
+   rather than being omitted — the road ahead exists whether or not it's been surveyed. */
+.rm-bundle.is-unbuilt .rm-bundle__back,
+.rm-bundle.is-unbuilt .rm-bundle__mid,
+.rm-bundle.is-unbuilt .rm-bundle__front {
+  fill: none;
+  stroke-dasharray: 3 3;
+}
+
+.rm-bundle.is-unbuilt:hover .rm-bundle__front {
+  fill: var(--leg);
+  fill-opacity: 0.15;
+}
+
+.rm-bundle.is-unbuilt .rm-bundle__count {
+  fill: var(--a-ink-faint);
+}
+
+.rm-label--leg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  -webkit-line-clamp: none;
+  line-clamp: none;
+}
+
+.rm-label__legname {
+  color: var(--a-ink);
+  font-size: var(--a-t-small);
+  font-weight: var(--a-w-semi);
+  line-height: 1.3;
+}
+
+.rm-label__unproven {
+  color: var(--a-attention);
+  font-size: var(--a-t-micro);
+}
+
+.rm-label__due {
+  color: var(--a-attention);
+  font-size: var(--a-t-micro);
+}
+
+.rm-label__unbuilt {
+  color: var(--a-ink-faint);
+  font-size: var(--a-t-micro);
+}
+
+.rm-label--leg.is-unbuilt .rm-label__legname {
+  color: var(--a-ink-dim);
+}
+
+/* ── Docked stop card ─────────────────────────────────────────────────────── */
+
+.rm-card {
+  position: absolute;
+  z-index: 10;
+  right: var(--a-5);
+  bottom: var(--a-5);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--a-line-strong);
+  border-radius: var(--a-radius-lg);
+  background: var(--a-panel);
+  box-shadow: var(--a-shadow-pop);
+  width: min(440px, calc(100vw - var(--a-8)));
+  max-height: min(70vh, 640px);
+  animation: rm-dock var(--a-slow) var(--a-ease);
+}
+
+@keyframes rm-dock {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+.rm-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--a-4) var(--a-4) 0;
+}
+
+.rm-card__x {
+  min-height: 24px;
+  padding: 0 var(--a-2);
+}
+
+.rm-card__title {
+  margin: var(--a-2) var(--a-4) 0;
+  font-size: var(--a-t-lg);
+  font-weight: var(--a-w-semi);
+  line-height: 1.35;
+}
+
+.rm-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--a-1);
+  padding: var(--a-3) var(--a-4) 0;
+}
+
+.rm-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--a-5);
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--a-5) var(--a-4);
+}
+
+.rm-card__why {
+  margin: 0;
+  border-left: 2px solid var(--a-line);
+  padding-left: var(--a-3);
+  color: var(--a-ink-2);
+  font-size: var(--a-t-body);
+  line-height: 1.5;
+}
+
+.rm-card__covers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--a-1);
+  margin: var(--a-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rm-card__res {
+  margin: var(--a-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rm-card__res a {
+  display: block;
+  border-radius: var(--a-radius);
+  padding: var(--a-2);
+  color: var(--a-link);
+  font-size: var(--a-t-body);
+  text-decoration: none;
+}
+
+.rm-card__res a:hover {
+  background: var(--a-panel-2);
+  text-decoration: underline;
+}
+
+.rm-card__resfmt {
+  margin: 0 0 var(--a-2) var(--a-2);
+}
+
+.rm-card__empty {
+  margin: var(--a-2) 0 0;
+  color: var(--a-ink-faint);
+  font-size: var(--a-t-small);
+  line-height: 1.5;
+}
+
+/* An inline action inside a sentence, not a button competing with the card's real actions. */
+.rm-card__link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--a-link);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.rm-card__link:disabled {
+  color: var(--a-ink-faint);
+  cursor: default;
+}
+
+/* Says what happened, then gets out of the way — a result worth reading once, not a status
+   that needs dismissing. */
+.rm-card__notice {
+  margin: var(--a-2) 0 0;
+  color: var(--a-ink-2);
+  font-size: var(--a-t-small);
+  animation: rm-notice 6s var(--a-ease) forwards;
+}
+
+@keyframes rm-notice {
+  0%, 80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The global guard collapses animation duration to near-zero, which here would park the
+     notice on its final keyframe — invisible before it could be read. No fade instead; it
+     stays until the next action clears it. */
+  .rm-card__notice {
+    animation: none;
+  }
+}
+
+.rm-card__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--a-2);
+  flex: none;
+  border-top: 1px solid var(--a-line);
+  padding: var(--a-3) var(--a-4);
+}
+
+.rm-card__spacer {
+  flex: 1;
+}
+
+.rm-card__err {
+  color: var(--a-risk);
+  font-size: var(--a-t-small);
+}
+
+/* ── Check ────────────────────────────────────────────────────────────────── */
+
+.rm-check__q {
+  margin: var(--a-2) 0 var(--a-4);
+  font-size: var(--a-t-base);
+  font-weight: var(--a-w-medium);
+  line-height: 1.45;
+}
+
+.rm-check__opts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--a-2);
+}
+
+.rm-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--a-3);
+  border: 1px solid var(--a-line);
+  border-radius: var(--a-radius);
+  background: var(--a-canvas);
+  padding: var(--a-3);
+  color: var(--a-ink);
+  font-size: var(--a-t-body);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--a-fast) var(--a-ease);
+}
+
+.rm-opt:hover:not(:disabled) {
+  border-color: var(--a-accent-line);
+}
+
+.rm-opt.is-picked {
+  border-color: var(--a-accent);
+  background: var(--a-accent-soft);
+}
+
+.rm-opt__key {
+  flex: none;
+  border: 1px solid var(--a-line-strong);
+  border-radius: 4px;
+  width: 19px;
+  height: 19px;
+  font-family: var(--a-mono);
+  font-size: 10px;
+  line-height: 17px;
+  text-align: center;
+}
+
+.rm-opt.is-picked .rm-opt__key {
+  border-color: var(--a-accent);
+  background: var(--a-accent);
+  color: var(--a-accent-ink);
+}
+
+.rm-check__answer {
+  width: 100%;
+  border: 1px solid var(--a-line-strong);
+  border-radius: var(--a-radius);
+  background: var(--a-canvas);
+  padding: var(--a-3);
+  font-family: var(--a-mono);
+  font-size: var(--a-t-body);
+  resize: vertical;
+}
+
+.rm-verdict {
+  margin-top: var(--a-4);
+  border-left: 2px solid var(--a-line);
+  padding-left: var(--a-3);
+  font-size: var(--a-t-body);
+}
+
+.rm-verdict.is-pass {
+  border-color: var(--a-done);
+}
+
+.rm-verdict.is-fail {
+  border-color: var(--a-attention);
+}
+
+.rm-verdict p {
+  margin: 0;
+}
+
+.rm-verdict__prereq {
+  margin-top: var(--a-2) !important;
+  color: var(--a-ink-2);
+  font-size: var(--a-t-small);
+}
+
+.rm-check__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--a-2);
+  margin-top: var(--a-4);
+}
+
+/* ── Narrow ───────────────────────────────────────────────────────────────── */
+
+@media (max-width: 700px) {
+  .rm-bar {
+    flex-wrap: wrap;
+  }
+
+  .rm-bar__legs {
+    order: 3;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .rm-card {
+    right: 0;
+    bottom: 0;
+    border-radius: var(--a-radius-lg) var(--a-radius-lg) 0 0;
+    width: 100%;
+    max-height: 78vh;
+  }
+
+  .rm-scroll {
+    padding-bottom: 60vh;
+  }
+}

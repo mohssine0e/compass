@@ -34,6 +34,16 @@ public class ApiExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
+    /**
+     * A request that doesn't fit the current state — already broken down as far as it goes,
+     * nothing pending to re-check. Distinct from the 503 below: retrying won't change the
+     * answer, so the frontend should say what's true rather than offer to try again.
+     */
+    @ExceptionHandler(ConflictException.class)
+    public ProblemDetail handleConflict(ConflictException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
     /** AI-backed features that can't run right now (no provider configured, or all failed). */
     @ExceptionHandler(IllegalStateException.class)
     public ProblemDetail handleUnavailable(IllegalStateException ex) {

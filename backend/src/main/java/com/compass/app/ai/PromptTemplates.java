@@ -268,6 +268,97 @@ final class PromptTemplates {
   }
 
   /**
+   * System prompt for the Roadmap Brain tier classifier (RB-1) — a standalone, isolated
+   * function not yet wired into any real generation path. Its whole job is to sort a goal into
+   * TASK / MINI / TOPIC / CAREER before anything else happens. This output is never shown to
+   * the founder directly at this stage, so plain and analytical, same discipline as
+   * {@link #ASSESS_SYSTEM}. Ambiguity in these tier definitions — not raw model capability — is
+   * the most likely cause of unreliable classification, so the definitions below are written to
+   * be as concrete as possible, with worked examples at every boundary.
+   */
+  static final String TIER_CLASSIFY_SYSTEM = """
+      Classify a goal into exactly one of four tiers: TASK, MINI, TOPIC, or CAREER. This output
+      is never shown to the person directly — it's an internal routing signal, so be plain,
+      analytical, and honest rather than hedged or generous.
+
+      The four tiers, in order of scale, with what separates each one from its neighbor:
+
+      TASK — a single action item with no learning curve. It is something to DO, not something
+      to GET BETTER AT. Reading one chapter, watching one talk, fixing one typo, sending one
+      email. There is no skill being built here, no depth to reach — just an item to check off.
+      Examples: "Read chapter 3 of the book on my desk this week", "Reply to the email from my
+      advisor", "Watch that conference talk I bookmarked", "Fix the typo in my resume".
+
+      MINI — a bounded, single project with a clear finish line. Building it requires applying
+      skills (possibly picking up a few small new ones along the way), but the goal is the
+      finished artifact, not open-ended mastery of a subject. You'd know when it's done — it
+      either exists and works, or it doesn't. What separates MINI from TASK: a MINI has real
+      internal structure (multiple steps, some sequencing, actual building) even though the
+      overall scope is still small. What separates MINI from TOPIC: a MINI is scoped to "build
+      this one thing," not "get good at this skill area" — the skill is a means, the project is
+      the end. Examples: "Build a personal budget tracker app", "Make a Discord bot that reminds
+      me to drink water", "Build a portfolio website for myself", "Write a script that backs up
+      my photos automatically".
+
+      TOPIC — open-ended skill or knowledge acquisition in one subject area, with no single
+      finish line and no implied job/career outcome. The goal is understanding or capability
+      itself, at whatever depth the person wants to take it — "learn X" or "get good at Y" for
+      its own sake, a hobby, curiosity, or a general capability upgrade. What separates TOPIC
+      from MINI: there's no single artifact that marks "done" — depth is genuinely open-ended
+      and could keep growing. What separates TOPIC from CAREER: nothing here implies becoming
+      employable in a new role or switching what the person does for a living — it's learning
+      IN a domain, not transitioning INTO one professionally. Examples: "Learn Docker", "Get
+      good at SQL", "Learn conversational Spanish", "Understand how neural networks actually
+      work".
+
+      CAREER — the goal is explicitly about an identity or role change: becoming employable in a
+      new role, or switching what the person does for work. This is the largest tier — it
+      typically spans months, not weeks, and implies a recognizable arc (foundations, core
+      tooling, specialization, portfolio/proof of work), not just conceptual mastery of one
+      topic. What separates CAREER from TOPIC: the goal is stated in terms of the career/role
+      outcome itself ("become a...", "transition into...", "break into..."), not merely a topic
+      that happens to be useful professionally. A goal about a topic that's often used
+      professionally (e.g. "learn Kubernetes") stays TOPIC unless the person frames it as part of
+      becoming something ("become a DevOps engineer" is CAREER; "learn Kubernetes" alone is
+      TOPIC). Examples: "Become a DevOps engineer", "Transition from frontend to backend
+      engineering as a career", "Become a data scientist starting from zero", "Pivot into
+      cybersecurity as my next career".
+
+      Ambiguous goals are expected and normal — when a goal genuinely sits on a boundary (e.g. it
+      could be read as TOPIC or as CAREER depending on unstated context), pick the more likely
+      reading, give it a lower confidence score, and say in your reasoning exactly what the
+      ambiguity is and which reading you chose. Do not force artificial certainty.
+
+      Some goals are not a clean fit for any tier at all — garbage/unparseable input, a goal with
+      no real object ("get better" — better at what?), or something that isn't a learning/growth
+      goal in the first place (e.g. "plan my wedding"). For these, still return your best-guess
+      tier (never leave it blank), but give it genuinely low confidence and say plainly in the
+      reasoning that this doesn't fit cleanly and why — a confident wrong answer here is worse
+      than an honest low-confidence one. The same applies to unrealistic urgency framing (e.g.
+      "master AI today") — the actual scope of the content still drives the tier, an unrealistic
+      deadline does not shrink a TOPIC/CAREER-scale goal down to TASK.
+
+      Hard rules:
+      - tier is exactly one of "TASK", "MINI", "TOPIC", "CAREER" — always pick one, never leave
+        it null or invent a fifth value.
+      - confidence is a number from 0.0 to 1.0 — reserve anything above 0.8 for genuinely
+        clear-cut cases; ambiguous or poor-fit goals should score meaningfully lower, not a
+        token deduction.
+      - reasoning is 1-3 plain sentences stating what specifically about the goal's wording
+        drove the tier choice — not a restatement of the tier's definition.
+      - Output ONLY strict JSON, no prose around it:
+        {"tier": "TOPIC", "confidence": 0.9, "reasoning": "..."}
+      """;
+
+  static String tierClassifyUser(String goal, String profileContext) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Goal: ").append(goal == null ? "" : goal.trim()).append('\n');
+    appendProfile(sb, profileContext);
+    sb.append("Write the tier classification as JSON.");
+    return sb.toString();
+  }
+
+  /**
    * System prompt for a FLAT roadmap (Phase 18) — used when the assessment judges the goal small
    * enough that a single ordered checklist covers it honestly, no named modules needed. Same step
    * shape as {@link #EXPAND_MODULE_SYSTEM}, but for the whole goal in one pass.
@@ -364,13 +455,13 @@ final class PromptTemplates {
       authoritative sources actually structure this material over your own memory. Don't invent
       sources.
 
-      If the assessed archetype (given below) is "career_path", bias the outline toward a
-      recognizable arc: foundational concepts and prerequisites first, core tools/technologies
-      next, deeper specialization after that, and a portfolio/capstone project area last. This is
-      guidance, not a rigid template — real goals don't always split cleanly into exactly four
-      named phases, so don't force awkward or padded modules just to hit that shape. For any
-      archetype other than "career_path", ignore this and size the outline purely on its own
-      merits as usual.
+      If the assessed archetype (given below) is "career_path", OR the tier (given below) is
+      "CAREER", bias the outline toward a recognizable arc: foundational concepts and
+      prerequisites first, core tools/technologies next, deeper specialization after that, and a
+      portfolio/capstone project area last (RB-4.3). This is guidance, not a rigid template — real
+      goals don't always split cleanly into exactly four named phases, so don't force awkward or
+      padded modules just to hit that shape. Otherwise, ignore this and size the outline purely on
+      its own merits as usual.
 
       If the goal could reasonably mean more than one thing (different domains, scopes, or
       end points — e.g. "learn Rust" could mean systems programming, web backends, embedded, or
@@ -394,7 +485,8 @@ final class PromptTemplates {
       - Size the number of modules to the assessed scope given below — don't apply a fixed count
         regardless of scale. A genuinely small goal should get as few modules as it honestly
         needs; a large one should get enough to actually cover it. Never more than 10 modules in
-        one call (a parsing/UX safety rail, not the primary sizing mechanism).
+        one call (15 if the tier given below is "CAREER" — a career-scale arc genuinely needs
+        more room) — a parsing/UX safety rail, not the primary sizing mechanism.
       - Fit the scope to their stated time and starting point. Don't pad.
       - Give the whole roadmap a short, plain title (a few words) naming what they'll be able to do.
       - If a "Teaching voice" is given below, write module titles/scopes in that voice — framing
@@ -405,6 +497,13 @@ final class PromptTemplates {
 
   static String outlineUser(String goal, String clarifications, String profileContext,
       String groundingContext, String assessmentContext, String domain) {
+    return outlineUser(goal, clarifications, profileContext, groundingContext, assessmentContext,
+        domain, null);
+  }
+
+  /** As above, plus {@code tier} (RB-4.1/4.2/4.3) — TASK/MINI/TOPIC/CAREER, or null if unclassified. */
+  static String outlineUser(String goal, String clarifications, String profileContext,
+      String groundingContext, String assessmentContext, String domain, String tier) {
     StringBuilder sb = new StringBuilder();
     sb.append("Goal: ").append(goal == null ? "" : goal.trim()).append('\n');
     if (clarifications != null && !clarifications.isBlank()) {
@@ -415,6 +514,9 @@ final class PromptTemplates {
     appendProfile(sb, profileContext);
     if (assessmentContext != null && !assessmentContext.isBlank()) {
       sb.append("Assessed scope: ").append(assessmentContext.trim()).append('\n');
+    }
+    if (tier != null && !tier.isBlank()) {
+      sb.append("Tier: ").append(tier).append('\n');
     }
     appendPersonaVoice(sb, domain);
     if (groundingContext != null && !groundingContext.isBlank()) {
@@ -569,16 +671,18 @@ final class PromptTemplates {
    * resurfaced stalled roadmap, chooses to restructure rather than just answer a question.
    */
   static final String BREAKDOWN_SYSTEM = """
-      One step of the user's roadmap has stalled. Break just that step into 2–4 smaller,
-      concrete sub-steps that make the first move obvious. These replace the stalled step.
+      Break one roadmap step into 2–4 smaller, concrete sub-steps that make the first move
+      obvious. These replace the original step (RB-4.8: available on any step, not only a
+      stalled one — the founder may just want it broken down further).
 
       If a profile of what they already know is given, skip or condense what they already have,
       and don't re-teach it. If real search results are given, prefer how authoritative sources
       order this material.
 
       Each step is an object with these fields:
-      - text: one concrete, checkable action — smaller than the original step. Plain, direct,
-        imperative. No numbering, no "Step 1:", no encouragement, no emoji.
+      - text: one concrete, checkable action — smaller than the original step, and sized to be
+        completable in a single sitting (roughly 1-4 hours, not a multi-day undertaking). Plain,
+        direct, imperative. No numbering, no "Step 1:", no encouragement, no emoji.
       - kind: "concept" for learning something, or "project" for building/applying it.
       - weight: an honest relative size — "small", "medium", or "large".
       - dependsOnIndex: the 0-based index of the ONE earlier sub-step here that is a genuine
@@ -717,6 +821,10 @@ final class PromptTemplates {
       Draft ONE new module to insert into an existing roadmap, given its other modules as
       context — it must add real, distinct coverage the existing modules don't already have.
 
+      If a specific focus is given, the module must be about THAT subtopic specifically — not a
+      free choice of whatever gap seems biggest. Without a focus, pick whatever real gap the
+      existing modules don't already cover.
+
       Hard rules:
       - title: a few plain words naming the area. No numbering, no "Module N", no emoji.
       - scope: one plain line saying what falls under it — the user's own clear-headed inner voice.
@@ -727,6 +835,15 @@ final class PromptTemplates {
 
   static String insertModuleUser(String roadmapTitle, String existingModulesContext,
       String assessmentContext) {
+    return insertModuleUser(roadmapTitle, existingModulesContext, assessmentContext, null);
+  }
+
+  /**
+   * As above, plus {@code focusHint} (RB-3.8) — the specific subtopic goal text a confirmed
+   * Canonical Topic Match asked for, so the drafted module is about that, not a free choice.
+   */
+  static String insertModuleUser(String roadmapTitle, String existingModulesContext,
+      String assessmentContext, String focusHint) {
     StringBuilder sb = new StringBuilder();
     sb.append("Roadmap: ").append(roadmapTitle == null ? "" : roadmapTitle.trim()).append('\n');
     if (existingModulesContext != null && !existingModulesContext.isBlank()) {
@@ -736,7 +853,75 @@ final class PromptTemplates {
     if (assessmentContext != null && !assessmentContext.isBlank()) {
       sb.append("Assessed scope: ").append(assessmentContext.trim()).append('\n');
     }
+    if (focusHint != null && !focusHint.isBlank()) {
+      sb.append("Specific focus this module must cover: ").append(focusHint.trim()).append('\n');
+    }
     sb.append("Write the new module as JSON.");
+    return sb.toString();
+  }
+
+  /**
+   * System prompt for the MINI → TOPIC re-tier path (RB-2.5): the founder decided a flat step
+   * list actually deserves named modules. Group the EXISTING steps (given by id) into modules —
+   * this reorganizes what's already there, it does not invent new steps or drop any. Fast tier,
+   * since this is a structural grouping call, not fresh content generation.
+   */
+  static final String REGROUP_STEPS_SYSTEM = """
+      A roadmap that was flat (one ordered step list) is being converted to a modules-based
+      structure. Group the given existing steps into a small number of named modules — this
+      REORGANIZES steps that already exist, it does not invent new step content.
+
+      Hard rules:
+      - Every step id given must appear in exactly one group's "stepIds" — don't drop any, don't
+        duplicate any, don't invent new ids.
+      - Group by real conceptual similarity, in a sensible learning order — not just evenly split.
+      - A module's title is a few plain words; scope is one plain line.
+      - 2-6 groups depending on how the steps naturally cluster — don't force a fixed count.
+      - Output ONLY strict JSON, no prose around it:
+        {"groups": [{"title": "...", "scope": "...", "stepIds": [1, 2, 3]}, ...]}
+      """;
+
+  static String regroupStepsUser(String roadmapTitle, List<String> stepIdsAndTexts) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Roadmap: ").append(roadmapTitle == null ? "" : roadmapTitle.trim()).append('\n');
+    sb.append("Existing steps (id: text):\n");
+    for (String line : stepIdsAndTexts) {
+      sb.append(line).append('\n');
+    }
+    sb.append("Write the grouping as JSON.");
+    return sb.toString();
+  }
+
+  /**
+   * System prompt for the TOPIC → CAREER re-tier path (RB-2.5): propose reordering the existing
+   * modules into a Foundations → Core Tooling → Specialization → Portfolio arc. Guidance, not an
+   * enforced schema (see RB-4.3) — this only proposes an ORDER for modules that already exist,
+   * it does not create a separate stored "phase" entity or rename/restructure anything. Heavy
+   * tier, since ordering a whole roadmap's arc benefits from deeper reasoning than a quick call.
+   */
+  static final String CAREER_ARC_SYSTEM = """
+      A roadmap that was a topic deep-dive is being converted to a career-path roadmap. Propose
+      an ORDER for the existing modules (given by id) that reflects a Foundations → Core Tooling →
+      Specialization → Portfolio/Capstone arc — this only reorders what already exists, it does
+      not rename modules, invent new ones, or drop any.
+
+      Hard rules:
+      - Every module id given must appear exactly once, in the proposed order.
+      - "phaseLabel" per module is which rough arc stage it now falls under (one of "Foundations",
+        "Core Tooling", "Specialization", "Portfolio") — informational only, not a new field to be
+        stored structurally.
+      - Output ONLY strict JSON, no prose around it:
+        {"order": [{"moduleId": 1, "phaseLabel": "Foundations"}, ...]}
+      """;
+
+  static String careerArcUser(String roadmapTitle, List<String> moduleIdsAndTitles) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Roadmap: ").append(roadmapTitle == null ? "" : roadmapTitle.trim()).append('\n');
+    sb.append("Existing modules (id: title — scope):\n");
+    for (String line : moduleIdsAndTitles) {
+      sb.append(line).append('\n');
+    }
+    sb.append("Write the proposed arc order as JSON.");
     return sb.toString();
   }
 
@@ -1190,6 +1375,33 @@ final class PromptTemplates {
     return sb.toString();
   }
 
+  /**
+   * System prompt for a CAREER roadmap's one-time completion reflection (RB-4.7) — same
+   * self-talk-voice discipline as {@link #REVIEW_SYSTEM} (a stock-taking, not a status report),
+   * triggered once when every step is done instead of on a recurring schedule. Per CLAUDE.md
+   * Section 2, this is reflection-facing (self-talk), never the domain-expert generation voice
+   * used for step/module content.
+   */
+  static final String CAREER_COMPLETION_SYSTEM = """
+      The person just finished every step of a career-scale roadmap. Say something honest about
+      it in their OWN clear-headed inner voice — the way a level-headed version of them would take
+      stock of finishing something real, not a congratulatory message from an assistant.
+
+      Hard rules:
+      - 1-3 short, plain sentences. Name the actual thing finished, not a generic "you did it."
+      - NEVER praise, hype, or cheerlead ("amazing work", "you should be proud", exclamation
+        points). Honest and plain, not celebratory.
+      - It's fair to note what's next in an honest, non-pushy way (e.g. "the roadmap's done —
+        whether that's enough on its own or the next step is putting it to use is worth a real
+        answer, not a reflex yes") — never a hard sell into "what's next."
+      - Output ONLY strict JSON, no prose around it: {"reflection": "..."}
+      """;
+
+  static String careerCompletionUser(String roadmapTitle) {
+    return "Roadmap just completed: " + (roadmapTitle == null ? "" : roadmapTitle.trim())
+        + "\nWrite the one-time completion reflection as JSON.";
+  }
+
   // --- Captures & organization: auto-cluster into themes (Phase 14) ----------------------
 
   static final String CLUSTER_SYSTEM = """
@@ -1216,6 +1428,160 @@ final class PromptTemplates {
       sb.append(i).append(". ").append(ideaTexts.get(i)).append('\n');
     }
     sb.append("Group them into themes as JSON.");
+    return sb.toString();
+  }
+
+  // --- Unified Intake (RB-5) ---------------------------------------------------------------
+
+  /**
+   * System prompt for the unified intake's intent classifier (RB-5.1) — the very first thing
+   * any input goes through now that Capture and Draft-with-AI are one input. Never shown to the
+   * founder directly, so plain and analytical, same discipline as {@link #ASSESS_SYSTEM}. Ten
+   * intents, concrete definitions with examples at every boundary — ambiguity in the
+   * definitions, not raw model capability, is the likely failure mode (same lesson as RB-1's
+   * tier classifier).
+   */
+  static final String INTENT_CLASSIFY_SYSTEM = """
+      Classify what the person actually wants from this one piece of input into exactly one of
+      ten intents. This is never shown to them directly — an internal routing signal, so be
+      plain, analytical, and honest rather than hedged.
+
+      The ten intents:
+      - IDEA: a fleeting thought worth holding onto, not asking the system to do anything with it
+        right now. "Build a CLI tool for tracking habits", "we should redesign the onboarding".
+      - LEARN: open-ended skill/knowledge acquisition, a hobby or capability upgrade, no career
+        framing. "Learn Docker", "get good at SQL".
+      - DO: a single action item, no learning curve — something to check off, not get better at.
+        "Reply to the email from my advisor", "fix the typo in my resume".
+      - PLAN_A_JOURNEY: a bounded project OR an explicit career/identity change goal — anything
+        that needs a real multi-step roadmap beyond open-ended topic learning. "Build a portfolio
+        website", "become a DevOps engineer".
+      - PRACTICE: wants to actively rehearse/apply something they already have some grounding in,
+        right now — not learn it fresh. "Let me practice some SQL queries."
+      - REVIEW: wants a check-in on how something already learned/done is holding up. "Quiz me on
+        what I covered in the Docker module", "how sharp am I still on closures?"
+      - PREPARE: getting ready for a specific known event/deadline (exam, interview, presentation)
+        — similar shape to PLAN_A_JOURNEY but explicitly framed around preparing for a fixed
+        target. "Get ready for my AWS certification exam next month."
+      - EXPLORE: open-ended browsing/discovery with no specific goal yet — wants to see what's out
+        there, not commit to a plan. "What should I learn next in backend development?"
+      - TROUBLESHOOT: a specific problem or confusion right now, wants it explained/resolved, not
+        a learning plan. "Why does my Rust borrow checker error happen here?"
+      - ASSESS: wants to know their own current level/standing in something, not to learn or plan.
+        "How good is my Python actually?"
+
+      What distinguishes the close pairs:
+      - LEARN vs. PLAN_A_JOURNEY: LEARN is open-ended ("learn X"), no artifact/career outcome;
+        PLAN_A_JOURNEY has a concrete finish line (a built thing) or an identity/career change.
+      - PRACTICE vs. REVIEW: PRACTICE is forward-looking rehearsal of a skill; REVIEW is
+        specifically checking retention of something already covered.
+      - EXPLORE vs. LEARN: EXPLORE has no specific topic committed to yet; LEARN already names one.
+      - TROUBLESHOOT vs. DO: TROUBLESHOOT is a confusion/problem to resolve by understanding it;
+        DO is a plain action item with nothing to figure out.
+
+      Hard rules:
+      - intent is exactly one of: IDEA, LEARN, DO, PLAN_A_JOURNEY, PRACTICE, REVIEW, PREPARE,
+        EXPLORE, TROUBLESHOOT, ASSESS. Always pick one, never invent another value.
+      - confidence is 0.0-1.0 — reserve above 0.8 for genuinely clear-cut cases.
+      - reasoning is 1-2 plain sentences on what specifically drove the call.
+      - Output ONLY strict JSON, no prose around it:
+        {"intent": "LEARN", "confidence": 0.9, "reasoning": "..."}
+      """;
+
+  static String intentClassifyUser(String input, String profileContext) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Input: ").append(input == null ? "" : input.trim()).append('\n');
+    appendProfile(sb, profileContext);
+    sb.append("Write the intent classification as JSON.");
+    return sb.toString();
+  }
+
+  // --- Canonical Topic Matching (RB-3) ----------------------------------------------------
+
+  /**
+   * System prompt for the ambiguous-similarity match call (RB-3.4) — only reached when a raw
+   * embedding cosine similarity landed in the middle band (neither clearly a match nor clearly
+   * not); a single best-candidate topic is judged against the new goal. Never shown to the
+   * founder directly, so plain and analytical, same discipline as {@link #ASSESS_SYSTEM}.
+   */
+  static final String TOPIC_MATCH_SYSTEM = """
+      Judge whether a new goal genuinely matches an existing topic the person already has a
+      roadmap for. This output is never shown to the person directly — an internal routing
+      signal, so be plain, analytical, and honest rather than generous.
+
+      matchType is exactly one of:
+      - "exact": the new goal is genuinely the same topic as the candidate — same core subject,
+        same rough scope (e.g. "learn Docker" and "get better at Docker").
+      - "subtopic": the new goal is a narrower slice already implied within the candidate's scope
+        (e.g. candidate "Learn Docker", new goal "Docker networking specifically").
+      - "prerequisite": the new goal is something that would normally come BEFORE the candidate,
+        not part of it (e.g. candidate "Learn Kubernetes", new goal "Learn Docker first").
+      - "new": genuinely a different topic, despite the surface similarity that got it compared
+        here at all (e.g. candidate "Learn Spanish", new goal "Learn Portuguese").
+
+      Hard rules:
+      - Be honest and specific — a superficial wording overlap is not enough for "exact" or
+        "subtopic"; a real, substantive difference in subject means "new".
+      - confidence is 0.0-1.0, reflecting how sure you are in the matchType chosen.
+      - reasoning is 1-2 plain sentences naming what specifically drove the call.
+      - Output ONLY strict JSON, no prose around it:
+        {"matchType": "exact", "confidence": 0.8, "reasoning": "..."}
+      """;
+
+  static String topicMatchUser(String goal, String candidateName, List<String> aliases,
+      List<String> subtopics) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("New goal: ").append(goal == null ? "" : goal.trim()).append('\n');
+    sb.append("Candidate existing topic: ").append(candidateName == null ? "" : candidateName).append('\n');
+    if (aliases != null && !aliases.isEmpty()) {
+      sb.append("Known aliases: ").append(String.join(", ", aliases)).append('\n');
+    }
+    if (subtopics != null && !subtopics.isEmpty()) {
+      sb.append("Known subtopics already covered: ").append(String.join(", ", subtopics)).append('\n');
+    }
+    sb.append("Write the match judgment as JSON.");
+    return sb.toString();
+  }
+
+  /**
+   * System prompt for topic evolution (RB-3.10) — the founder suggests a specific addition to
+   * an existing Canonical Topic (a subtopic, prerequisite, or alias it should now know about).
+   * Judge duplicates/relevance/fit before proposing the actual edit; never shown to the founder
+   * directly at this stage, so plain and analytical.
+   */
+  static final String TOPIC_ADDITION_SYSTEM = """
+      The founder wants to add something to an existing canonical topic's known shape — a new
+      subtopic, a prerequisite, or an alias. Judge whether it's a genuine, non-duplicate addition,
+      and propose the specific edit.
+
+      field is exactly one of "subtopics", "prerequisites", "aliases" — whichever the suggestion
+      actually is. value is the specific, cleaned-up text to add (a few plain words, not a
+      restatement of the founder's whole sentence).
+
+      Hard rules:
+      - isDuplicate: true if this is already covered (near-exactly) by an existing entry in that
+        same list — check the existing lists given, not just guess.
+      - isRelevant: true only if this genuinely belongs to this topic, not a different one.
+      - reasoning: 1-2 plain sentences on the call made.
+      - Output ONLY strict JSON, no prose around it:
+        {"field": "subtopics", "value": "...", "isDuplicate": false, "isRelevant": true, "reasoning": "..."}
+      """;
+
+  static String topicAdditionUser(String canonicalName, List<String> aliases,
+      List<String> subtopics, List<String> prerequisites, String suggestion) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Topic: ").append(canonicalName == null ? "" : canonicalName).append('\n');
+    if (aliases != null && !aliases.isEmpty()) {
+      sb.append("Existing aliases: ").append(String.join(", ", aliases)).append('\n');
+    }
+    if (subtopics != null && !subtopics.isEmpty()) {
+      sb.append("Existing subtopics: ").append(String.join(", ", subtopics)).append('\n');
+    }
+    if (prerequisites != null && !prerequisites.isEmpty()) {
+      sb.append("Existing prerequisites: ").append(String.join(", ", prerequisites)).append('\n');
+    }
+    sb.append("Founder's suggested addition: ").append(suggestion == null ? "" : suggestion.trim()).append('\n');
+    sb.append("Write the proposed edit as JSON.");
     return sb.toString();
   }
 }

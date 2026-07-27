@@ -16,6 +16,12 @@ import java.util.List;
  * {@code assessment} (Phase 18, optional) carries the shared goal-scope read computed when this
  * roadmap was drafted, stored on the roadmap so a later module-expand call reads the same numbers
  * instead of re-guessing scope from scratch.
+ *
+ * <p>{@code tier} (RB-2.3, optional) carries the TASK/MINI/TOPIC/CAREER classification computed
+ * during drafting — stored as-is on the roadmap's {@code content} (a new labeled field on the
+ * existing flexible structure, not new schema; CLAUDE.md Section 4). Not surfaced in any UI yet
+ * and doesn't influence generation (that's RB-4) — this phase only makes sure it survives from
+ * classification through to the persisted entry.
  */
 public record CreateRoadmapRequest(
         String title,
@@ -23,7 +29,8 @@ public record CreateRoadmapRequest(
         List<String> steps,
         List<DraftStepInput> draftSteps,
         List<ModuleInput> modules,
-        AssessmentInput assessment
+        AssessmentInput assessment,
+        String tier
 ) {
     /**
      * One accepted step. {@code dependsOn} is the 0-based index (within this list) of the

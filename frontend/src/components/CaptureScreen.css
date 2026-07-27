@@ -53,6 +53,30 @@
   font-style: italic;
 }
 
+/* RB-5.3: the TROUBLESHOOT intent's answer, shown inline right under the input rather than
+   navigating away — same peer-explains-it framing as the step deep-view's Explain feature. */
+.capture-troubleshoot {
+  margin-top: 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--brass);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.capture-troubleshoot-q {
+  margin: 0 0 6px;
+  color: var(--faint);
+  font-size: 0.85rem;
+}
+
+.capture-troubleshoot-a {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.98rem;
+  line-height: 1.5;
+}
+
 .capture-significance-block {
   display: flex;
   flex-direction: column;
@@ -175,4 +199,33 @@
   color: var(--faint);
   border-color: var(--line);
   cursor: default;
+}
+
+/* RB-5.3: the PRACTICE/REVIEW step picker — a plain list, one click opens VerifyModal. */
+.intake-step-picker {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.intake-step-picker-item {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 10px 14px;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+.intake-step-picker-item:hover {
+  border-color: var(--brass-dim);
+  background: var(--surface);
 }

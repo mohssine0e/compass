@@ -24,6 +24,8 @@ public record RoadmapResponse(
         String verify,
         String shape,
         String archetype,
+        String tier,
+        Map<String, Boolean> collapseOverrides,
         Instant createdAt,
         Instant updatedAt,
         List<RoadmapNodeResponse> children,
@@ -145,7 +147,10 @@ public record RoadmapResponse(
         String notes = asString(roadmap, "notes");
         String verify = asString(roadmap, "verify"); // roadmap-wide default: null/light/full
 
+        // ARCHIVED excluded — e.g. a module left behind by re-tiering to MINI (RB-2.5): detached
+        // from view, kept in the database rather than deleted.
         List<RoadmapNodeResponse> children = childrenOf.apply(roadmap.getId()).stream()
+                .filter(child -> child.getStatus() != EntryStatus.ARCHIVED)
                 .map(child -> RoadmapNodeResponse.of(child, childrenOf))
                 .toList();
         children = flagMissingProjects(roadmap, children);
@@ -173,6 +178,8 @@ public record RoadmapResponse(
                 verify,
                 shapeOf(roadmap, children),
                 archetypeOf(roadmap),
+                asString(roadmap, "tier"),
+                collapseOverridesOf(roadmap),
                 roadmap.getCreatedAt(),
                 roadmap.getUpdatedAt(),
                 children,
@@ -182,16 +189,20 @@ public record RoadmapResponse(
     }
 
     /**
-     * Project Portfolio Mandate flag (Phase 24, non-blocking): for a career-scale roadmap, mark
-     * each top-level module that isn't the first (foundational) one, has already been expanded
-     * into steps, and has no project-kind step among its leaves — a visible nudge, never a reason
-     * to reject anything. Left alone for flat roadmaps, non-career archetypes, unexpanded modules,
-     * and the foundational module itself.
+     * Project Portfolio Mandate flag (Phase 24, non-blocking; RB-4.4 reconciled the trigger
+     * signal): for a career-scale roadmap, mark each top-level module that isn't the first
+     * (foundational) one, has already been expanded into steps, and has no project-kind step
+     * among its leaves — a visible nudge, never a reason to reject anything. Left alone for flat
+     * roadmaps, non-career roadmaps, unexpanded modules, and the foundational module itself.
+     * Triggers on either signal — {@code tier: "CAREER"} (RB-2, the current one) or the older
+     * Phase 24 {@code archetype: "career_path"} (still true for roadmaps created before RB-2) —
+     * per RB-4.3's note that the tier classifier now provides this same signal.
      */
     private static List<RoadmapNodeResponse> flagMissingProjects(Entry roadmap, List<RoadmapNodeResponse> children) {
-        boolean isCareerPath = roadmap.getContent() != null
-                && roadmap.getContent().get("assessment") instanceof Map<?, ?> assessment
-                && "career_path".equals(assessment.get("archetype"));
+        boolean isCareerPath = roadmap.getContent() != null && (
+                "CAREER".equals(roadmap.getContent().get("tier"))
+                        || (roadmap.getContent().get("assessment") instanceof Map<?, ?> assessment
+                                && "career_path".equals(assessment.get("archetype"))));
         if (!isCareerPath) {
             return children;
         }
@@ -234,5 +245,12 @@ public record RoadmapResponse(
     private static String asString(Entry entry, String key) {
         Object value = entry.getContent() != null ? entry.getContent().get(key) : null;
         return value instanceof String s ? s : null;
+    }
+
+    /** The founder's manual collapse/expand choices (RB-4.10), or an empty map if none yet. */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Boolean> collapseOverridesOf(Entry roadmap) {
+        Object value = roadmap.getContent() != null ? roadmap.getContent().get("collapseOverrides") : null;
+        return value instanceof Map<?, ?> ? (Map<String, Boolean>) value : Map.of();
     }
 }

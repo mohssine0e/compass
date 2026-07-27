@@ -1,5 +1,6 @@
 package com.compass.app.reformulate;
 
+import com.compass.app.config.ConflictException;
 import com.compass.app.ai.ResourceAiService;
 import com.compass.app.ai.RoadmapAiService;
 import com.compass.app.ai.SearchGroundingService;
@@ -66,7 +67,7 @@ public class ReformulateService {
     return switch (kind == null ? "" : kind) {
       case "break_down" -> {
         if (roadmapService.isAtMaxStepDepth(stepId)) {
-          throw new IllegalStateException("This is already broken down as far as it goes.");
+          throw new ConflictException("This is already broken down as far as it goes.");
         }
         String profileContext = profileService.confirmedProfile()
             .map(p -> ProfileContext.forModulePrompt(p, roadmapTitle, stepText))
@@ -96,7 +97,7 @@ public class ReformulateService {
         RoadmapAiService.Prerequisite p =
             roadmapAi.proposePrerequisite(roadmapTitle, stepText, priorStepsText(roadmapId, step), null);
         if (p == null) {
-          throw new IllegalStateException("Nothing obvious to revisit first — this may just need doing.");
+          throw new ConflictException("Nothing obvious to revisit first — this may just need doing.");
         }
         yield ReformulateProposal.prerequisite(roadmapId, stepId, stepText, p.step(), p.why(), note);
       }
@@ -188,12 +189,20 @@ public class ReformulateService {
     repository.save(step);
   }
 
+  /**
+   * The steps that come before {@code step}, as one block for the prompt.
+   *
+   * <p>Walks the roadmap's real leaf steps rather than its direct children. On a nested roadmap
+   * the direct children are modules: they have no {@code text} (so every line came out blank)
+   * and the step being reformulated is never among them (so the "stop here" break never fired).
+   * The prompt was getting an empty context block and no one could see that it was empty.
+   */
   private String priorStepsText(Long roadmapId, Entry step) {
     if (roadmapId == null) {
       return null;
     }
     StringBuilder sb = new StringBuilder();
-    for (Entry s : repository.findByParentIdOrderByOrderIndexAsc(roadmapId)) {
+    for (Entry s : roadmapService.leafStepsOf(roadmapId)) {
       if (s.getId().equals(step.getId())) {
         break;
       }

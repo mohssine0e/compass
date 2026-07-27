@@ -10,10 +10,13 @@ import com.compass.app.roadmap.dto.GenerateRoadmapResponse.ProposedResource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Learning-resource discovery (Phase 7.5), split out of {@code RoadmapService}/
@@ -72,6 +75,124 @@ public class ResourceService {
         return perStep.stream()
                 .map(step -> step.stream().map(ProposedResource::from).toList())
                 .toList();
+    }
+
+    /**
+     * Attach resources to already-persisted steps under {@code parentId} (a module, or the
+     * roadmap itself for a flat one) that don't have any yet, and return how many steps gained
+     * some.
+     *
+     * <p>This fills a real hole rather than adding a feature: resource discovery only ever ran
+     * while a proposal was still open for review, so a step that was persisted without resources
+     * — because the AI call failed that minute, or because it was accepted from the titles-only
+     * skeleton fallback — could never get them afterwards. Steps that already have resources are
+     * left completely alone: the founder curates these (CLAUDE.md Section 2, "resources are
+     * suggestions"), and silently replacing a curated list would be the system overruling them.
+     */
+    @Transactional
+    public int backfillResources(Long parentId, Long roadmapId) {
+        Entry parent = repository.findById(parentId).orElseThrow(
+                () -> new java.util.NoSuchElementException("No entry with id " + parentId));
+
+        List<Entry> needing = repository.findByParentIdOrderByOrderIndexAsc(parentId).stream()
+                .filter(e -> e.getType() == EntryType.ROADMAP_STEP)
+                .filter(e -> !hasResources(e))
+                .filter(e -> stepText(e) != null)
+                .toList();
+        if (needing.isEmpty()) {
+            return 0;
+        }
+
+        String scope = scopeOf(parent);
+        List<String> texts = needing.stream().map(ResourceService::stepText).toList();
+        SearchGroundingService.Grounding grounding = searchGrounding.ground(scope);
+        List<List<ResourceAiService.Resource>> found = suggestResourcesPerStep(
+                scope, texts, grounding == null ? null : grounding.results(), roadmapId);
+
+        int filled = 0;
+        for (int i = 0; i < needing.size(); i++) {
+            List<ResourceAiService.Resource> resources = i < found.size() ? found.get(i) : List.of();
+            if (resources.isEmpty()) {
+                continue;
+            }
+            Entry step = needing.get(i);
+            Map<String, Object> content = step.getContent() == null
+                    ? new LinkedHashMap<>() : new LinkedHashMap<>(step.getContent());
+            content.put("resources", stored(resources));
+            step.setContent(content);
+            repository.save(step);
+            filled++;
+        }
+        return filled;
+    }
+
+    /** The text to search against for a step's parent: a module's title and scope, or a title. */
+    private static String scopeOf(Entry parent) {
+        Map<String, Object> content = parent.getContent();
+        String title = content != null && content.get("title") instanceof String s ? s : null;
+        String scope = content != null && content.get("scope") instanceof String s ? s : null;
+        if (title == null || title.isBlank()) {
+            return scope == null ? "" : scope;
+        }
+        return scope == null || scope.isBlank() ? title : title + ": " + scope;
+    }
+
+    private static String stepText(Entry step) {
+        Object text = step.getContent() != null ? step.getContent().get("text") : null;
+        return text instanceof String s && !s.isBlank() ? s : null;
+    }
+
+    private static boolean hasResources(Entry step) {
+        Object resources = step.getContent() != null ? step.getContent().get("resources") : null;
+        return resources instanceof List<?> list && !list.isEmpty();
+    }
+
+    /**
+     * Suggested resources in their stored shape. The single place a resource becomes a stored
+     * map — {@code RoadmapService} builds the same shape when accepting a reviewed proposal and
+     * delegates here, so the two paths can't drift apart on field names or defaults.
+     */
+    public static List<Map<String, Object>> stored(List<ResourceAiService.Resource> resources) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        if (resources == null) {
+            return out;
+        }
+        for (ResourceAiService.Resource r : resources) {
+            Map<String, Object> map = storedResource(null, r.title(), r.url(), r.format(),
+                    r.sourceType(), r.estimatedTime(), r.aiGroundingSource());
+            if (map != null) {
+                out.add(map);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * One stored resource map, or {@code null} if it lacks a real title/url. Each gets a stable
+     * id (generated when the caller has none) and starts {@code userRating} null.
+     */
+    public static Map<String, Object> storedResource(String id, String title, String url, String format,
+                                                     String sourceType, String estimatedTime,
+                                                     String groundingSource) {
+        if (title == null || title.isBlank() || url == null || url.isBlank()) {
+            return null;
+        }
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", id != null && !id.isBlank() ? id : UUID.randomUUID().toString());
+        map.put("title", title.trim());
+        map.put("url", url.trim());
+        putIfPresent(map, "format", format);
+        putIfPresent(map, "sourceType", sourceType);
+        putIfPresent(map, "estimatedTime", estimatedTime);
+        putIfPresent(map, "aiGroundingSource", groundingSource);
+        map.put("userRating", null);
+        return map;
+    }
+
+    private static void putIfPresent(Map<String, Object> map, String key, String value) {
+        if (value != null && !value.isBlank()) {
+            map.put(key, value.trim());
+        }
     }
 
     /** Every resource url already attached anywhere in this roadmap's tree (Phase 13 dedup). */

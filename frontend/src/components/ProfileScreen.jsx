@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  downloadExport,
   extractResume,
   getInference,
   getProfile,
@@ -532,6 +533,15 @@ export default function ProfileScreen() {
             ))}
           </ul>
         )}
+      </Section>
+
+      <Section title="Your data">
+        <p className="profile-export-note">
+          Everything you've captured — ideas, roadmaps, this profile — as one JSON file.
+        </p>
+        <Button variant="ghost" onClick={downloadExport}>
+          Export everything
+        </Button>
       </Section>
 
       <div className="profile-actions">

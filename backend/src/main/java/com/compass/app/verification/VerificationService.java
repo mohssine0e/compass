@@ -1,9 +1,11 @@
 package com.compass.app.verification;
 
+import com.compass.app.config.ConflictException;
 import com.compass.app.ai.RoadmapAiService;
 import com.compass.app.ai.VerificationAiService;
 import com.compass.app.entry.Entry;
 import com.compass.app.entry.EntryRepository;
+import com.compass.app.entry.EntryContent;
 import com.compass.app.entry.EntryStatus;
 import com.compass.app.entry.EntryType;
 import com.compass.app.verification.dto.CheckResult;
@@ -18,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Optional understanding-checks before a step counts as done (Phase 8, format variety added
@@ -44,18 +45,17 @@ public class VerificationService {
   private final EntryRepository repository;
   private final VerificationAiService verifyAi;
   private final RoadmapAiService roadmapAi;
-
-  // The correct option for a pending multiple-choice check, kept out of persisted content so it
-  // never round-trips through the roadmap tree endpoint (Phase 26) — transient by design, same
-  // as any other in-memory-only server state in this app. Lost on restart, same tradeoff as any
-  // other un-answered pending check would have anyway.
-  private final Map<Long, Integer> pendingCorrectIndex = new ConcurrentHashMap<>();
+  private final com.compass.app.roadmap.RoadmapService roadmapService;
 
   public VerificationService(EntryRepository repository, VerificationAiService verifyAi,
-                             RoadmapAiService roadmapAi) {
+                             RoadmapAiService roadmapAi,
+                             @org.springframework.context.annotation.Lazy
+                             com.compass.app.roadmap.RoadmapService roadmapService) {
     this.repository = repository;
     this.verifyAi = verifyAi;
     this.roadmapAi = roadmapAi;
+    // @Lazy: RoadmapService -> ... -> VerificationService closes a constructor cycle otherwise.
+    this.roadmapService = roadmapService;
   }
 
   /** A step's default check format (Phase 26) from its {@code kind} — always overridable. */
@@ -64,9 +64,38 @@ public class VerificationService {
     return defaultFormatFor(step);
   }
 
+  /**
+   * Pick the format that fits what the step actually asks of you. {@code scenario} was accepted
+   * by the API and supported by the prompts but was never selectable automatically — only a
+   * project step got anything other than multiple choice, so design/architecture steps were
+   * checked with trivia when a judgement question was the whole point.
+   */
   private static String defaultFormatFor(Entry step) {
-    return "project".equals(stringField(step, "kind")) ? "code_challenge" : "multiple_choice";
+    if ("project".equals(stringField(step, "kind"))) {
+      return "code_challenge";
+    }
+    String text = textOf(step);
+    String haystack = text == null ? "" : text.toLowerCase();
+    for (String cue : SCENARIO_CUES) {
+      if (haystack.contains(cue)) {
+        return "scenario";
+      }
+    }
+    for (String cue : CODE_CUES) {
+      if (haystack.contains(cue)) {
+        return "code_challenge";
+      }
+    }
+    return "multiple_choice";
   }
+
+  // Deliberately a small, readable cue list rather than an AI call: picking a default format is
+  // not worth a round trip, and the founder can override it on any check anyway.
+  private static final List<String> SCENARIO_CUES =
+      List.of("design", "architect", "choose", "trade-off", "tradeoff", "strategy", "plan ",
+          "decide", "evaluate", "compare");
+  private static final List<String> CODE_CUES =
+      List.of("build", "implement", "write ", "code", "script", "configure", "deploy", "automate");
 
   /**
    * Generate (and stash) a fair check for a step, in {@code formatOverride} if given and valid,
@@ -103,10 +132,15 @@ public class VerificationService {
     pending.put("format", "multiple_choice");
     pending.put("question", mc.question());
     pending.put("options", mc.options());
+    // Persisted, not held in a server-side map: the question and options are already in the DB,
+    // so keeping the answer key in memory meant any backend restart left a pending check that
+    // could never be answered ("That check expired") — and multiple_choice is the DEFAULT format,
+    // so that was the common path. EntryContent.forClient strips this before it reaches the
+    // browser, which is what the in-memory map was really protecting against.
+    pending.put(EntryContent.CORRECT_INDEX, mc.correctIndex());
     content.put("pendingCheck", pending);
     step.setContent(content);
     repository.save(step);
-    pendingCorrectIndex.put(step.getId(), mc.correctIndex());
     return new CheckResult("multiple_choice", mc.question(), mc.options());
   }
 
@@ -122,7 +156,6 @@ public class VerificationService {
     content.put("pendingCheck", pending);
     step.setContent(content);
     repository.save(step);
-    pendingCorrectIndex.remove(step.getId());
     return new CheckResult(format, question, null);
   }
 
@@ -138,12 +171,12 @@ public class VerificationService {
     Map<String, Object> content = copyContent(step);
     PendingCheck pending = pendingCheckOf(content);
     if (pending == null) {
-      throw new IllegalStateException("No pending check on this step — ask for one first.");
+      throw new ConflictException("No pending check on this step — ask for one first.");
     }
 
     VerificationAiService.Evaluation eval;
     if ("multiple_choice".equals(pending.format())) {
-      eval = gradeMultipleChoice(stepId, selectedIndex, pending);
+      eval = gradeMultipleChoice(selectedIndex, pending);
     } else {
       if (answer == null || answer.isBlank()) {
         throw new IllegalArgumentException("Write an answer first.");
@@ -158,7 +191,6 @@ public class VerificationService {
     }
 
     if (eval.passed()) {
-      pendingCorrectIndex.remove(stepId);
       content.remove("pendingCheck");
       content.put("verifiedAt", Instant.now().toString());
       scheduleRecheck(content, 0); // first spaced recheck after passing
@@ -168,7 +200,15 @@ public class VerificationService {
       touchParent(saved);
       return new VerifyResult(true, null, null, null);
     }
-    return withSuggestedPrerequisite(step, eval.gap());
+
+    // A missed check is spent. It has to be, for multiple choice: the gap deliberately names the
+    // option that holds up (missing something and being told what you missed is the point), and
+    // leaving the same question pending meant you could immediately resubmit the revealed answer
+    // and pass. That is not verification. The gap still teaches; passing now costs a fresh check.
+    content.remove("pendingCheck");
+    step.setContent(content);
+    Entry saved = repository.save(step);
+    return withSuggestedPrerequisite(saved, eval.gap());
   }
 
   /**
@@ -176,14 +216,14 @@ public class VerificationService {
    * the actually-correct option plainly, in the same self-talk voice as an AI-judged gap, since
    * there's no ambiguity to explain, just the fact of what was missed.
    */
-  private VerificationAiService.Evaluation gradeMultipleChoice(Long stepId, Integer selectedIndex,
+  private VerificationAiService.Evaluation gradeMultipleChoice(Integer selectedIndex,
                                                                 PendingCheck pending) {
     if (selectedIndex == null) {
       throw new IllegalArgumentException("Pick an option first.");
     }
-    Integer correctIndex = pendingCorrectIndex.get(stepId);
+    Integer correctIndex = pending.correctIndex();
     if (correctIndex == null) {
-      throw new IllegalStateException("That check expired — ask for a new one.");
+      throw new ConflictException("That check expired — ask for a new one.");
     }
     if (selectedIndex.equals(correctIndex)) {
       return new VerificationAiService.Evaluation(true, null);
@@ -209,13 +249,20 @@ public class VerificationService {
         prereq == null ? null : prereq.step(), prereq == null ? null : prereq.why());
   }
 
-  /** Step texts already before this one under the same parent, earliest first. */
+  /**
+   * Step texts already covered before this one, earliest first — across the whole roadmap, not
+   * just the current module. Scoped to the immediate parent, a nested step's "prior steps" began
+   * again at each module boundary, so a prerequisite suggestion for a step in module 5 couldn't
+   * see anything taught in modules 1-4 and would happily propose re-learning it.
+   */
   private String priorStepsText(Entry step) {
-    if (step.getParentId() == null) {
+    List<Entry> ancestors = repository.findAncestors(step.getId());
+    if (ancestors.isEmpty()) {
       return null;
     }
+    Long rootId = ancestors.get(ancestors.size() - 1).getId();
     StringBuilder sb = new StringBuilder();
-    for (Entry s : repository.findByParentIdOrderByOrderIndexAsc(step.getParentId())) {
+    for (Entry s : roadmapService.leafStepsOf(rootId)) {
       if (s.getId().equals(step.getId())) {
         break;
       }
@@ -271,9 +318,14 @@ public class VerificationService {
     }
     Map<String, Object> content = copyContent(step);
     PendingCheck pending = pendingCheckOf(content);
-    String question = pending == null ? null : pending.question();
+    if (pending == null) {
+      // Without this the answer was evaluated against a null question — a meaningless verdict
+      // returned as if it meant something. verify() has always guarded this; recheck() didn't.
+      throw new ConflictException("No recheck pending on this step — ask for one first.");
+    }
 
-    VerificationAiService.Evaluation eval = verifyAi.evaluate(textOf(step), question, answer);
+    VerificationAiService.Evaluation eval =
+        verifyAi.evaluate(textOf(step), pending.question(), answer);
     if (eval == null) {
       throw new IllegalStateException("Couldn't judge that right now.");
     }
@@ -290,21 +342,35 @@ public class VerificationService {
 
   private static void scheduleRecheck(Map<String, Object> content, int stage) {
     int clamped = Math.max(0, Math.min(stage, RECHECK_DAYS.length - 1));
-    content.put("recheckStage", stage);
+    // Store the clamped stage: the raw one kept incrementing past the end of RECHECK_DAYS, so a
+    // long-retained step's recorded stage drifted away from any interval it actually maps to.
+    content.put("recheckStage", clamped);
     content.put("nextRecheckAt",
         Instant.now().plus(RECHECK_DAYS[clamped], ChronoUnit.DAYS).toString());
   }
 
-  /** The step's rigor: its own {@code verify} if set (off → null), else its roadmap's default. */
+  /**
+   * The step's rigor: its own {@code verify} if set (off → null), else the ROOT roadmap's default.
+   *
+   * <p>This walks all the way up rather than checking one parent. It used to check only
+   * {@code step.getParentId()}, which for a nested roadmap is the step's <em>module</em> — and
+   * modules never carry {@code verify}, only the root roadmap does. The effect was that
+   * verification silently could not be used at all on any TOPIC or CAREER roadmap: the roadmap
+   * said {@code verify: light}, the UI offered the button (it reads the same fallback correctly),
+   * and the server answered "This step isn't set to be verified." Only flat MINI roadmaps ever
+   * worked. Confirmed by the data: zero steps had ever reached {@code verifiedAt}.
+   */
   private String resolveRigor(Entry step) {
     String stepVerify = stringField(step, "verify");
     if (stepVerify != null) {
       return RIGORS.contains(stepVerify) ? stepVerify : null;
     }
-    if (step.getParentId() != null) {
-      String roadmapVerify = repository.findById(step.getParentId())
-          .map(r -> stringField(r, "verify")).orElse(null);
-      return roadmapVerify != null && RIGORS.contains(roadmapVerify) ? roadmapVerify : null;
+    // Nearest ancestor that actually states a mode wins, so a per-module override stays possible.
+    for (Entry ancestor : repository.findAncestors(step.getId())) {
+      String verify = stringField(ancestor, "verify");
+      if (verify != null) {
+        return RIGORS.contains(verify) ? verify : null;
+      }
     }
     return null;
   }
@@ -315,9 +381,15 @@ public class VerificationService {
         .orElseThrow(() -> new NoSuchElementException("No step " + stepId));
   }
 
+  /**
+   * The title of the roadmap this step belongs to — the ROOT, not the immediate parent. For a
+   * nested step the immediate parent is a module, and modules carry a {@code title} too, so the
+   * old one-level lookup returned a module name while the prompt labelled it as the roadmap. The
+   * check was written against the wrong scope without anything looking wrong.
+   */
   private String parentTitle(Entry step) {
-    return step.getParentId() == null ? null
-        : repository.findById(step.getParentId()).map(r -> stringField(r, "title")).orElse(null);
+    List<Entry> ancestors = repository.findAncestors(step.getId());
+    return ancestors.isEmpty() ? null : stringField(ancestors.get(ancestors.size() - 1), "title");
   }
 
   private void touchParent(Entry step) {
@@ -340,7 +412,8 @@ public class VerificationService {
   }
 
   /** A step's in-progress pending check, however it's shaped. */
-  private record PendingCheck(String format, String question, List<String> options) {
+  private record PendingCheck(String format, String question, List<String> options,
+                              Integer correctIndex) {
   }
 
   /**
@@ -353,14 +426,16 @@ public class VerificationService {
   private static PendingCheck pendingCheckOf(Map<String, Object> content) {
     Object raw = content.get("pendingCheck");
     if (raw instanceof String s) {
-      return s.isBlank() ? null : new PendingCheck("free_response", s, null);
+      return s.isBlank() ? null : new PendingCheck("free_response", s, null, null);
     }
     if (raw instanceof Map<?, ?> map) {
       String format = map.get("format") instanceof String f ? f : "free_response";
       String question = map.get("question") instanceof String q ? q : null;
       List<String> options = map.get("options") instanceof List<?> list
           ? (List<String>) list : null;
-      return question == null ? null : new PendingCheck(format, question, options);
+      Integer correctIndex = map.get(EntryContent.CORRECT_INDEX) instanceof Number n
+          ? n.intValue() : null;
+      return question == null ? null : new PendingCheck(format, question, options, correctIndex);
     }
     return null;
   }

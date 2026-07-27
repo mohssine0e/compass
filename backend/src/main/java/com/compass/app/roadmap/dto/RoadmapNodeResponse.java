@@ -1,6 +1,7 @@
 package com.compass.app.roadmap.dto;
 
 import com.compass.app.entry.Entry;
+import com.compass.app.entry.EntryContent;
 import com.compass.app.entry.EntryStatus;
 import com.compass.app.entry.EntryType;
 
@@ -35,13 +36,26 @@ public record RoadmapNodeResponse(
         List<RoadmapNodeResponse> children,
         boolean missingProjectFlag
 ) {
-    /** Rolled-up counts over a container's leaf descendants. */
-    public record NodeProgress(int total, int done) {
+    /**
+     * Rolled-up counts over a container's leaf descendants.
+     *
+     * <p>{@code done} and {@code verified} are deliberately separate numbers. A step is
+     * {@code done} because you said so; it is {@code verified} because you defended it against a
+     * check. CLAUDE.md's founding problem is that self-reported progress lies, so a module that
+     * reports "8/8 done, 0 proved" is telling you something a single completion figure hides.
+     * {@code due} counts finished steps whose spaced recheck has come around again.
+     */
+    public record NodeProgress(int total, int done, int verified, int due) {
     }
 
-    /** Build a node (and its whole subtree) from an entry, resolving children via {@code childrenOf}. */
+    /**
+     * Build a node (and its whole subtree) from an entry, resolving children via {@code
+     * childrenOf}. An ARCHIVED child is excluded from the tree — e.g. a module left behind by
+     * re-tiering to MINI (RB-2.5): detached from view, kept in the database rather than deleted.
+     */
     public static RoadmapNodeResponse of(Entry entry, Function<Long, List<Entry>> childrenOf) {
         List<RoadmapNodeResponse> children = childrenOf.apply(entry.getId()).stream()
+                .filter(child -> child.getStatus() != EntryStatus.ARCHIVED)
                 .map(child -> of(child, childrenOf))
                 .toList();
 
@@ -49,9 +63,22 @@ public record RoadmapNodeResponse(
         if (!children.isEmpty()) {
             List<RoadmapNodeResponse> leaves = new ArrayList<>();
             collectLeaves(children, leaves);
+            java.time.Instant now = java.time.Instant.now();
             int total = leaves.size();
             int done = (int) leaves.stream().filter(l -> l.status() == EntryStatus.DONE).count();
-            progress = new NodeProgress(total, done);
+            int verified = (int) leaves.stream().filter(l -> stringOf(l, "verifiedAt") != null).count();
+            int due = (int) leaves.stream()
+                    .filter(l -> l.status() == EntryStatus.DONE)
+                    .filter(l -> {
+                        String at = stringOf(l, "nextRecheckAt");
+                        try {
+                            return at != null && !java.time.Instant.parse(at).isAfter(now);
+                        } catch (RuntimeException ignored) {
+                            return false;
+                        }
+                    })
+                    .count();
+            progress = new NodeProgress(total, done, verified, due);
         }
 
         return new RoadmapNodeResponse(
@@ -60,7 +87,7 @@ public record RoadmapNodeResponse(
                 entry.getStatus(),
                 entry.getOrderIndex(),
                 entry.getDependsOn(),
-                entry.getContent(),
+                EntryContent.forClient(entry.getContent()),
                 progress,
                 children,
                 false
@@ -71,6 +98,11 @@ public record RoadmapNodeResponse(
     public RoadmapNodeResponse withMissingProjectFlag(boolean flag) {
         return new RoadmapNodeResponse(id, type, status, orderIndex, dependsOn, content, progress,
                 children, flag);
+    }
+
+    private static String stringOf(RoadmapNodeResponse node, String key) {
+        Object value = node.content() != null ? node.content().get(key) : null;
+        return value instanceof String s && !s.isBlank() ? s : null;
     }
 
     /** Whether any leaf step in this subtree is a {@code kind: "project"} step (Phase 24). */

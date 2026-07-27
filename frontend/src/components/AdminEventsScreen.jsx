@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getAdminEvents } from '../api'
+import { getAdminEvents, getProviderHealth } from '../api'
 import { Chip } from './ui'
 import './AdminEventsScreen.css'
 
@@ -7,7 +7,7 @@ import './AdminEventsScreen.css'
 // filterable by source/severity — nothing fancier than the plain-list views elsewhere.
 // Filters are Chip toggles (Phase 23), matching the pattern used in Everything/Profile — an
 // empty string means "all"; clicking the already-selected chip clears back to it.
-const SOURCES = ['ai_provider', 'system']
+const SOURCES = ['ai_provider', 'system', 'founder']
 const SEVERITIES = ['info', 'warning', 'error']
 
 export default function AdminEventsScreen() {
@@ -31,6 +31,8 @@ export default function AdminEventsScreen() {
 
   return (
     <div className="events">
+      <ProviderHealthPanel />
+
       <div className="events-head">
         <h1 className="screen-title">Events</h1>
         <div className="events-filters">
@@ -65,6 +67,64 @@ export default function AdminEventsScreen() {
       )}
     </div>
   )
+}
+
+/**
+ * Which AI providers are actually working right now (V3-2.3). Sits above the event list because
+ * it answers the question the events below usually raise — "is a provider down, or is it me?" —
+ * without opening the Groq, Google, and NVIDIA consoles separately to find out.
+ */
+function ProviderHealthPanel() {
+  const [providers, setProviders] = useState(null)
+
+  useEffect(() => {
+    let alive = true
+    getProviderHealth()
+      .then((p) => alive && setProviders(p))
+      .catch(() => alive && setProviders([]))
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  if (!providers || providers.length === 0) return null
+
+  return (
+    <section className="providers">
+      <h2 className="providers-title">Providers</h2>
+      <ul className="providers-list">
+        {providers.map((p) => (
+          <li key={`${p.tier}-${p.name}-${p.model}`} className={'provider-row ' + statusClass(p)}>
+            <span className="provider-name">{p.name}</span>
+            <span className="provider-tier">{p.tier}</span>
+            <span className="provider-state">{stateLabel(p)}</span>
+            <span className="provider-timing">
+              {p.avgDurationMs != null ? `${Math.round(p.avgDurationMs)}ms avg` : ''}
+            </span>
+            <span className="provider-counts">
+              {p.successes > 0 || p.failures > 0 ? `${p.successes} ok · ${p.failures} failed` : ''}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+function statusClass(p) {
+  if (!p.configured) return 'is-unconfigured'
+  if (p.coolingDownForSeconds != null) return 'is-benched'
+  return 'is-ok'
+}
+
+function stateLabel(p) {
+  if (!p.configured) return 'no key set'
+  if (p.coolingDownForSeconds != null) {
+    const mins = Math.ceil(p.coolingDownForSeconds / 60)
+    return `benched ${mins}m — ${(p.lastFailureKind || '').toLowerCase().replace('_', ' ')}`
+  }
+  if (p.lastSuccessAt) return 'working'
+  return 'not called yet'
 }
 
 function FilterChips({ label, value, onChange, options }) {

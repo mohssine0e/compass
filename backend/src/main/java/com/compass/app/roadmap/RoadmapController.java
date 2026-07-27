@@ -1,7 +1,9 @@
 package com.compass.app.roadmap;
 
 import com.compass.app.entry.Entry;
+import com.compass.app.resource.ResourceService;
 import com.compass.app.roadmap.dto.AddModuleStepsRequest;
+import com.compass.app.roadmap.dto.ApplyReTierProposalRequest;
 import com.compass.app.roadmap.dto.ArchiveRoadmapRequest;
 import com.compass.app.roadmap.dto.CreateRoadmapRequest;
 import com.compass.app.roadmap.dto.ExpandModulesBatchRequest;
@@ -12,10 +14,13 @@ import com.compass.app.roadmap.dto.InsertModuleRequest;
 import com.compass.app.roadmap.dto.InsertStepRequest;
 import com.compass.app.roadmap.dto.ModuleExpansionResult;
 import com.compass.app.roadmap.dto.ModulePrefetchStatus;
+import com.compass.app.roadmap.dto.ReTierRequest;
+import com.compass.app.roadmap.dto.ReTierResponse;
 import com.compass.app.roadmap.dto.ReorderStepsRequest;
 import com.compass.app.roadmap.dto.ReplanModuleItem;
 import com.compass.app.roadmap.dto.ReplanModulesRequest;
 import com.compass.app.roadmap.dto.RoadmapResponse;
+import com.compass.app.roadmap.dto.SubtopicProposalRequest;
 import com.compass.app.roadmap.dto.UpdateModuleRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -38,11 +43,14 @@ public class RoadmapController {
     private final RoadmapService service;
     private final GenerationJobService jobs;
     private final ModulePrefetchService prefetch;
+    private final ResourceService resources;
 
-    public RoadmapController(RoadmapService service, GenerationJobService jobs, ModulePrefetchService prefetch) {
+    public RoadmapController(RoadmapService service, GenerationJobService jobs,
+                             ModulePrefetchService prefetch, ResourceService resources) {
         this.service = service;
         this.jobs = jobs;
         this.prefetch = prefetch;
+        this.resources = resources;
     }
 
     /**
@@ -121,6 +129,29 @@ public class RoadmapController {
         return RoadmapResponse.of(roadmap, service::stepsOf);
     }
 
+    /**
+     * This one roadmap as a downloadable JSON file — the whole tree, exactly as the app sees it.
+     *
+     * <p>Distinct from {@code /api/export}, which dumps everything you've ever captured: this is
+     * the one you reach for to hand a plan to someone else, diff it against a later version, or
+     * keep a copy of a roadmap before restructuring it. Same shape the UI renders from, so
+     * what's in the file is what you were looking at.
+     */
+    @GetMapping("/{id}/export")
+    public ResponseEntity<RoadmapResponse> export(@PathVariable Long id) {
+        Entry roadmap = service.getRoadmap(id);
+        RoadmapResponse body = RoadmapResponse.of(roadmap, service::stepsOf);
+        String slug = body.title() == null ? "roadmap"
+                : body.title().toLowerCase().replaceAll("[^a-z0-9]+", "-").replaceAll("(^-|-$)", "");
+        String filename = "compass-" + (slug.isBlank() ? "roadmap" : slug) + "-"
+                + java.time.LocalDate.now(java.time.ZoneOffset.UTC) + ".json";
+        return ResponseEntity.ok()
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + filename + "\"")
+                .body(body);
+    }
+
     /** Insert a new step. Body is {text, position?} — appended when position is omitted. */
     @PostMapping("/{id}/steps")
     public ResponseEntity<RoadmapResponse> insertStep(@PathVariable Long id,
@@ -185,6 +216,46 @@ public class RoadmapController {
     }
 
     /**
+     * The re-tier escape hatch (RB-2.5) — founder-triggered only, never automatic. Body is
+     * {tier}. Some transitions apply immediately ({@code status: "applied"}); MINI → TOPIC and
+     * an already-nested roadmap moving to CAREER instead return a proposal
+     * ({@code status: "proposal"}) for the founder to review via {@link #applyReTierProposal}.
+     */
+    @PostMapping("/{id}/re-tier")
+    public ReTierResponse reTier(@PathVariable Long id, @RequestBody ReTierRequest request) {
+        return service.reTier(id, request);
+    }
+
+    /** Confirm a re-tier proposal from {@link #reTier} — applies the founder's groups/order. */
+    @PostMapping("/{id}/re-tier/apply")
+    public ReTierResponse applyReTierProposal(@PathVariable Long id,
+                                              @RequestBody ApplyReTierProposalRequest request) {
+        return service.applyReTierProposal(id, request);
+    }
+
+    /**
+     * The one-time CAREER completion reflection (RB-4.7) — cheap to call after any step is
+     * marked done; a no-op unless this roadmap just became 100% complete. Body is {reflection}
+     * (null when there's nothing new to show).
+     */
+    @PostMapping("/{id}/check-completion")
+    public Map<String, String> checkCompletion(@PathVariable Long id) {
+        String reflection = service.checkCareerCompletion(id);
+        Map<String, String> body = new java.util.HashMap<>();
+        body.put("reflection", reflection);
+        return body;
+    }
+
+    /**
+     * Two-way completion sync + module rollup (RB-4.8/4.12) — call right after marking a step
+     * done. A no-op if the step isn't actually done or has nothing to roll up either direction.
+     */
+    @PostMapping("/steps/{stepId}/sync-completion")
+    public void syncCompletion(@PathVariable Long stepId) {
+        service.syncStepCompletion(stepId);
+    }
+
+    /**
      * Draft steps for one module of this roadmap (Phase 13) — grounded on the module's own
      * scope, deduped against resources already used elsewhere in the roadmap. Nothing persisted;
      * accept via {@link #addModuleSteps}.
@@ -214,6 +285,18 @@ public class RoadmapController {
         Entry roadmap = service.getRoadmap(id);
         RoadmapResponse body = RoadmapResponse.of(roadmap, service::stepsOf);
         return ResponseEntity.status(HttpStatus.CREATED).body(body);
+    }
+
+    /**
+     * Find resources for the already-persisted steps under {@code parentId} that have none.
+     * Unlike every other resource path this one writes directly rather than proposing: it only
+     * ever adds to steps that are empty, so there's nothing of the founder's to overrule — and a
+     * review screen for "here are links for the nine steps that had none" would be friction for
+     * no decision. Curated lists are never touched. Returns {@code {filled: n}}.
+     */
+    @PostMapping("/{id}/nodes/{parentId}/resources")
+    public Map<String, Integer> backfillResources(@PathVariable Long id, @PathVariable Long parentId) {
+        return Map.of("filled", resources.backfillResources(parentId, id));
     }
 
     /**
@@ -248,6 +331,17 @@ public class RoadmapController {
     @PostMapping("/{id}/modules/insert-proposal")
     public GenerateRoadmapResponse.ProposedModule proposeNewModule(@PathVariable Long id) {
         return service.proposeNewModule(id);
+    }
+
+    /**
+     * Draft one new module scoped to a specific subtopic (RB-3.8) — reached from a confirmed
+     * Canonical Topic Match's SUBTOPIC decision. Accept the same way as {@link #proposeNewModule},
+     * via {@link #insertModule}.
+     */
+    @PostMapping("/{id}/modules/subtopic-proposal")
+    public RoadmapService.SubtopicModuleProposal proposeSubtopicModule(@PathVariable Long id,
+                                                                       @RequestBody SubtopicProposalRequest request) {
+        return service.proposeSubtopicModule(id, request.focusGoal());
     }
 
     /**

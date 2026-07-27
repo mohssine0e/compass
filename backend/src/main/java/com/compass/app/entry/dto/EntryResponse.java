@@ -1,6 +1,7 @@
 package com.compass.app.entry.dto;
 
 import com.compass.app.entry.Entry;
+import com.compass.app.entry.EntryContent;
 import com.compass.app.entry.EntryStatus;
 import com.compass.app.entry.EntryType;
 import com.compass.app.entry.Significance;
@@ -41,7 +42,7 @@ public record EntryResponse(
                 e.getParentId(),
                 e.getOrderIndex(),
                 e.getDependsOn(),
-                e.getContent(),
+                EntryContent.forClient(e.getContent()),
                 e.getCreatedAt(),
                 e.getUpdatedAt(),
                 e.getLastResurfacedAt(),

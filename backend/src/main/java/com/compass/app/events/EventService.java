@@ -72,6 +72,16 @@ public class EventService {
         record(EventSource.SYSTEM, category, message, EventSeverity.ERROR, context);
     }
 
+    /** Routine system-side signal worth a quick glance later, not a warning or error. */
+    public void info(String category, String message, Map<String, Object> context) {
+        record(EventSource.SYSTEM, category, message, EventSeverity.INFO, context);
+    }
+
+    /** A founder-triggered action worth a brief record (RB-2.5) — distinct from AI/system events. */
+    public void founderAction(String category, String message, Map<String, Object> context) {
+        record(EventSource.FOUNDER, category, message, EventSeverity.INFO, context);
+    }
+
     private static String truncate(String message) {
         if (message == null) {
             return "";

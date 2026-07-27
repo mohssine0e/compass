@@ -1,5 +1,6 @@
 .app {
   min-height: 100svh;
+  max-height: 100svh;
   display: flex;
   flex-direction: column;
 }
@@ -46,10 +47,21 @@
 }
 
 .app-main {
+  min-height: 0;
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 0 0 12vh;
+}
+
+/* Full-bleed variant for the workspace. The default .app-main is a centred reading column with
+   a 12vh bottom gutter — right for capture and resurfacing, wrong for a two-pane surface that
+   needs the whole viewport and wants its own panes to scroll rather than the page. */
+.app-main--full {
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 0;
+  overflow: hidden;
 }

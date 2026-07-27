@@ -2,11 +2,60 @@
 
 const BASE = '/api'
 
+// Every request gets a ceiling (V3-0.5). Without one, a hung connection — a provider stall
+// behind the backend, a dropped wifi association that never RSTs — left a spinner turning
+// forever with no error and no way back.
+//
+// Deliberately generous rather than tight, and one number for every path. Most endpoints here
+// make a synchronous AI call, and the slow ones are genuinely slow: an expand-batch runs four
+// modules against the heavy chain, where a single module can spend 40s on Gemini Pro before
+// falling through to NIM's 75s override. A tighter default with a per-endpoint allowlist would
+// silently break whichever AI endpoint the list forgot, which is worse than a rare CRUD call
+// taking two minutes to give up. The point is to bound the hang, not to be precise about it.
+const DEFAULT_TIMEOUT_MS = 120_000
+
+// The generation job's status poll is the exception: it returns immediately by design, is called
+// every 1.2s for the life of a draft, and a stuck one should be retried, not waited on.
+const POLL_TIMEOUT_MS = 10_000
+
+/**
+ * Thrown when a request hit its own ceiling rather than being refused. Callers can tell the
+ * difference and say "that took too long" instead of the generic failure message.
+ */
+export class TimeoutError extends Error {
+  constructor(path) {
+    super('That took too long — nothing was saved.')
+    this.name = 'TimeoutError'
+    this.path = path
+  }
+}
+
 async function request(path, options = {}) {
-  const res = await fetch(BASE + path, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  })
+  const { timeoutMs = DEFAULT_TIMEOUT_MS, signal: callerSignal, ...init } = options
+
+  // Our own timeout, plus the caller's cancellation (unmount, superseded request) if given.
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const onCallerAbort = () => controller.abort()
+  callerSignal?.addEventListener('abort', onCallerAbort)
+
+  let res
+  try {
+    res = await fetch(BASE + path, {
+      headers: { 'Content-Type': 'application/json' },
+      ...init,
+      signal: controller.signal,
+    })
+  } catch (err) {
+    // An abort we caused on a timeout reads differently from one the caller asked for — only
+    // the former is a failure worth showing.
+    if (err.name === 'AbortError' && !callerSignal?.aborted) throw new TimeoutError(path)
+    throw err
+  } finally {
+    clearTimeout(timer)
+    callerSignal?.removeEventListener('abort', onCallerAbort)
+  }
+
   if (!res.ok) {
     let detail = `Request failed (${res.status})`
     try {
@@ -32,6 +81,11 @@ export function createEntry(payload) {
 /** All entries, newest first. */
 export function listEntries() {
   return request('/entries')
+}
+
+/** Every completed roadmap step, most recently updated first (RB-5.3) — the Practice/Review picker. */
+export function listCompletedSteps() {
+  return request('/entries/completed-steps')
 }
 
 /** Partial update of an entry. `patch` is e.g. { status: 'done' }. */
@@ -74,7 +128,15 @@ export async function generateRoadmap(payload, onStage) {
   let lastStage = null
   for (;;) {
     await sleep(1200)
-    const job = await request(`/roadmaps/generate/jobs/${jobId}`)
+    let job
+    try {
+      job = await request(`/roadmaps/generate/jobs/${jobId}`, { timeoutMs: POLL_TIMEOUT_MS })
+    } catch (err) {
+      // A dropped poll isn't a failed generation — the job runs on the server regardless. Keep
+      // polling; a genuinely dead backend surfaces as FAILED or as the caller navigating away.
+      if (err instanceof TimeoutError) continue
+      throw err
+    }
     if (job.stage && job.stage !== lastStage) {
       lastStage = job.stage
       onStage?.(job.stage)
@@ -138,6 +200,18 @@ export function suggestResources({ scope, stepTexts, roadmapId }) {
   })
 }
 
+/**
+ * Find resources for the already-saved steps under `parentId` (a module, or the roadmap itself
+ * for a flat one) that don't have any yet. Steps that already have resources are never touched —
+ * those are curated. Returns `{filled}`: how many steps gained resources.
+ *
+ * Unlike `suggestResources`, this writes directly rather than proposing: it only ever adds to
+ * steps that were empty, so there's no existing choice of yours to review against.
+ */
+export function backfillResources(roadmapId, parentId) {
+  return request(`/roadmaps/${roadmapId}/nodes/${parentId}/resources`, { method: 'POST' })
+}
+
 /** Redraft one module's title/scope (Phase 18). Nothing persisted; accept via `updateModule`. */
 export function regenerateModuleScope(roadmapId, moduleId) {
   return request(`/roadmaps/${roadmapId}/modules/${moduleId}/regenerate-scope`, { method: 'POST' })
@@ -154,6 +228,17 @@ export function updateModule(roadmapId, moduleId, title, scope) {
 /** Draft one new module to insert (Phase 18). Nothing persisted; accept via `insertModule`. */
 export function proposeNewModule(roadmapId) {
   return request(`/roadmaps/${roadmapId}/modules/insert-proposal`, { method: 'POST' })
+}
+
+/**
+ * Draft one new module scoped to a specific subtopic (RB-3.8), reached from a confirmed
+ * Canonical Topic Match. Returns { title, scope, possibleDuplicate }. Accept via `insertModule`.
+ */
+export function proposeSubtopicModule(roadmapId, focusGoal) {
+  return request(`/roadmaps/${roadmapId}/modules/subtopic-proposal`, {
+    method: 'POST',
+    body: JSON.stringify({ focusGoal }),
+  })
 }
 
 /** Insert an accepted new module. `position` is 0-based; omit to append. */
@@ -207,6 +292,42 @@ export function setRoadmapArchived(roadmapId, archived) {
 /** Delete a whole roadmap and its steps. Not reversible. */
 export function deleteRoadmap(roadmapId) {
   return request(`/roadmaps/${roadmapId}`, { method: 'DELETE' })
+}
+
+/**
+ * The re-tier escape hatch (RB-2.5) — founder-triggered correction when the classifier got a
+ * goal's scale wrong. Returns { status: 'applied', ... } or { status: 'proposal', proposal }.
+ */
+export function reTierRoadmap(roadmapId, tier) {
+  return request(`/roadmaps/${roadmapId}/re-tier`, {
+    method: 'POST',
+    body: JSON.stringify({ tier }),
+  })
+}
+
+/** Confirm a re-tier proposal from `reTierRoadmap` — applies the (possibly edited) groups/order. */
+export function applyReTierProposal(roadmapId, kind, groups) {
+  return request(`/roadmaps/${roadmapId}/re-tier/apply`, {
+    method: 'POST',
+    body: JSON.stringify({ kind, groups }),
+  })
+}
+
+/**
+ * The one-time CAREER completion reflection (RB-4.7) — cheap to call after any step is marked
+ * done; a no-op unless this roadmap just became 100% complete. Returns { reflection } (null when
+ * there's nothing new).
+ */
+export function checkCareerCompletion(roadmapId) {
+  return request(`/roadmaps/${roadmapId}/check-completion`, { method: 'POST' })
+}
+
+/**
+ * Two-way completion sync + module rollup (RB-4.8/4.12) — call right after marking a step done.
+ * A no-op server-side if there's nothing to roll up either direction.
+ */
+export function syncStepCompletion(stepId) {
+  return request(`/roadmaps/steps/${stepId}/sync-completion`, { method: 'POST' })
 }
 
 /** Reorder a roadmap's steps. `stepIds` is the full step id list in the new order. */
@@ -430,4 +551,88 @@ export function getAdminEvents(filters = {}) {
   if (filters.limit) params.set('limit', filters.limit)
   const query = params.toString()
   return request('/admin/events' + (query ? `?${query}` : ''))
+}
+
+/**
+ * RB-1 tier-classifier debug screen (throwaway, not part of the real app flow): classify one
+ * goal. Returns { goal, tier, confidence, reasoning }.
+ */
+export function classifyGoal(goal) {
+  return request('/admin/classify-test/classify', {
+    method: 'POST',
+    body: JSON.stringify({ goal }),
+  })
+}
+
+/**
+ * RB-1 tier-classifier debug screen: run the exact 26-goal validation set from TASKS_v2.md in
+ * one call. Returns a list of { goal, expectedTier, actualTier, confidence, reasoning, pass }.
+ */
+export function runClassifyTestSet() {
+  return request('/admin/classify-test/run-all', { method: 'POST' })
+}
+
+/**
+ * The canonical topic a roadmap was created as/from (RB-3.10), or null if it doesn't have one
+ * (e.g. embeddings weren't configured when it was created).
+ */
+export function getCanonicalTopicForRoadmap(roadmapId) {
+  return request(`/topics?roadmapId=${roadmapId}`)
+}
+
+/** Draft the specific edit a founder's addition suggestion implies — nothing applied yet. */
+export function suggestTopicAddition(topicId, suggestion) {
+  return request(`/topics/${topicId}/suggest-addition`, {
+    method: 'POST',
+    body: JSON.stringify({ suggestion }),
+  })
+}
+
+/** Apply a confirmed topic addition. `field` is subtopics|prerequisites|aliases. */
+export function applyTopicAddition(topicId, field, value) {
+  return request(`/topics/${topicId}/apply-addition`, {
+    method: 'POST',
+    body: JSON.stringify({ field, value }),
+  })
+}
+
+/**
+ * The unified intake's first step (RB-5.1/5.2) — classify what one piece of input actually
+ * wants before anything else runs. Returns { intent, confidence, reasoning }.
+ */
+export function classifyIntent(input) {
+  return request('/intake/classify', {
+    method: 'POST',
+    body: JSON.stringify({ input }),
+  })
+}
+
+/**
+ * Everything in Compass as one JSON document (V3-0.2) — triggers a browser download rather than
+ * returning data, since the point is getting a file onto disk, not rendering it. Uses a plain
+ * anchor to the endpoint so the browser handles the save with the server's own filename, instead
+ * of buffering the whole export through JS.
+ */
+export function downloadExport() {
+  const a = document.createElement('a')
+  a.href = BASE + '/export'
+  a.download = ''
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+
+/** Per-provider AI health: what's working, what's benched, and how fast (V3-2.3). */
+export function getProviderHealth() {
+  return request('/admin/providers')
+}
+
+/** This one roadmap as a downloadable JSON file — the tree exactly as the app renders it. */
+export function downloadRoadmapExport(roadmapId) {
+  const a = document.createElement('a')
+  a.href = `${BASE}/roadmaps/${roadmapId}/export`
+  a.download = ''
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
 }

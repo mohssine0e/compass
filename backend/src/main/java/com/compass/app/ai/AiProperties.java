@@ -7,20 +7,22 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * AI configuration (prefix {@code compass.ai}). Two tiers, two OpenAI-compatible providers
- * each, tried in order within a tier on any error/timeout/quota exhaustion (Phase 19):
+ * AI configuration (prefix {@code compass.ai}). Two tiers, OpenAI-compatible providers tried
+ * in order within a tier on any error/timeout/quota exhaustion (Phase 19, extended past its
+ * original four-provider ceiling once real use started hitting Groq's per-minute budget):
  * <ul>
- *   <li>{@code fast} — Groq, then Gemini Flash. For tone acknowledgments, clarifying
- *   questions, verification checks: short, frequent, cheap calls where a snappy provider
- *   matters more than depth.</li>
+ *   <li>{@code fast} — Groq, then Gemini Flash, then two NVIDIA NIM catalog models
+ *   (llama-3.3-70b-instruct, deepseek-v4-flash) as a slower last-resort safety net. For tone
+ *   acknowledgments, clarifying questions, verification checks, tier classification: short,
+ *   frequent, cheap calls where a snappy provider matters more than depth in the common case.</li>
  *   <li>{@code heavy} — Gemini Pro, then NVIDIA NIM. For generation-weight calls (outline
  *   drafting, module expansion, self-critique) that need a stronger model and can tolerate a
  *   longer wait.</li>
  * </ul>
- * Four providers, two tiers is the founder's confirmed ceiling — not six discrete providers
- * across three tiers (see TASKS.md Phase 19). Gemini Flash and Gemini Pro share one API key
- * ({@code GEMINI_API_KEY}) but are genuinely separate quota pools, addressed by model name
- * per provider entry. Only API keys are secret; they come from environment variables so they
+ * Gemini Flash and Gemini Pro share one API key ({@code GEMINI_API_KEY}) but are genuinely
+ * separate quota pools, addressed by model name per provider entry. The fast tier's two NIM
+ * entries share {@code NVIDIA_API_KEY} with the heavy tier's NIM entry — same account/quota
+ * pool, no new key. Only API keys are secret; they come from environment variables so they
  * never live in the codebase.
  */
 @Component
@@ -33,8 +35,9 @@ public class AiProperties {
     // need more room than a one-line tone acknowledgment but far less than a full outline —
     // a smaller, quicker budget than the heavy tier's, so the fast chain stays fast in practice
     // and not just in name.
-    private long fastJsonTimeoutSeconds = 12;
+    private long fastJsonTimeoutSeconds = 20;
     private int fastJsonMaxTokens = 500;
+    private int resourceMaxTokens = 1600;
     // Roadmap generation/restructuring returns a multi-step payload, so it needs a bigger
     // token budget and a longer timeout than a one-line acknowledgment. A genuinely large,
     // assessed-as-complex goal (Phase 18) can need close to the old fixed 8-module cap's worth of
@@ -45,6 +48,12 @@ public class AiProperties {
     // as the emergency skeleton path when the whole heavy chain fails (Phase 19).
     private long skeletonTimeoutSeconds = 10;
     private int skeletonMaxTokens = 300;
+    // Embeddings (RB-3): Gemini only, no fallback provider — a single short call, well within a
+    // normal request's budget.
+    private String embeddingBaseUrl;
+    private String embeddingApiKey;
+    private String embeddingModel = "gemini-embedding-001";
+    private long embeddingTimeoutSeconds = 8;
 
     private List<Provider> fast = new ArrayList<>();
     private List<Provider> heavy = new ArrayList<>();
@@ -81,6 +90,15 @@ public class AiProperties {
         this.fastJsonMaxTokens = fastJsonMaxTokens;
     }
 
+    /** Per-call token ceiling for resource suggestions — see the note in application.properties. */
+    public int getResourceMaxTokens() {
+        return resourceMaxTokens;
+    }
+
+    public void setResourceMaxTokens(int resourceMaxTokens) {
+        this.resourceMaxTokens = resourceMaxTokens;
+    }
+
     public long getGenerationTimeoutSeconds() {
         return generationTimeoutSeconds;
     }
@@ -111,6 +129,44 @@ public class AiProperties {
 
     public void setSkeletonMaxTokens(int skeletonMaxTokens) {
         this.skeletonMaxTokens = skeletonMaxTokens;
+    }
+
+    public String getEmbeddingBaseUrl() {
+        return embeddingBaseUrl;
+    }
+
+    public void setEmbeddingBaseUrl(String embeddingBaseUrl) {
+        this.embeddingBaseUrl = embeddingBaseUrl;
+    }
+
+    public String getEmbeddingApiKey() {
+        return embeddingApiKey;
+    }
+
+    public void setEmbeddingApiKey(String embeddingApiKey) {
+        this.embeddingApiKey = embeddingApiKey;
+    }
+
+    public String getEmbeddingModel() {
+        return embeddingModel;
+    }
+
+    public void setEmbeddingModel(String embeddingModel) {
+        this.embeddingModel = embeddingModel;
+    }
+
+    public long getEmbeddingTimeoutSeconds() {
+        return embeddingTimeoutSeconds;
+    }
+
+    public void setEmbeddingTimeoutSeconds(long embeddingTimeoutSeconds) {
+        this.embeddingTimeoutSeconds = embeddingTimeoutSeconds;
+    }
+
+    /** True when an embedding call could actually be served. */
+    public boolean embeddingConfigured() {
+        return embeddingBaseUrl != null && !embeddingBaseUrl.isBlank()
+                && embeddingApiKey != null && !embeddingApiKey.isBlank();
     }
 
     public List<Provider> getFast() {

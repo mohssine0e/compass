@@ -1,0 +1,48 @@
+.crash {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: var(--space-6) 0;
+}
+
+.crash-lead {
+  margin: 0;
+  font-size: var(--text-lg);
+  color: var(--text);
+}
+
+.crash-action {
+  border: 1px solid var(--brass-dim);
+  border-radius: var(--radius);
+  background: none;
+  padding: var(--space-2) var(--space-4);
+  color: var(--brass);
+  font-size: var(--text-sm);
+}
+
+.crash-action:hover {
+  border-color: var(--brass);
+}
+
+.crash-details {
+  width: 100%;
+  color: var(--faint);
+  font-size: var(--text-xs);
+}
+
+.crash-details summary {
+  cursor: pointer;
+}
+
+.crash-details pre {
+  overflow-x: auto;
+  margin: var(--space-2) 0 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: var(--space-3);
+  color: var(--muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

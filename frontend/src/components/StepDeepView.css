@@ -173,6 +173,18 @@ button.deep-crumb:hover {
   resize: vertical;
 }
 
+/* RB-4.9: same input treatment as .deep-notes, just a <select> instead of free text. */
+.deep-depends-select {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 12px;
+  font-size: 0.9rem;
+  outline: none;
+}
+
 .deep-notes:focus {
   border-color: var(--faint);
 }
