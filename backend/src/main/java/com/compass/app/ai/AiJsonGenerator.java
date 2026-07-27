@@ -89,7 +89,7 @@ public class AiJsonGenerator {
         // Providers currently benched by the circuit breaker are skipped, so a standing 429 or a
         // bad key stops costing a full timeout on every call (see ProviderHealth).
         for (AiProperties.Provider provider : health.callOrder(props.providersFor(tier))) {
-            String raw = complete(tier, provider, system, user, maxTokensOverride);
+            String raw = complete(tier, feature, provider, system, user, maxTokensOverride);
             if (raw == null) {
                 continue;
             }
@@ -124,21 +124,26 @@ public class AiJsonGenerator {
     public JsonNode generateSkeleton(String feature, String system, String user) {
         String raw = null;
         for (AiProperties.Provider provider : health.callOrder(props.providersFor(AiTier.FAST))) {
+            long startedAt = System.currentTimeMillis();
             try {
                 long timeout = provider.getTimeoutSecondsOverride() != null
                         ? provider.getTimeoutSecondsOverride() : props.getSkeletonTimeoutSeconds();
-                long startedAt = System.currentTimeMillis();
                 raw = chat.complete(provider, timeout, props.getSkeletonMaxTokens(), system, user);
+                long durationMs = System.currentTimeMillis() - startedAt;
                 if (raw != null && !raw.isBlank()) {
-                    health.recordSuccess(provider, System.currentTimeMillis() - startedAt);
+                    health.recordSuccess(provider, durationMs);
+                    logCallTiming(AiTier.FAST, feature + " (skeleton)", provider, durationMs, "success");
                     break;
                 }
+                logCallTiming(AiTier.FAST, feature + " (skeleton)", provider, durationMs, "empty");
                 raw = null;
             } catch (RuntimeException ex) {
                 health.recordFailure(provider, ex);
                 log.warn("AI skeleton provider ({}) failed: {}", provider.getModel(), ex.getMessage());
                 events.aiWarning(AiFailures.category(ex),
                         provider.getModel() + " failed: " + AiFailures.reason(ex), null);
+                logCallTiming(AiTier.FAST, feature + " (skeleton)", provider,
+                        System.currentTimeMillis() - startedAt, "failure");
             }
         }
         if (raw == null) {
@@ -148,11 +153,12 @@ public class AiJsonGenerator {
         return parse(raw);
     }
 
-    private String complete(AiTier tier, AiProperties.Provider provider, String system, String user,
-                            Integer maxTokensOverride) {
+    private String complete(AiTier tier, String feature, AiProperties.Provider provider, String system,
+                            String user, Integer maxTokensOverride) {
         if (!provider.isConfigured()) {
             return null;
         }
+        long startedAt = System.currentTimeMillis();
         try {
             long defaultTimeout = tier == AiTier.FAST
                     ? props.getFastJsonTimeoutSeconds() : props.getGenerationTimeoutSeconds();
@@ -160,20 +166,45 @@ public class AiJsonGenerator {
                     : tier == AiTier.FAST ? props.getFastJsonMaxTokens() : props.getGenerationMaxTokens();
             long timeout = provider.getTimeoutSecondsOverride() != null
                     ? provider.getTimeoutSecondsOverride() : defaultTimeout;
-            long startedAt = System.currentTimeMillis();
             String out = chat.complete(provider, timeout, maxTokens, system, user);
+            long durationMs = System.currentTimeMillis() - startedAt;
             if (out != null && !out.isBlank()) {
-                health.recordSuccess(provider, System.currentTimeMillis() - startedAt);
+                health.recordSuccess(provider, durationMs);
+                logCallTiming(tier, feature, provider, durationMs, "success");
                 return out;
             }
+            logCallTiming(tier, feature, provider, durationMs, "empty");
             return null;
         } catch (RuntimeException ex) {
             health.recordFailure(provider, ex);
             log.warn("AI JSON provider ({}) failed: {}", provider.getModel(), ex.getMessage());
             events.aiWarning(AiFailures.category(ex),
                     provider.getModel() + " failed: " + AiFailures.reason(ex), null);
+            logCallTiming(tier, feature, provider, System.currentTimeMillis() - startedAt, "failure");
             return null;
         }
+    }
+
+    /**
+     * One `info`-severity record per AI call — tier, feature, provider, duration, and outcome
+     * (V3-2.4). Separate from the `aiWarning` events above (which exist to flag degradation):
+     * this is a routine timing signal, present on success as much as failure, so the questions
+     * `TASKS_v3.md` was guessing at ("is Gemini Pro actually worth its 40s override? is the NIM
+     * fallback ever reached?") have real data behind them instead of one-off observations.
+     * Pruned by the existing {@code EventRetentionService} like every other event, so this stays
+     * a recent-signal view rather than an unbounded log.
+     */
+    private void logCallTiming(AiTier tier, String feature, AiProperties.Provider provider,
+                               long durationMs, String outcome) {
+        events.info("ai_call_timing",
+                feature + " via " + provider.getModel() + " (" + tier.name().toLowerCase() + ") "
+                        + outcome + " in " + durationMs + "ms.",
+                java.util.Map.of(
+                        "tier", tier.name(),
+                        "feature", feature,
+                        "provider", provider.getModel(),
+                        "durationMs", durationMs,
+                        "outcome", outcome));
     }
 
     /**

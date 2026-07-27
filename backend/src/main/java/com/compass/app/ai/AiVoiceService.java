@@ -113,7 +113,7 @@ public class AiVoiceService {
         // Benched providers are skipped (see ProviderHealth) — an acknowledgment must feel
         // instant, and it's the call most often paying for a dead provider in the chain.
         for (AiProperties.Provider provider : health.callOrder(props.providersFor(AiTier.FAST))) {
-            String line = tryProvider(provider, system, user);
+            String line = tryProvider(feature, provider, system, user);
             if (line != null) {
                 return line;
             }
@@ -155,19 +155,22 @@ public class AiVoiceService {
         return java.time.Duration.between(instant, java.time.Instant.now()).toDays();
     }
 
-    private String tryProvider(AiProperties.Provider provider, String system, String user) {
+    private String tryProvider(String feature, AiProperties.Provider provider, String system, String user) {
         if (!provider.isConfigured()) {
             return null;
         }
+        long startedAt = System.currentTimeMillis();
         try {
             long timeout = provider.getTimeoutSecondsOverride() != null
                     ? provider.getTimeoutSecondsOverride() : props.getTimeoutSeconds();
-            long startedAt = System.currentTimeMillis();
             String line = chat.complete(provider, timeout, props.getMaxTokens(), system, user);
+            long durationMs = System.currentTimeMillis() - startedAt;
             if (line == null || line.isBlank()) {
+                logCallTiming(feature, provider, durationMs, "empty");
                 return null;
             }
-            health.recordSuccess(provider, System.currentTimeMillis() - startedAt);
+            health.recordSuccess(provider, durationMs);
+            logCallTiming(feature, provider, durationMs, "success");
             // Models sometimes wrap the line in quotes despite the instruction; strip them.
             return stripQuotes(line.trim());
         } catch (RuntimeException ex) {
@@ -175,8 +178,21 @@ public class AiVoiceService {
             log.warn("AI provider ({}) failed: {}", provider.getModel(), ex.getMessage());
             events.aiWarning(AiFailures.category(ex),
                     provider.getModel() + " failed: " + AiFailures.reason(ex), null);
+            logCallTiming(feature, provider, System.currentTimeMillis() - startedAt, "failure");
             return null;
         }
+    }
+
+    /** One `info`-severity timing record per call (V3-2.4) — see AiJsonGenerator's twin for why. */
+    private void logCallTiming(String feature, AiProperties.Provider provider, long durationMs, String outcome) {
+        events.info("ai_call_timing",
+                feature + " via " + provider.getModel() + " (fast) " + outcome + " in " + durationMs + "ms.",
+                java.util.Map.of(
+                        "tier", AiTier.FAST.name(),
+                        "feature", feature,
+                        "provider", provider.getModel(),
+                        "durationMs", durationMs,
+                        "outcome", outcome));
     }
 
     private static String stripQuotes(String s) {
