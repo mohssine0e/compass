@@ -96,7 +96,10 @@ class RoadmapServiceBehaviorTest {
         RoadmapQueryService realQueryService = new RoadmapQueryService(repository);
         RoadmapRetierService realRetierService = new RoadmapRetierService(
                 repository, realQueryService, roadmapAi, entryService, aiVoice, events);
-        service = new RoadmapService(repository, realQueryService, realRetierService, roadmapAi, profileService, searchGrounding,
+        RoadmapStructureService realStructureService = new RoadmapStructureService(
+                repository, realQueryService, canonicalTopics, embeddings, reviewAi);
+        service = new RoadmapService(repository, realQueryService, realRetierService, realStructureService,
+                roadmapAi, profileService, searchGrounding,
                 resourceService, entryService, aiVoice, events, topicMatcher, canonicalTopics,
                 embeddings, reviewAi, Executors.newSingleThreadExecutor(), 5);
 
