@@ -2,6 +2,8 @@ package com.compass.app.resource;
 
 import com.compass.app.ai.ResourceAiService;
 import com.compass.app.ai.SearchGroundingService;
+import com.compass.app.events.EventService;
+import com.compass.app.resource.dto.EnrichmentResponse;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,11 +33,67 @@ public class ResourceEnrichmentService {
     static final String KIND_WRITTEN = "written";
     static final String KIND_VIDEO = "video";
     static final String SOURCE_EXA_HIGHLIGHT = "exa_highlight";
+    static final String SOURCE_FETCH_FALLBACK = "fetch_fallback";
 
     private final ResourceEnrichmentRepository repository;
+    private final ResourcePageFetcher pageFetcher;
+    private final ResourceAiService resourceAi;
+    private final EventService events;
 
-    public ResourceEnrichmentService(ResourceEnrichmentRepository repository) {
+    public ResourceEnrichmentService(ResourceEnrichmentRepository repository, ResourcePageFetcher pageFetcher,
+                                     ResourceAiService resourceAi, EventService events) {
         this.repository = repository;
+        this.pageFetcher = pageFetcher;
+        this.resourceAi = resourceAi;
+        this.events = events;
+    }
+
+    /**
+     * The lazy entry point (RES-3/RES-5): a cache hit returns instantly; a miss triggers the
+     * appropriate fallback (fetch+summarize for a written resource; RES-4 adds the video path).
+     * {@code null} when nothing could be produced — the deep view then shows the plain link with
+     * no fabricated pointer, exactly as if enrichment had never been attempted.
+     */
+    @Transactional
+    public EnrichmentResponse enrich(String resourceUrl, String stepTopic) {
+        if (resourceUrl == null || resourceUrl.isBlank()) {
+            return null;
+        }
+        String topicKey = topicKey(stepTopic);
+        return repository.findByResourceUrlAndTopicKey(resourceUrl, topicKey)
+                .map(ResourceEnrichmentService::toResponse)
+                .orElseGet(() -> enrichWritten(resourceUrl, topicKey, stepTopic));
+    }
+
+    /**
+     * RES-3: fetch the resource's real page, ask the Fast tier for a grounded focus pointer, and
+     * cache it. A fetch failure or an AI call that couldn't produce a pointer both degrade to
+     * "no enrichment" — no cache entry, plain link only — rather than anything fabricated.
+     */
+    private EnrichmentResponse enrichWritten(String resourceUrl, String topicKey, String stepTopic) {
+        String pageText = pageFetcher.fetchText(resourceUrl);
+        if (pageText == null) {
+            events.systemError("resource_fetch_failed",
+                    "Resource fetch failed for enrichment, showing plain link.", null);
+            return null;
+        }
+        String pointer = resourceAi.focusPointer(stepTopic, pageText);
+        if (pointer == null) {
+            return null;
+        }
+        ResourceEnrichment enrichment = new ResourceEnrichment();
+        enrichment.setResourceUrl(resourceUrl);
+        enrichment.setTopicKey(topicKey);
+        enrichment.setKind(KIND_WRITTEN);
+        enrichment.setFocusPointer(pointer);
+        enrichment.setSource(SOURCE_FETCH_FALLBACK);
+        repository.save(enrichment);
+        return toResponse(enrichment);
+    }
+
+    private static EnrichmentResponse toResponse(ResourceEnrichment e) {
+        return new EnrichmentResponse(e.getKind(), e.getFocusPointer(), e.getSegmentStart(),
+                e.getSegmentEnd(), e.getSegmentDescription(), e.getSource());
     }
 
     /**

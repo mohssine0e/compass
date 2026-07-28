@@ -70,4 +70,69 @@ public final class ResourcePrompts {
     sb.append("Write the per-step resources as JSON.");
     return sb.toString();
   }
+
+  // --- Enrichment (RESSOURCE_BRAIN_TASKS.md RES-3/RES-4): a resource nudge, so the plain
+  // self-talk voice applies without exception (CLAUDE.md Section 2 names "resource nudges"
+  // directly as reflection-facing) — never the Phase 25 teaching persona, even for a resource
+  // attached to a career-domain roadmap. ---------------------------------------------------
+
+  /**
+   * RES-3: a short, honest "what to focus on" for a written resource, grounded strictly in the
+   * page text actually fetched — never the AI's own guess at what the page probably says.
+   */
+  public static final String FOCUS_POINTER_SYSTEM = """
+      You are the user's own clear-headed inner voice, about to start a resource for something
+      they're learning. Read the page text below and say, in 2-4 plain sentences, what to
+      actually pay attention to for the specific thing they're trying to learn — not a summary
+      of the whole page, a pointer to the part that matters for THIS.
+
+      Hard rules:
+      - Ground this ONLY in the page text given. If the text doesn't clearly cover the topic,
+        say so plainly rather than inventing a pointer ("This page doesn't really get into
+        {topic} — skim for the closest section or find something else.").
+      - Plain and direct, the way you'd note it to yourself before diving in. No "This resource
+        covers...", no praise ("great resource"), no hype, no emoji, no sign-off.
+      - Never repeat the resource's title back — get straight to what to focus on.
+      - Output ONLY strict JSON, no prose around it: {"pointer": "..."}
+      """;
+
+  public static String focusPointerUser(String stepTopic, String pageText) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("What they're trying to learn right now: ").append(stepTopic == null ? "" : stepTopic.trim())
+        .append('\n');
+    sb.append("Page text (fetched from the resource):\n")
+        .append(pageText == null ? "" : pageText.trim()).append('\n');
+    sb.append("Write the focus pointer as JSON.");
+    return sb.toString();
+  }
+
+  /**
+   * RES-4: the specific transcript segment relevant to the step's topic, or an honest "not
+   * really covered" when nothing in the given chunks fits — never a fabricated timestamp.
+   */
+  public static final String VIDEO_SEGMENT_SYSTEM = """
+      You are the user's own clear-headed inner voice, about to watch part of a video for
+      something they're learning. Below are timestamped transcript chunks. Find the one segment
+      that actually covers what they're trying to learn, and say so in one plain sentence.
+
+      Hard rules:
+      - The start/end seconds MUST come from the transcript chunks given — never estimate or
+        invent a timestamp. Pick the chunk boundaries that best bracket the relevant part.
+      - If nothing in the given chunks genuinely covers the topic, say so plainly instead of
+        picking the closest-sounding chunk anyway: {"found": false}.
+      - The one-line description is plain and direct, not a summary of the whole video — what
+        this specific segment covers.
+      - Output ONLY strict JSON, no prose around it: {"found": true, "start_seconds": 0,
+        "end_seconds": 0, "description": "..."} or {"found": false}
+      """;
+
+  public static String videoSegmentUser(String stepTopic, String transcriptChunks) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("What they're trying to learn right now: ").append(stepTopic == null ? "" : stepTopic.trim())
+        .append('\n');
+    sb.append("Timestamped transcript chunks:\n")
+        .append(transcriptChunks == null ? "" : transcriptChunks.trim()).append('\n');
+    sb.append("Find the relevant segment as JSON.");
+    return sb.toString();
+  }
 }

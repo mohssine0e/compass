@@ -2,6 +2,8 @@ package com.compass.app.resource;
 
 import com.compass.app.ai.ResourceAiService;
 import com.compass.app.ai.SearchGroundingService;
+import com.compass.app.events.EventService;
+import com.compass.app.resource.dto.EnrichmentResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,26 +14,38 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * RES-2: caching a real Exa highlight as a resource's focus pointer costs no extra AI call and
- * no extra fetch — it's just surfacing something already computed. Pins down the actual
+ * RES-2/RES-3: caching a real Exa highlight as a resource's focus pointer costs no extra AI call
+ * and no extra fetch — it's just surfacing something already computed. Pins down the actual
  * matching/threshold/dedup rules, since those are exactly the kind of thing that silently does
- * nothing if a condition is subtly wrong (matches V3-2.7's own lesson about this codebase).
+ * nothing if a condition is subtly wrong (matches V3-2.7's own lesson about this codebase). The
+ * fallback fetch+summarize path is covered too, including the graceful-degradation cases: a
+ * failed fetch or an AI call with nothing useful to say both mean "plain link only," never a
+ * fabricated pointer.
  */
 class ResourceEnrichmentServiceTest {
 
     private ResourceEnrichmentRepository repository;
+    private ResourcePageFetcher pageFetcher;
+    private ResourceAiService resourceAi;
+    private EventService events;
     private ResourceEnrichmentService service;
 
     @BeforeEach
     void setUp() {
         repository = mock(ResourceEnrichmentRepository.class);
-        service = new ResourceEnrichmentService(repository);
+        pageFetcher = mock(ResourcePageFetcher.class);
+        resourceAi = mock(ResourceAiService.class);
+        events = mock(EventService.class);
+        service = new ResourceEnrichmentService(repository, pageFetcher, resourceAi, events);
     }
 
     private static ResourceAiService.Resource resource(String url) {
@@ -147,5 +161,77 @@ class ResourceEnrichmentServiceTest {
         assertThat(ResourceEnrichmentService.topicKey("  leading/trailing spaces  ")).isEqualTo("leading-trailing-spaces");
         assertThat(ResourceEnrichmentService.topicKey(null)).isEmpty();
         assertThat(ResourceEnrichmentService.topicKey("x".repeat(200))).hasSize(128);
+    }
+
+    // ── enrich() / RES-3 fallback fetch+summarize ────────────────────────────────────────
+
+    @Test
+    @DisplayName("a cache hit returns the cached enrichment without fetching or calling the AI")
+    void enrichReturnsCachedResultWithoutRefetching() {
+        ResourceEnrichment cached = new ResourceEnrichment();
+        cached.setKind("written");
+        cached.setFocusPointer("Cached pointer.");
+        cached.setSource("exa_highlight");
+        when(repository.findByResourceUrlAndTopicKey("https://example.com/a", "topic"))
+                .thenReturn(Optional.of(cached));
+
+        EnrichmentResponse result = service.enrich("https://example.com/a", "topic");
+
+        assertThat(result.focusPointer()).isEqualTo("Cached pointer.");
+        assertThat(result.source()).isEqualTo("exa_highlight");
+        verifyNoInteractions(pageFetcher, resourceAi);
+    }
+
+    @Test
+    @DisplayName("a cache miss fetches the page, asks the AI, and caches the result as fetch_fallback")
+    void enrichCacheMissFetchesAndCaches() {
+        when(repository.findByResourceUrlAndTopicKey(any(), any())).thenReturn(Optional.empty());
+        when(pageFetcher.fetchText("https://example.com/a")).thenReturn("The real page text.");
+        when(resourceAi.focusPointer("Ownership", "The real page text.")).thenReturn("Focus on X.");
+
+        EnrichmentResponse result = service.enrich("https://example.com/a", "Ownership");
+
+        assertThat(result.focusPointer()).isEqualTo("Focus on X.");
+        assertThat(result.source()).isEqualTo("fetch_fallback");
+        assertThat(result.kind()).isEqualTo("written");
+
+        ArgumentCaptor<ResourceEnrichment> captor = ArgumentCaptor.forClass(ResourceEnrichment.class);
+        verify(repository).save(captor.capture());
+        assertThat(captor.getValue().getTopicKey()).isEqualTo("ownership");
+    }
+
+    @Test
+    @DisplayName("a failed fetch degrades to no enrichment, caches nothing, and logs a brief system event")
+    void enrichDegradesOnFetchFailure() {
+        when(repository.findByResourceUrlAndTopicKey(any(), any())).thenReturn(Optional.empty());
+        when(pageFetcher.fetchText(anyString())).thenReturn(null);
+
+        EnrichmentResponse result = service.enrich("https://example.com/a", "topic");
+
+        assertThat(result).isNull();
+        verify(repository, never()).save(any());
+        verifyNoInteractions(resourceAi);
+        verify(events).systemError(eq("resource_fetch_failed"), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("an AI call that couldn't produce a pointer also degrades to no enrichment, not a fabricated one")
+    void enrichDegradesWhenAiHasNothingUseful() {
+        when(repository.findByResourceUrlAndTopicKey(any(), any())).thenReturn(Optional.empty());
+        when(pageFetcher.fetchText(anyString())).thenReturn("Page text unrelated to the topic.");
+        when(resourceAi.focusPointer(any(), any())).thenReturn(null);
+
+        EnrichmentResponse result = service.enrich("https://example.com/a", "topic");
+
+        assertThat(result).isNull();
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("a blank resource url is a no-op")
+    void enrichBlankUrlIsNoOp() {
+        assertThat(service.enrich("", "topic")).isNull();
+        assertThat(service.enrich(null, "topic")).isNull();
+        verifyNoInteractions(pageFetcher, resourceAi, repository);
     }
 }

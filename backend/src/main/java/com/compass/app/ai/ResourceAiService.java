@@ -171,4 +171,51 @@ public class ResourceAiService {
     public record Resource(String title, String url, String format, String sourceType,
                            String estimatedTime, String aiGroundingSource) {
     }
+
+    /**
+     * RES-3: a short "what to focus on" for a written resource, grounded strictly in
+     * {@code pageText} (the resource's actually-fetched content) — {@code null} on failure, or
+     * when the model itself says the page doesn't cover the topic (still {@code null}: a step
+     * saying nothing useful isn't worth caching as a pointer, same as any other best-effort AI
+     * result in this codebase).
+     */
+    public String focusPointer(String stepTopic, String pageText) {
+        JsonNode json = ai.generate(AiTier.FAST, "resource focus pointer",
+                ResourcePrompts.FOCUS_POINTER_SYSTEM, ResourcePrompts.focusPointerUser(stepTopic, pageText));
+        if (json == null) {
+            return null;
+        }
+        String pointer = AiJsonGenerator.text(json.get("pointer"));
+        return pointer == null || pointer.isBlank() ? null : pointer.trim();
+    }
+
+    /**
+     * RES-4: the transcript segment relevant to {@code stepTopic}, chosen only from the
+     * timestamps actually present in {@code transcriptChunks} — never a fabricated one.
+     * {@code null} on failure or when nothing in the given chunks genuinely fits.
+     */
+    public VideoSegment findVideoSegment(String stepTopic, String transcriptChunks) {
+        JsonNode json = ai.generate(AiTier.FAST, "video segment lookup",
+                ResourcePrompts.VIDEO_SEGMENT_SYSTEM, ResourcePrompts.videoSegmentUser(stepTopic, transcriptChunks));
+        if (json == null) {
+            return null;
+        }
+        JsonNode foundNode = json.get("found");
+        if (foundNode == null || !foundNode.asBoolean(false)) {
+            return null;
+        }
+        JsonNode startNode = json.get("start_seconds");
+        JsonNode endNode = json.get("end_seconds");
+        String description = AiJsonGenerator.text(json.get("description"));
+        if (startNode == null || !startNode.isIntegralNumber()
+                || endNode == null || !endNode.isIntegralNumber()
+                || description == null || description.isBlank()) {
+            return null;
+        }
+        return new VideoSegment(startNode.asInt(), endNode.asInt(), description.trim());
+    }
+
+    /** A real transcript-backed segment (RES-4) — seconds from the video's own timestamps. */
+    public record VideoSegment(int startSeconds, int endSeconds, String description) {
+    }
 }
