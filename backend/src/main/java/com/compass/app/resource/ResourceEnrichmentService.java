@@ -1,0 +1,97 @@
+package com.compass.app.resource;
+
+import com.compass.app.ai.ResourceAiService;
+import com.compass.app.ai.SearchGroundingService;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+/**
+ * The resource enrichment cache (RES-1..RES-4 of RESSOURCE_BRAIN_TASKS.md): a "what to focus
+ * on" for a written resource, or a real transcript-backed timestamp range for a video one,
+ * cached forever per (resource url, topic) so the same resource is never re-processed twice.
+ *
+ * <p>{@link #cacheExaHighlights} is the zero-AI-call common case (RES-2), called inline from
+ * {@link ResourceService} right when resources are suggested — piggybacking on a call that's
+ * already being made. RES-3/RES-4's lazy fallback paths (fetch+summarize, transcript lookup)
+ * live in this class too, but are only ever triggered from the deep view on demand — see
+ * {@link ResourceController}.
+ */
+@Service
+public class ResourceEnrichmentService {
+
+    // Below this many characters, an Exa highlight reads as a fragment, not a usable "what to
+    // focus on" — not worth caching as one; RES-3's fallback will produce a real pointer for it
+    // instead, the first time the founder actually opens that step.
+    private static final int MIN_HIGHLIGHT_LENGTH = 40;
+
+    static final String KIND_WRITTEN = "written";
+    static final String KIND_VIDEO = "video";
+    static final String SOURCE_EXA_HIGHLIGHT = "exa_highlight";
+
+    private final ResourceEnrichmentRepository repository;
+
+    public ResourceEnrichmentService(ResourceEnrichmentRepository repository) {
+        this.repository = repository;
+    }
+
+    /**
+     * RES-2: for each of {@code resources} that Exa returned a real highlight for (matched by
+     * url against {@code groundingResults}), cache that highlight as the resource's focus
+     * pointer for {@code stepTopic} — no AI call, no fetch, just surfacing something Exa had
+     * already computed. A resource with no matching Exa highlight, or one already cached for
+     * this exact topic, is silently skipped (the fallback path picks it up lazily instead).
+     */
+    @Transactional
+    public void cacheExaHighlights(List<ResourceAiService.Resource> resources,
+                                   List<SearchGroundingService.Result> groundingResults,
+                                   String stepTopic) {
+        if (resources == null || resources.isEmpty() || groundingResults == null || groundingResults.isEmpty()) {
+            return;
+        }
+        Map<String, SearchGroundingService.Result> highlightsByUrl = groundingResults.stream()
+                .filter(r -> r.isExaHighlight() && r.content() != null
+                        && r.content().length() >= MIN_HIGHLIGHT_LENGTH)
+                .collect(java.util.stream.Collectors.toMap(
+                        SearchGroundingService.Result::url, r -> r, (a, b) -> a));
+        if (highlightsByUrl.isEmpty()) {
+            return;
+        }
+        String topicKey = topicKey(stepTopic);
+        for (ResourceAiService.Resource resource : resources) {
+            SearchGroundingService.Result highlight = highlightsByUrl.get(resource.url());
+            if (highlight == null) {
+                continue;
+            }
+            if (repository.findByResourceUrlAndTopicKey(resource.url(), topicKey).isPresent()) {
+                continue;
+            }
+            ResourceEnrichment enrichment = new ResourceEnrichment();
+            enrichment.setResourceUrl(resource.url());
+            enrichment.setTopicKey(topicKey);
+            enrichment.setKind(KIND_WRITTEN);
+            enrichment.setFocusPointer(highlight.content());
+            enrichment.setSource(SOURCE_EXA_HIGHLIGHT);
+            repository.save(enrichment);
+        }
+    }
+
+    /**
+     * A short, stable key identifying the step/topic context an enrichment was generated for —
+     * deliberately not a full free-text match, same reasoning and same shape as {@code
+     * RoadmapService}'s own topic slugify (duplicated rather than shared across packages: three
+     * lines, no real coupling gained from sharing it).
+     */
+    static String topicKey(String text) {
+        if (text == null) {
+            return "";
+        }
+        String slug = text.trim().toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("(^-|-$)", "");
+        return slug.length() <= 128 ? slug : slug.substring(0, 128);
+    }
+}

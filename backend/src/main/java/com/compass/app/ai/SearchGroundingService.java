@@ -194,11 +194,10 @@ public class SearchGroundingService {
             List<Result> results = new ArrayList<>();
             for (ExaResponse.ExaResult r : response.results()) {
                 if (r.title() != null && !r.title().isBlank()) {
-                    String snippet = r.highlights() == null || r.highlights().isEmpty()
-                            ? ""
-                            : String.join(" … ", r.highlights());
+                    boolean hasHighlight = r.highlights() != null && !r.highlights().isEmpty();
+                    String snippet = hasHighlight ? String.join(" … ", r.highlights()) : "";
                     results.add(new Result(r.title().strip(),
-                            r.url() == null ? "" : r.url().strip(), snippet.strip()));
+                            r.url() == null ? "" : r.url().strip(), snippet.strip(), hasHighlight));
                 }
             }
             return results;
@@ -233,7 +232,7 @@ public class SearchGroundingService {
             for (TavilyResponse.TavilyResult r : response.results()) {
                 if (r.title() != null && !r.title().isBlank()) {
                     results.add(new Result(r.title().strip(), r.url() == null ? "" : r.url().strip(),
-                            r.content() == null ? "" : r.content().strip()));
+                            r.content() == null ? "" : r.content().strip(), false));
                 }
             }
             return results;
@@ -264,7 +263,7 @@ public class SearchGroundingService {
             context.append('\n');
             String url = r.url() == null ? "" : r.url().strip();
             sources.add(!url.isBlank() ? r.title().strip() + " — " + host(url) : r.title().strip());
-            results.add(new Result(r.title().strip(), url, snippet));
+            results.add(new Result(r.title().strip(), url, snippet, r.isExaHighlight()));
         }
         if (sources.isEmpty()) {
             return null;
@@ -321,10 +320,16 @@ public class SearchGroundingService {
     }
 
     /**
-     * One real search result — its URL is what resource suggestions are allowed to
-     * link to.
+     * One real search result — its URL is what resource suggestions are allowed to link to.
+     * {@code isExaHighlight} is {@code true} only when {@code content} is a real extractive
+     * quote Exa itself pulled from the page (its {@code highlights} field) — as opposed to
+     * Tavily's own paraphrased content snippet, or an Exa result with no highlight at all
+     * (empty {@code content}, {@code isExaHighlight} false). RES-2 reuses exactly this
+     * distinction: a genuine Exa highlight is trustworthy enough to cache as a resource's
+     * "focus pointer" with zero extra AI calls; a generic snippet isn't the same kind of thing
+     * and isn't reused that way.
      */
-    public record Result(String title, String url, String content) {
+    public record Result(String title, String url, String content, boolean isExaHighlight) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

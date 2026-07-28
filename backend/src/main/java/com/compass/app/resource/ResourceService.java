@@ -38,13 +38,16 @@ public class ResourceService {
     private final SearchGroundingService searchGrounding;
     private final EntryRepository repository;
     private final ProfileService profileService;
+    private final ResourceEnrichmentService enrichmentService;
 
     public ResourceService(ResourceAiService resourceAi, SearchGroundingService searchGrounding,
-                           EntryRepository repository, ProfileService profileService) {
+                           EntryRepository repository, ProfileService profileService,
+                           ResourceEnrichmentService enrichmentService) {
         this.resourceAi = resourceAi;
         this.searchGrounding = searchGrounding;
         this.repository = repository;
         this.profileService = profileService;
+        this.enrichmentService = enrichmentService;
     }
 
     /**
@@ -53,12 +56,22 @@ public class ResourceService {
      * the same result set here) — same call, same timing as before this concern was split out.
      * Returns a list aligned by index to {@code stepTexts} (empty list per step with nothing
      * fitting).
+     *
+     * <p>Also piggybacks RES-2's zero-AI-call enrichment cache: any chosen resource whose grounding
+     * result carried a real Exa highlight gets that highlight cached as its focus pointer for this
+     * step's topic, right here — no extra call, no extra fetch, just surfacing something Exa had
+     * already computed for a page that was picked anyway.
      */
     public List<List<ResourceAiService.Resource>> suggestResourcesPerStep(
             String scope, List<String> stepTexts, List<SearchGroundingService.Result> groundingResults,
             Long roadmapId) {
-        return resourceAi.suggestResources(scope, stepTexts, groundingResults, avoidedFormats(),
-                preferredFormats(), roadmapId == null ? Set.of() : usedResourceUrls(roadmapId));
+        List<List<ResourceAiService.Resource>> perStep = resourceAi.suggestResources(scope, stepTexts,
+                groundingResults, avoidedFormats(), preferredFormats(),
+                roadmapId == null ? Set.of() : usedResourceUrls(roadmapId));
+        for (int i = 0; i < perStep.size() && i < stepTexts.size(); i++) {
+            enrichmentService.cacheExaHighlights(perStep.get(i), groundingResults, stepTexts.get(i));
+        }
+        return perStep;
     }
 
     /**
