@@ -45,6 +45,7 @@ class RoadmapServicePureLogicTest {
         repository = mock(EntryRepository.class);
         service = new RoadmapService(
                 repository,
+                new RoadmapQueryService(repository),
                 mock(RoadmapAiService.class),
                 mock(ProfileService.class),
                 mock(SearchGroundingService.class),
@@ -189,7 +190,7 @@ class RoadmapServicePureLogicTest {
         step.setParentId(1L);
         when(repository.findById(99L)).thenReturn(java.util.Optional.of(step));
         when(repository.findAncestors(Mockito.any()))
-                .thenReturn(Collections.nCopies(RoadmapService.MAX_STEP_DEPTH, new Entry()));
+                .thenReturn(Collections.nCopies(RoadmapQueryService.MAX_STEP_DEPTH, new Entry()));
 
         assertThat(service.isAtMaxStepDepth(99L)).isTrue();
     }

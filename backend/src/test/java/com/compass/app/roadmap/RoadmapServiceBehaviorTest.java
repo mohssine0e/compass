@@ -93,7 +93,7 @@ class RoadmapServiceBehaviorTest {
         canonicalTopics = mock(CanonicalTopicRepository.class);
         embeddings = mock(EmbeddingService.class);
         reviewAi = mock(ReviewAiService.class);
-        service = new RoadmapService(repository, roadmapAi, profileService, searchGrounding,
+        service = new RoadmapService(repository, new RoadmapQueryService(repository), roadmapAi, profileService, searchGrounding,
                 resourceService, entryService, aiVoice, events, topicMatcher, canonicalTopics,
                 embeddings, reviewAi, Executors.newSingleThreadExecutor(), 5);
 
@@ -509,7 +509,7 @@ class RoadmapServiceBehaviorTest {
         Entry original = step(2, 1, "original", EntryStatus.CAPTURED, 0);
         when(repository.findById(2L)).thenReturn(Optional.of(original));
         when(repository.findAncestors(2L))
-                .thenReturn(java.util.Collections.nCopies(RoadmapService.MAX_STEP_DEPTH, new Entry()));
+                .thenReturn(java.util.Collections.nCopies(RoadmapQueryService.MAX_STEP_DEPTH, new Entry()));
         CreateRoadmapRequest.DraftStepInput draft = new CreateRoadmapRequest.DraftStepInput(
                 "sub", null, null, null, null, null, null, false);
 

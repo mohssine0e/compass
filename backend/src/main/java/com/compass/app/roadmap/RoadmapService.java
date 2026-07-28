@@ -49,6 +49,7 @@ import java.util.concurrent.ExecutorService;
 public class RoadmapService {
 
     private final EntryRepository repository;
+    private final RoadmapQueryService queryService;
     private final RoadmapAiService roadmapAi;
     private final ProfileService profileService;
     private final SearchGroundingService searchGrounding;
@@ -73,7 +74,8 @@ public class RoadmapService {
     // created here, so Spring drains it on shutdown instead of leaving threads mid-AI-call.
     private final ExecutorService expansionExecutor;
 
-    public RoadmapService(EntryRepository repository, RoadmapAiService roadmapAi,
+    public RoadmapService(EntryRepository repository, RoadmapQueryService queryService,
+                          RoadmapAiService roadmapAi,
                           ProfileService profileService, SearchGroundingService searchGrounding,
                           ResourceService resourceService, EntryService entryService,
                           AiVoiceService aiVoice, EventService events,
@@ -83,6 +85,7 @@ public class RoadmapService {
                           @org.springframework.beans.factory.annotation.Value(
                                   "${compass.search.max-context-snippets:5}") int maxGroundingSnippets) {
         this.repository = repository;
+        this.queryService = queryService;
         this.roadmapAi = roadmapAi;
         this.profileService = profileService;
         this.searchGrounding = searchGrounding;
@@ -608,10 +611,7 @@ public class RoadmapService {
     }
 
     private Entry requireModule(Long roadmapId, Long moduleId) {
-        return repository.findById(moduleId)
-                .filter(e -> e.getType() == EntryType.ROADMAP && roadmapId.equals(e.getParentId()))
-                .orElseThrow(() -> new java.util.NoSuchElementException(
-                        "No module " + moduleId + " on roadmap " + roadmapId));
+        return queryService.requireModule(roadmapId, moduleId);
     }
 
     /**
@@ -621,14 +621,7 @@ public class RoadmapService {
      */
     @Transactional(readOnly = true)
     public List<Long> unexpandedModuleIds(Long roadmapId) {
-        List<Long> ids = new ArrayList<>();
-        for (Entry m : repository.findByParentIdOrderByOrderIndexAsc(roadmapId)) {
-            if (m.getType() == EntryType.ROADMAP
-                    && repository.findByParentIdOrderByOrderIndexAsc(m.getId()).isEmpty()) {
-                ids.add(m.getId());
-            }
-        }
-        return ids;
+        return queryService.unexpandedModuleIds(roadmapId);
     }
 
     /**
@@ -864,19 +857,9 @@ public class RoadmapService {
         return sb.toString();
     }
 
-    // Total tree depth allowed below the roadmap root (Phase 20) — module(1)/step(2)/substep(3),
-    // no deeper. Counted from the root, not by role, so a flat roadmap's step(1)/substep(2)
-    // naturally gets one more level of break-down room than a nested one, which is fine: the cap
-    // is about total nesting, not about labeling every level "module" or "step".
-    static final int MAX_STEP_DEPTH = 3;
-
     /** How many parents up to the root roadmap (root itself is depth 0). */
     int depthOf(Entry entry) {
-        if (entry.getParentId() == null) {
-            return 0;
-        }
-        // One recursive query instead of a findById per level (V3-3.1).
-        return repository.findAncestors(entry.getId()).size();
+        return queryService.depthOf(entry);
     }
 
     /**
@@ -886,10 +869,7 @@ public class RoadmapService {
      */
     @Transactional(readOnly = true)
     public boolean isAtMaxStepDepth(Long stepId) {
-        return repository.findById(stepId)
-                .map(this::depthOf)
-                .map(depth -> depth >= MAX_STEP_DEPTH)
-                .orElse(false);
+        return queryService.isAtMaxStepDepth(stepId);
     }
 
     /**
@@ -901,16 +881,7 @@ public class RoadmapService {
      */
     @Transactional(readOnly = true)
     public String domainOf(Long nodeId) {
-        Entry node = repository.findById(nodeId).orElse(null);
-        if (node == null) {
-            return null;
-        }
-        // findAncestors returns nearest-first, so the last element is the root (V3-3.1) — one
-        // query rather than one per level.
-        List<Entry> ancestors = repository.findAncestors(nodeId);
-        Entry root = ancestors.isEmpty() ? node : ancestors.get(ancestors.size() - 1);
-        return root.getContent() != null && root.getContent().get("assessment") instanceof Map<?, ?> assessment
-                && assessment.get("domain") instanceof String s ? s : null;
+        return queryService.domainOf(nodeId);
     }
 
     /**
@@ -921,17 +892,7 @@ public class RoadmapService {
      */
     @Transactional(readOnly = true)
     public List<Entry> leafStepsOf(Long roadmapId) {
-        // The whole subtree in one query, walked in memory (V3-3.1). The old version recursed
-        // with a query per node, so a career roadmap cost 60+ round trips to build this list.
-        List<Entry> descendants = repository.findDescendants(roadmapId);
-        Set<Long> parents = descendants.stream()
-                .map(Entry::getParentId)
-                .filter(java.util.Objects::nonNull)
-                .collect(java.util.stream.Collectors.toSet());
-        return descendants.stream()
-                .filter(e -> e.getType() == EntryType.ROADMAP_STEP)
-                .filter(e -> !parents.contains(e.getId()))
-                .toList();
+        return queryService.leafStepsOf(roadmapId);
     }
 
     // (proposal() maps the AI draft steps to the structured response DTO.)
@@ -1182,7 +1143,7 @@ public class RoadmapService {
     /** A roadmap's steps in order. */
     @Transactional(readOnly = true)
     public List<Entry> stepsOf(Long roadmapId) {
-        return repository.findByParentIdOrderByOrderIndexAsc(roadmapId);
+        return queryService.stepsOf(roadmapId);
     }
 
     /**
@@ -1269,19 +1230,13 @@ public class RoadmapService {
      */
     @Transactional(readOnly = true)
     public List<Entry> listRoadmaps() {
-        return repository.findByTypeOrderByCreatedAtDesc(EntryType.ROADMAP).stream()
-                .filter(r -> r.getParentId() == null)
-                .filter(r -> r.getStatus() != EntryStatus.ARCHIVED)
-                .toList();
+        return queryService.listRoadmaps();
     }
 
     /** Archived top-level roadmaps only, newest first (the Archive view). */
     @Transactional(readOnly = true)
     public List<Entry> listArchivedRoadmaps() {
-        return repository.findByTypeOrderByCreatedAtDesc(EntryType.ROADMAP).stream()
-                .filter(r -> r.getParentId() == null)
-                .filter(r -> r.getStatus() == EntryStatus.ARCHIVED)
-                .toList();
+        return queryService.listArchivedRoadmaps();
     }
 
     /**
@@ -1573,11 +1528,7 @@ public class RoadmapService {
 
     @Transactional(readOnly = true)
     public Entry getRoadmap(Long id) {
-        Entry entry = repository.findById(id)
-                .filter(e -> e.getType() == EntryType.ROADMAP)
-                .orElseThrow(() -> new java.util.NoSuchElementException(
-                        "No roadmap with id " + id));
-        return entry;
+        return queryService.getRoadmap(id);
     }
 
     /**
@@ -1659,7 +1610,7 @@ public class RoadmapService {
                 .filter(s -> s.getType() == EntryType.ROADMAP_STEP)
                 .orElseThrow(() -> new java.util.NoSuchElementException(
                         "No step " + stepId + " on roadmap " + roadmapId));
-        if (depthOf(original) >= MAX_STEP_DEPTH) {
+        if (depthOf(original) >= RoadmapQueryService.MAX_STEP_DEPTH) {
             throw new IllegalStateException("This is already broken down as far as it goes.");
         }
 
