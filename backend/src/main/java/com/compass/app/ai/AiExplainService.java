@@ -1,5 +1,7 @@
 package com.compass.app.ai;
 
+import com.compass.app.ai.prompts.ExplainPrompts;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 
@@ -32,8 +34,8 @@ public class AiExplainService {
   public String help(String action, String selectedText, String stepText,
       String profileContext, String depth, String language) {
     String act = action != null && ACTIONS.contains(action) ? action : "explain";
-    JsonNode json = ai.generate(AiTier.FAST, "in-content " + act, PromptTemplates.EXPLAIN_SYSTEM,
-        PromptTemplates.explainUser(act, selectedText, stepText, profileContext, depth, language));
+    JsonNode json = ai.generate(AiTier.FAST, "in-content " + act, ExplainPrompts.EXPLAIN_SYSTEM,
+        ExplainPrompts.explainUser(act, selectedText, stepText, profileContext, depth, language));
     if (json == null) {
       return null;
     }

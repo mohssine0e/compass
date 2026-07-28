@@ -1,5 +1,7 @@
 package com.compass.app.ai;
 
+import com.compass.app.ai.prompts.VerificationPrompts;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 
@@ -32,7 +34,7 @@ public class VerificationAiService {
    */
   public String generateCheck(String roadmapTitle, String stepText, String rigor, String format) {
     JsonNode json = ai.generate(AiTier.FAST, "verification check",
-        PromptTemplates.CHECK_SYSTEM, PromptTemplates.checkUser(roadmapTitle, stepText, rigor, format));
+        VerificationPrompts.CHECK_SYSTEM, VerificationPrompts.checkUser(roadmapTitle, stepText, rigor, format));
     if (json == null) {
       return null;
     }
@@ -46,8 +48,8 @@ public class VerificationAiService {
    */
   public MultipleChoiceCheck generateMultipleChoiceCheck(String roadmapTitle, String stepText, String rigor) {
     JsonNode json = ai.generate(AiTier.FAST, "verification check (multiple choice)",
-        PromptTemplates.CHECK_MULTIPLE_CHOICE_SYSTEM,
-        PromptTemplates.checkMultipleChoiceUser(roadmapTitle, stepText, rigor));
+        VerificationPrompts.CHECK_MULTIPLE_CHOICE_SYSTEM,
+        VerificationPrompts.checkMultipleChoiceUser(roadmapTitle, stepText, rigor));
     if (json == null) {
       return null;
     }
@@ -77,7 +79,7 @@ public class VerificationAiService {
   /** Judge an answer to a check, or {@code null} on failure. */
   public Evaluation evaluate(String stepText, String question, String answer) {
     JsonNode json = ai.generate(AiTier.FAST, "verification evaluation",
-        PromptTemplates.EVALUATE_SYSTEM, PromptTemplates.evaluateUser(stepText, question, answer));
+        VerificationPrompts.EVALUATE_SYSTEM, VerificationPrompts.evaluateUser(stepText, question, answer));
     if (json == null) {
       return null;
     }

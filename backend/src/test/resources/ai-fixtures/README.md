@@ -12,8 +12,8 @@ parsing/mapping code turn this JSON into the expected domain object, and does a 
 missing/renamed field degrade the way the code documents rather than NPE" — both are exercised
 against the real parsing code in `RoadmapAiService`/`VerificationAiService`, unchanged. What's
 hand-authored is only the input, and it's shaped directly from the field names those classes
-already read (`json.get("...")`) plus the prompts in `PromptTemplates` that ask a model to
-produce them.
+already read (`json.get("...")`) plus the prompts in `com.compass.app.ai.prompts` (split from
+the former `PromptTemplates` god-file by V3-4.2) that ask a model to produce them.
 
 If a real captured response is ever saved from an actual run, drop it in here and it's a better
 fixture than what's here now — nothing about the test structure needs to change.

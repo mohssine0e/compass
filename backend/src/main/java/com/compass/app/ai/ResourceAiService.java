@@ -1,5 +1,7 @@
 package com.compass.app.ai;
 
+import com.compass.app.ai.prompts.ResourcePrompts;
+
 import com.compass.app.ai.SearchGroundingService.Result;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
@@ -104,8 +106,8 @@ public class ResourceAiService {
         // roadmap drafting needs, and losing: in practice the heavy chain was exhausted or
         // erroring most times resources were asked for. The fast chain is twice as deep and far
         // likelier to answer, which for this feature matters more than model strength.
-        JsonNode json = ai.generate(AiTier.FAST, "resource suggestions", PromptTemplates.RESOURCE_SUGGEST_SYSTEM,
-                PromptTemplates.resourceSuggestUser(goal, batchTexts, results, avoidFormats,
+        JsonNode json = ai.generate(AiTier.FAST, "resource suggestions", ResourcePrompts.RESOURCE_SUGGEST_SYSTEM,
+                ResourcePrompts.resourceSuggestUser(goal, batchTexts, results, avoidFormats,
                         preferFormats, List.copyOf(used)),
                 props.getResourceMaxTokens());
         if (json == null || json.get("steps") == null || !json.get("steps").isArray()) {

@@ -1,5 +1,7 @@
 package com.compass.app.ai;
 
+import com.compass.app.ai.prompts.TopicPrompts;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 
@@ -29,8 +31,8 @@ public class TopicAiService {
      */
     public MatchJudgment classifyMatch(String goal, String candidateName, List<String> aliases,
                                        List<String> subtopics) {
-        JsonNode json = ai.generate(AiTier.FAST, "topic match judgment", PromptTemplates.TOPIC_MATCH_SYSTEM,
-                PromptTemplates.topicMatchUser(goal, candidateName, aliases, subtopics));
+        JsonNode json = ai.generate(AiTier.FAST, "topic match judgment", TopicPrompts.TOPIC_MATCH_SYSTEM,
+                TopicPrompts.topicMatchUser(goal, candidateName, aliases, subtopics));
         if (json == null) {
             return null;
         }
@@ -56,8 +58,8 @@ public class TopicAiService {
     public AdditionProposal proposeAddition(String canonicalName, List<String> aliases,
                                             List<String> subtopics, List<String> prerequisites,
                                             String suggestion) {
-        JsonNode json = ai.generate(AiTier.FAST, "topic addition", PromptTemplates.TOPIC_ADDITION_SYSTEM,
-                PromptTemplates.topicAdditionUser(canonicalName, aliases, subtopics, prerequisites, suggestion));
+        JsonNode json = ai.generate(AiTier.FAST, "topic addition", TopicPrompts.TOPIC_ADDITION_SYSTEM,
+                TopicPrompts.topicAdditionUser(canonicalName, aliases, subtopics, prerequisites, suggestion));
         if (json == null) {
             return null;
         }

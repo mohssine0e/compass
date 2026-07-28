@@ -1,5 +1,7 @@
 package com.compass.app.ai;
 
+import com.compass.app.ai.prompts.VoicePrompts;
+
 import com.compass.app.entry.Entry;
 import com.compass.app.entry.EntryStatus;
 import com.compass.app.entry.EntryType;
@@ -70,8 +72,8 @@ public class AiVoiceService {
                 ? entry.getSignificance().getValue()
                 : null;
         String text = textOf(entry);
-        return generate("acknowledgment", PromptTemplates.ACK_SYSTEM,
-                PromptTemplates.ackUser(moment, type, significance, text));
+        return generate("acknowledgment", VoicePrompts.ACK_SYSTEM,
+                VoicePrompts.ackUser(moment, type, significance, text));
     }
 
     /**
@@ -99,8 +101,8 @@ public class AiVoiceService {
         String text = textOf(entry);
         long days = daysSince(entry.getUpdatedAt());
 
-        String q = generate("resurfacing question", PromptTemplates.RESURFACE_SYSTEM,
-                PromptTemplates.resurfaceUser(type, significance, text, days, currentStepText, skipCount));
+        String q = generate("resurfacing question", VoicePrompts.RESURFACE_SYSTEM,
+                VoicePrompts.resurfaceUser(type, significance, text, days, currentStepText, skipCount));
         return q != null ? q : fallbackQuestion(entry, text, currentStepText, skipCount);
     }
 

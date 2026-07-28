@@ -4,7 +4,7 @@ import java.util.List;
 
 /**
  * The exact 26-goal validation set from {@code TASKS_v2.md} RB-1.3 — use this set, not a
- * different one, every time {@link PromptTemplates#TIER_CLASSIFY_SYSTEM} changes. Cases 1-16
+ * different one, every time {@link com.compass.app.ai.prompts.RoadmapPrompts#TIER_CLASSIFY_SYSTEM} changes. Cases 1-16
  * have a stated expected tier (clear-cut); cases 17-26 have {@code expectedTier == null}
  * (deliberately ambiguous or adversarial) — for those, only reasoning quality/plausibility is
  * judged, not tier agreement, so no pass/fail is computed for them.

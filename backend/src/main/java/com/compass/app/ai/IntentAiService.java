@@ -1,5 +1,7 @@
 package com.compass.app.ai;
 
+import com.compass.app.ai.prompts.IntentPrompts;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 
@@ -22,7 +24,7 @@ public class IntentAiService {
     /** {@code null} on failure — the caller falls back to treating input as a plain IDEA capture. */
     public IntentClassification classifyIntent(String input, String profileContext) {
         JsonNode json = ai.generate(AiTier.FAST, "intent classification",
-                PromptTemplates.INTENT_CLASSIFY_SYSTEM, PromptTemplates.intentClassifyUser(input, profileContext));
+                IntentPrompts.INTENT_CLASSIFY_SYSTEM, IntentPrompts.intentClassifyUser(input, profileContext));
         if (json == null) {
             return null;
         }

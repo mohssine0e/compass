@@ -1,5 +1,7 @@
 package com.compass.app.ai;
 
+import com.compass.app.ai.prompts.ProfilePrompts;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 
@@ -34,7 +36,7 @@ public class ProfileAiService {
      */
     public Map<String, Object> extractResume(String resumeText) {
         JsonNode json = ai.generate(AiTier.HEAVY, "resume extraction",
-                PromptTemplates.RESUME_EXTRACT_SYSTEM, PromptTemplates.resumeExtractUser(resumeText));
+                ProfilePrompts.RESUME_EXTRACT_SYSTEM, ProfilePrompts.resumeExtractUser(resumeText));
         if (json == null) {
             return null;
         }
@@ -54,7 +56,7 @@ public class ProfileAiService {
      */
     public List<String> interpretSelfDescription(String text) {
         JsonNode json = ai.generate(AiTier.FAST, "self-description interpretation",
-                PromptTemplates.SELF_DESCRIPTION_SYSTEM, PromptTemplates.selfDescriptionUser(text));
+                ProfilePrompts.SELF_DESCRIPTION_SYSTEM, ProfilePrompts.selfDescriptionUser(text));
         if (json == null) {
             return null;
         }

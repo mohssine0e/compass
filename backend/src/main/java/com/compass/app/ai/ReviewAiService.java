@@ -1,5 +1,7 @@
 package com.compass.app.ai;
 
+import com.compass.app.ai.prompts.ReviewPrompts;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.stereotype.Service;
 
@@ -26,14 +28,14 @@ public class ReviewAiService {
   /** Recurring patterns across ideas/roadmaps/stalled steps — empty list when none / unavailable. */
   public List<String> findThreads(String ideas, String roadmaps, String stalled) {
     JsonNode json = ai.generate(AiTier.FAST, "cross-thread patterns",
-        PromptTemplates.THREADS_SYSTEM, PromptTemplates.threadsUser(ideas, roadmaps, stalled));
+        ReviewPrompts.THREADS_SYSTEM, ReviewPrompts.threadsUser(ideas, roadmaps, stalled));
     return json == null ? List.of() : AiJsonGenerator.strings(json.get("threads"));
   }
 
   /** A self-talk-voice review of where things stand, or {@code null} when unavailable. */
   public String weeklyReview(String roadmaps, String ideas) {
     JsonNode json = ai.generate(AiTier.FAST, "weekly review",
-        PromptTemplates.REVIEW_SYSTEM, PromptTemplates.reviewUser(roadmaps, ideas));
+        ReviewPrompts.REVIEW_SYSTEM, ReviewPrompts.reviewUser(roadmaps, ideas));
     if (json == null) {
       return null;
     }
@@ -48,7 +50,7 @@ public class ReviewAiService {
    */
   public String careerCompletionReflection(String roadmapTitle) {
     JsonNode json = ai.generate(AiTier.FAST, "career completion reflection",
-        PromptTemplates.CAREER_COMPLETION_SYSTEM, PromptTemplates.careerCompletionUser(roadmapTitle));
+        ReviewPrompts.CAREER_COMPLETION_SYSTEM, ReviewPrompts.careerCompletionUser(roadmapTitle));
     if (json == null) {
       return null;
     }
@@ -66,7 +68,7 @@ public class ReviewAiService {
       return List.of();
     }
     JsonNode json = ai.generate(AiTier.FAST, "idea clustering",
-        PromptTemplates.CLUSTER_SYSTEM, PromptTemplates.clusterUser(ideaTexts));
+        ReviewPrompts.CLUSTER_SYSTEM, ReviewPrompts.clusterUser(ideaTexts));
     if (json == null || json.get("themes") == null || !json.get("themes").isArray()) {
       return List.of();
     }

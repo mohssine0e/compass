@@ -5,7 +5,7 @@ package com.compass.app.ai;
  * {@code TASK} (a single action item, no learning curve), {@code MINI} (a bounded single
  * project with a clear finish line), {@code TOPIC} (open-ended skill/knowledge acquisition,
  * no career implication), {@code CAREER} (an identity/role change, typically months-scale).
- * See {@link PromptTemplates#TIER_CLASSIFY_SYSTEM} for the full definitions and boundary
+ * See {@link com.compass.app.ai.prompts.RoadmapPrompts#TIER_CLASSIFY_SYSTEM} for the full definitions and boundary
  * examples used to draw these distinctions.
  *
  * <p>This phase (RB-1) only produces and validates the classification itself — nothing reads

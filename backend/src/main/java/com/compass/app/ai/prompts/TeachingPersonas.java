@@ -1,4 +1,4 @@
-package com.compass.app.ai;
+package com.compass.app.ai.prompts;
 
 /**
  * A small, curated domain-expert voice roster for generation/teaching content (Phase 25) — the
@@ -11,8 +11,11 @@ package com.compass.app.ai;
  * reflection-facing surface (resurfacing questions, capture acknowledgments, verification
  * check-ins, the Explain feature). See CLAUDE.md Section 2's scoped exception. A persona changes
  * framing and vocabulary; the "no empty hype" rule still applies in full regardless of persona.
+ *
+ * Moved from {@code com.compass.app.ai} into this package (V3-4.2) alongside the prompt-file
+ * split, since it's exclusively prompt-content and only {@link RoadmapPrompts} reads it.
  */
-final class TeachingPersonas {
+public final class TeachingPersonas {
 
   private TeachingPersonas() {
   }
@@ -34,7 +37,7 @@ final class TeachingPersonas {
    * plain drafting voice (today's default, still governed by "no empty hype"), never to
    * self-talk.
    */
-  static String voiceFor(String domain) {
+  public static String voiceFor(String domain) {
     if (domain == null || domain.isBlank()) {
       return null;
     }
