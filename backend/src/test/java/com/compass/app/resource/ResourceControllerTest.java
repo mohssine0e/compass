@@ -34,12 +34,13 @@ class ResourceControllerTest {
     @Test
     @DisplayName("a produced enrichment returns 200 with the pointer")
     void enrichReturns200WithResult() throws Exception {
-        when(enrichmentService.enrich("https://example.com/a", "Ownership"))
+        when(enrichmentService.enrich("https://example.com/a", "Ownership", "Title"))
                 .thenReturn(new EnrichmentResponse("written", "Focus on X.", null, null, null, "fetch_fallback"));
 
         mvc.perform(post("/resources/enrich")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"resourceUrl\":\"https://example.com/a\",\"stepTopic\":\"Ownership\"}"))
+                        .content("{\"resourceUrl\":\"https://example.com/a\",\"stepTopic\":\"Ownership\","
+                                + "\"resourceTitle\":\"Title\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.focusPointer").value("Focus on X."))
                 .andExpect(jsonPath("$.source").value("fetch_fallback"));
@@ -48,11 +49,12 @@ class ResourceControllerTest {
     @Test
     @DisplayName("nothing produced (fetch failed, or AI had nothing useful) returns 204, not an error")
     void enrichReturns204WhenNothingProduced() throws Exception {
-        when(enrichmentService.enrich("https://example.com/a", "Ownership")).thenReturn(null);
+        when(enrichmentService.enrich("https://example.com/a", "Ownership", "Title")).thenReturn(null);
 
         mvc.perform(post("/resources/enrich")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"resourceUrl\":\"https://example.com/a\",\"stepTopic\":\"Ownership\"}"))
+                        .content("{\"resourceUrl\":\"https://example.com/a\",\"stepTopic\":\"Ownership\","
+                                + "\"resourceTitle\":\"Title\"}"))
                 .andExpect(status().isNoContent());
     }
 }

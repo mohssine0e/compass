@@ -37,6 +37,7 @@ class ResourceEnrichmentServiceTest {
     private ResourcePageFetcher pageFetcher;
     private ResourceAiService resourceAi;
     private EventService events;
+    private YouTubeTranscriptFetcher transcriptFetcher;
     private ResourceEnrichmentService service;
 
     @BeforeEach
@@ -45,7 +46,8 @@ class ResourceEnrichmentServiceTest {
         pageFetcher = mock(ResourcePageFetcher.class);
         resourceAi = mock(ResourceAiService.class);
         events = mock(EventService.class);
-        service = new ResourceEnrichmentService(repository, pageFetcher, resourceAi, events);
+        transcriptFetcher = mock(YouTubeTranscriptFetcher.class);
+        service = new ResourceEnrichmentService(repository, pageFetcher, resourceAi, events, transcriptFetcher);
     }
 
     private static ResourceAiService.Resource resource(String url) {
@@ -175,7 +177,7 @@ class ResourceEnrichmentServiceTest {
         when(repository.findByResourceUrlAndTopicKey("https://example.com/a", "topic"))
                 .thenReturn(Optional.of(cached));
 
-        EnrichmentResponse result = service.enrich("https://example.com/a", "topic");
+        EnrichmentResponse result = service.enrich("https://example.com/a", "topic", "Title");
 
         assertThat(result.focusPointer()).isEqualTo("Cached pointer.");
         assertThat(result.source()).isEqualTo("exa_highlight");
@@ -189,7 +191,7 @@ class ResourceEnrichmentServiceTest {
         when(pageFetcher.fetchText("https://example.com/a")).thenReturn("The real page text.");
         when(resourceAi.focusPointer("Ownership", "The real page text.")).thenReturn("Focus on X.");
 
-        EnrichmentResponse result = service.enrich("https://example.com/a", "Ownership");
+        EnrichmentResponse result = service.enrich("https://example.com/a", "Ownership", "Title");
 
         assertThat(result.focusPointer()).isEqualTo("Focus on X.");
         assertThat(result.source()).isEqualTo("fetch_fallback");
@@ -206,7 +208,7 @@ class ResourceEnrichmentServiceTest {
         when(repository.findByResourceUrlAndTopicKey(any(), any())).thenReturn(Optional.empty());
         when(pageFetcher.fetchText(anyString())).thenReturn(null);
 
-        EnrichmentResponse result = service.enrich("https://example.com/a", "topic");
+        EnrichmentResponse result = service.enrich("https://example.com/a", "topic", "Title");
 
         assertThat(result).isNull();
         verify(repository, never()).save(any());
@@ -221,7 +223,7 @@ class ResourceEnrichmentServiceTest {
         when(pageFetcher.fetchText(anyString())).thenReturn("Page text unrelated to the topic.");
         when(resourceAi.focusPointer(any(), any())).thenReturn(null);
 
-        EnrichmentResponse result = service.enrich("https://example.com/a", "topic");
+        EnrichmentResponse result = service.enrich("https://example.com/a", "topic", "Title");
 
         assertThat(result).isNull();
         verify(repository, never()).save(any());
@@ -230,8 +232,76 @@ class ResourceEnrichmentServiceTest {
     @Test
     @DisplayName("a blank resource url is a no-op")
     void enrichBlankUrlIsNoOp() {
-        assertThat(service.enrich("", "topic")).isNull();
-        assertThat(service.enrich(null, "topic")).isNull();
-        verifyNoInteractions(pageFetcher, resourceAi, repository);
+        assertThat(service.enrich("", "topic", "Title")).isNull();
+        assertThat(service.enrich(null, "topic", "Title")).isNull();
+        verifyNoInteractions(pageFetcher, resourceAi, repository, transcriptFetcher);
+    }
+
+    // ── enrich() / RES-4 video transcript path ───────────────────────────────────────────
+
+    private static YouTubeTranscriptFetcher.Segment segment(double start, double end, String text) {
+        return new YouTubeTranscriptFetcher.Segment(start, end, text);
+    }
+
+    @Test
+    @DisplayName("a YouTube url with a real transcript caches the AI-found segment as source=transcript")
+    void enrichVideoWithTranscriptCachesSegment() {
+        when(repository.findByResourceUrlAndTopicKey(any(), any())).thenReturn(Optional.empty());
+        when(transcriptFetcher.isYouTubeUrl("https://youtu.be/abc123")).thenReturn(true);
+        when(transcriptFetcher.fetchTranscript("https://youtu.be/abc123"))
+                .thenReturn(List.of(segment(0, 5, "intro"), segment(120, 128, "ownership explained here")));
+        when(resourceAi.findVideoSegment(eq("Ownership"), anyString()))
+                .thenReturn(new ResourceAiService.VideoSegment(120, 128, "Covers ownership."));
+
+        EnrichmentResponse result = service.enrich("https://youtu.be/abc123", "Ownership", "Rust Crash Course");
+
+        assertThat(result.kind()).isEqualTo("video");
+        assertThat(result.segmentStart()).isEqualTo(120);
+        assertThat(result.segmentEnd()).isEqualTo(128);
+        assertThat(result.segmentDescription()).isEqualTo("Covers ownership.");
+        assertThat(result.source()).isEqualTo("transcript");
+        verify(pageFetcher, never()).fetchText(any());
+    }
+
+    @Test
+    @DisplayName("a YouTube url with no public transcript degrades to an honest, title-based pointer")
+    void enrichVideoWithoutTranscriptDegradesToDescriptionFallback() {
+        when(repository.findByResourceUrlAndTopicKey(any(), any())).thenReturn(Optional.empty());
+        when(transcriptFetcher.isYouTubeUrl("https://youtu.be/abc123")).thenReturn(true);
+        when(transcriptFetcher.fetchTranscript("https://youtu.be/abc123")).thenReturn(null);
+
+        EnrichmentResponse result = service.enrich("https://youtu.be/abc123", "Ownership", "Rust Crash Course");
+
+        assertThat(result.kind()).isEqualTo("video");
+        assertThat(result.source()).isEqualTo("description_fallback");
+        assertThat(result.focusPointer()).contains("Rust Crash Course").contains("Ownership");
+        verifyNoInteractions(resourceAi);
+    }
+
+    @Test
+    @DisplayName("a transcript that exists but has nothing relevant degrades to no enrichment, not a fallback")
+    void enrichVideoWithTranscriptButNoMatchIsNoEnrichment() {
+        when(repository.findByResourceUrlAndTopicKey(any(), any())).thenReturn(Optional.empty());
+        when(transcriptFetcher.isYouTubeUrl("https://youtu.be/abc123")).thenReturn(true);
+        when(transcriptFetcher.fetchTranscript("https://youtu.be/abc123"))
+                .thenReturn(List.of(segment(0, 5, "unrelated intro chatter")));
+        when(resourceAi.findVideoSegment(any(), any())).thenReturn(null);
+
+        EnrichmentResponse result = service.enrich("https://youtu.be/abc123", "Ownership", "Rust Crash Course");
+
+        assertThat(result).isNull();
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("a missing resource title still produces an honest fallback pointer, just without naming it")
+    void enrichVideoDescriptionFallbackHandlesMissingTitle() {
+        when(repository.findByResourceUrlAndTopicKey(any(), any())).thenReturn(Optional.empty());
+        when(transcriptFetcher.isYouTubeUrl("https://youtu.be/abc123")).thenReturn(true);
+        when(transcriptFetcher.fetchTranscript("https://youtu.be/abc123")).thenReturn(List.of());
+
+        EnrichmentResponse result = service.enrich("https://youtu.be/abc123", "Ownership", null);
+
+        assertThat(result.focusPointer()).contains("this video").contains("Ownership");
     }
 }

@@ -34,35 +34,51 @@ public class ResourceEnrichmentService {
     static final String KIND_VIDEO = "video";
     static final String SOURCE_EXA_HIGHLIGHT = "exa_highlight";
     static final String SOURCE_FETCH_FALLBACK = "fetch_fallback";
+    static final String SOURCE_TRANSCRIPT = "transcript";
+    static final String SOURCE_DESCRIPTION_FALLBACK = "description_fallback";
+
+    // A transcript line's own timestamps are too fine-grained to hand the model as "chunk
+    // boundaries to pick from" — group consecutive lines into windows this wide instead, the
+    // same reasoning RES-3's MAX_TEXT_CHARS applies to fetched page text: keep what's sent
+    // small and skimmable rather than a raw dump.
+    private static final int CHUNK_SECONDS = 45;
+    private static final int MAX_TRANSCRIPT_CHARS = 6000;
 
     private final ResourceEnrichmentRepository repository;
     private final ResourcePageFetcher pageFetcher;
     private final ResourceAiService resourceAi;
     private final EventService events;
+    private final YouTubeTranscriptFetcher transcriptFetcher;
 
     public ResourceEnrichmentService(ResourceEnrichmentRepository repository, ResourcePageFetcher pageFetcher,
-                                     ResourceAiService resourceAi, EventService events) {
+                                     ResourceAiService resourceAi, EventService events,
+                                     YouTubeTranscriptFetcher transcriptFetcher) {
         this.repository = repository;
         this.pageFetcher = pageFetcher;
         this.resourceAi = resourceAi;
         this.events = events;
+        this.transcriptFetcher = transcriptFetcher;
     }
 
     /**
-     * The lazy entry point (RES-3/RES-5): a cache hit returns instantly; a miss triggers the
-     * appropriate fallback (fetch+summarize for a written resource; RES-4 adds the video path).
-     * {@code null} when nothing could be produced — the deep view then shows the plain link with
-     * no fabricated pointer, exactly as if enrichment had never been attempted.
+     * The lazy entry point (RES-3/RES-4/RES-5): a cache hit returns instantly; a miss triggers
+     * the appropriate fallback — fetch+summarize for a written resource, transcript lookup for a
+     * YouTube one. {@code resourceTitle} is only used by the video path's description fallback,
+     * when there's no transcript to ground a real pointer in. {@code null} when nothing could be
+     * produced — the deep view then shows the plain link with no fabricated pointer, exactly as
+     * if enrichment had never been attempted.
      */
     @Transactional
-    public EnrichmentResponse enrich(String resourceUrl, String stepTopic) {
+    public EnrichmentResponse enrich(String resourceUrl, String stepTopic, String resourceTitle) {
         if (resourceUrl == null || resourceUrl.isBlank()) {
             return null;
         }
         String topicKey = topicKey(stepTopic);
         return repository.findByResourceUrlAndTopicKey(resourceUrl, topicKey)
                 .map(ResourceEnrichmentService::toResponse)
-                .orElseGet(() -> enrichWritten(resourceUrl, topicKey, stepTopic));
+                .orElseGet(() -> transcriptFetcher.isYouTubeUrl(resourceUrl)
+                        ? enrichVideo(resourceUrl, topicKey, stepTopic, resourceTitle)
+                        : enrichWritten(resourceUrl, topicKey, stepTopic));
     }
 
     /**
@@ -89,6 +105,94 @@ public class ResourceEnrichmentService {
         enrichment.setSource(SOURCE_FETCH_FALLBACK);
         repository.save(enrichment);
         return toResponse(enrichment);
+    }
+
+    /**
+     * RES-4: fetch the video's real public transcript, chunk it, and ask the Fast tier for the
+     * segment that actually covers {@code stepTopic}, with real timestamps grounded in the
+     * transcript itself. No transcript at all, or the AI finding nothing in it that genuinely
+     * fits, both degrade — never a fabricated timestamp. Only "no transcript at all" falls
+     * further to {@link #enrichVideoDescriptionFallback}: once a real transcript exists but
+     * nothing in it fits, that's the same "AI had nothing useful" case {@link #enrichWritten}
+     * already treats as no-enrichment-at-all, not a case for switching to a lesser fallback.
+     */
+    private EnrichmentResponse enrichVideo(String resourceUrl, String topicKey, String stepTopic,
+                                           String resourceTitle) {
+        List<YouTubeTranscriptFetcher.Segment> transcript = transcriptFetcher.fetchTranscript(resourceUrl);
+        if (transcript == null || transcript.isEmpty()) {
+            return enrichVideoDescriptionFallback(resourceUrl, topicKey, stepTopic, resourceTitle);
+        }
+        ResourceAiService.VideoSegment segment = resourceAi.findVideoSegment(stepTopic, chunkTranscript(transcript));
+        if (segment == null) {
+            return null;
+        }
+        ResourceEnrichment enrichment = new ResourceEnrichment();
+        enrichment.setResourceUrl(resourceUrl);
+        enrichment.setTopicKey(topicKey);
+        enrichment.setKind(KIND_VIDEO);
+        enrichment.setSegmentStart(segment.startSeconds());
+        enrichment.setSegmentEnd(segment.endSeconds());
+        enrichment.setSegmentDescription(segment.description());
+        enrichment.setSource(SOURCE_TRANSCRIPT);
+        repository.save(enrichment);
+        return toResponse(enrichment);
+    }
+
+    /**
+     * RES-4's honest fallback when a video has no public transcript at all: a plain pointer built
+     * from text already on hand (the resource's own title), no AI call — self-talk voice, applied
+     * by hand rather than through a prompt since there's nothing here worth spending a call on.
+     */
+    private EnrichmentResponse enrichVideoDescriptionFallback(String resourceUrl, String topicKey,
+                                                               String stepTopic, String resourceTitle) {
+        String subject = resourceTitle == null || resourceTitle.isBlank() ? "this video" : "\"" + resourceTitle.trim() + "\"";
+        String topic = stepTopic == null || stepTopic.isBlank() ? "this" : stepTopic.trim();
+        String pointer = "No transcript available for " + subject + " — skim for the part on " + topic + " yourself.";
+
+        ResourceEnrichment enrichment = new ResourceEnrichment();
+        enrichment.setResourceUrl(resourceUrl);
+        enrichment.setTopicKey(topicKey);
+        enrichment.setKind(KIND_VIDEO);
+        enrichment.setFocusPointer(pointer);
+        enrichment.setSource(SOURCE_DESCRIPTION_FALLBACK);
+        repository.save(enrichment);
+        return toResponse(enrichment);
+    }
+
+    /**
+     * Groups consecutive transcript lines into {@link #CHUNK_SECONDS}-wide windows, each written
+     * as {@code [start-end] text}, and stops once {@link #MAX_TRANSCRIPT_CHARS} is reached rather
+     * than sending an hour-long video's full transcript into one prompt.
+     */
+    private static String chunkTranscript(List<YouTubeTranscriptFetcher.Segment> segments) {
+        StringBuilder out = new StringBuilder();
+        int windowStart = -1;
+        double windowEnd = 0;
+        StringBuilder windowText = new StringBuilder();
+        for (YouTubeTranscriptFetcher.Segment seg : segments) {
+            if (windowStart < 0) {
+                windowStart = (int) seg.startSeconds();
+            }
+            if (seg.startSeconds() - windowStart >= CHUNK_SECONDS) {
+                if (appendChunk(out, windowStart, windowEnd, windowText) >= MAX_TRANSCRIPT_CHARS) {
+                    return out.toString();
+                }
+                windowStart = (int) seg.startSeconds();
+                windowText.setLength(0);
+            }
+            windowText.append(' ').append(seg.text());
+            windowEnd = seg.endSeconds();
+        }
+        if (windowText.length() > 0) {
+            appendChunk(out, windowStart, windowEnd, windowText);
+        }
+        return out.length() <= MAX_TRANSCRIPT_CHARS ? out.toString() : out.substring(0, MAX_TRANSCRIPT_CHARS);
+    }
+
+    private static int appendChunk(StringBuilder out, int start, double end, StringBuilder text) {
+        out.append('[').append(start).append('-').append((int) end).append("] ")
+                .append(text.toString().trim()).append('\n');
+        return out.length();
     }
 
     private static EnrichmentResponse toResponse(ResourceEnrichment e) {

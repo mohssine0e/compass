@@ -45,7 +45,8 @@ public class ResourceController {
      */
     @PostMapping("/enrich")
     public ResponseEntity<EnrichmentResponse> enrich(@RequestBody EnrichResourceRequest request) {
-        EnrichmentResponse result = enrichmentService.enrich(request.resourceUrl(), request.stepTopic());
+        EnrichmentResponse result =
+                enrichmentService.enrich(request.resourceUrl(), request.stepTopic(), request.resourceTitle());
         return result == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(result);
     }
 }
