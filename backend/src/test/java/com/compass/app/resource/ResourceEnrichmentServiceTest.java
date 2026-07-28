@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.util.List;
 import java.util.Optional;
@@ -157,6 +158,19 @@ class ResourceEnrichmentServiceTest {
     }
 
     @Test
+    @DisplayName("a concurrent-save race on the same (url, topic) is swallowed, not thrown")
+    void cacheExaHighlightsSwallowsConcurrentSaveRace() {
+        when(repository.findByResourceUrlAndTopicKey(any(), any())).thenReturn(Optional.empty());
+        when(repository.save(any())).thenThrow(new DataIntegrityViolationException("duplicate key"));
+        String highlight = "A long enough highlight for the threshold check to pass cleanly every time.";
+
+        assertThat(org.assertj.core.api.Assertions.catchThrowable(() -> service.cacheExaHighlights(
+                List.of(resource("https://example.com/a")),
+                List.of(exaHighlight("https://example.com/a", highlight)),
+                "topic"))).isNull();
+    }
+
+    @Test
     @DisplayName("topicKey slugifies, lowercases, and caps length, same shape as RoadmapService's own slugify")
     void topicKeySlugifies() {
         assertThat(ResourceEnrichmentService.topicKey("Ownership & Borrowing!")).isEqualTo("ownership-borrowing");
@@ -200,6 +214,29 @@ class ResourceEnrichmentServiceTest {
         ArgumentCaptor<ResourceEnrichment> captor = ArgumentCaptor.forClass(ResourceEnrichment.class);
         verify(repository).save(captor.capture());
         assertThat(captor.getValue().getTopicKey()).isEqualTo("ownership");
+    }
+
+    @Test
+    @DisplayName("losing a concurrent-save race for the same (url, topic) serves the winner's result, not a 500")
+    void enrichRaceLosingSaveReturnsTheWinnersResult() {
+        // Real scenario, not just a test artifact: the cache is shared across roadmaps (RES-1),
+        // so two deep views open around the same moment can both see "not cached yet" and both
+        // try to fetch+summarize+save the same resource+topic pair. The table's unique
+        // constraint lets only one insert land; this pins down that the loser serves that
+        // winner's row instead of surfacing the constraint violation as an error.
+        ResourceEnrichment winner = new ResourceEnrichment();
+        winner.setKind("written");
+        winner.setFocusPointer("Focus on X (the request that won the race).");
+        winner.setSource("fetch_fallback");
+        when(repository.findByResourceUrlAndTopicKey("https://example.com/a", "topic"))
+                .thenReturn(Optional.empty(), Optional.of(winner));
+        when(pageFetcher.fetchText(anyString())).thenReturn("Page text.");
+        when(resourceAi.focusPointer(any(), any())).thenReturn("Focus on X (this request's own answer).");
+        when(repository.save(any())).thenThrow(new DataIntegrityViolationException("duplicate key"));
+
+        EnrichmentResponse result = service.enrich("https://example.com/a", "topic", "Title");
+
+        assertThat(result.focusPointer()).isEqualTo("Focus on X (the request that won the race).");
     }
 
     @Test

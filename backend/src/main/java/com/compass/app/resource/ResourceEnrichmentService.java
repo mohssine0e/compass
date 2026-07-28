@@ -4,8 +4,8 @@ import com.compass.app.ai.ResourceAiService;
 import com.compass.app.ai.SearchGroundingService;
 import com.compass.app.events.EventService;
 import com.compass.app.resource.dto.EnrichmentResponse;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Locale;
@@ -67,8 +67,18 @@ public class ResourceEnrichmentService {
      * when there's no transcript to ground a real pointer in. {@code null} when nothing could be
      * produced — the deep view then shows the plain link with no fabricated pointer, exactly as
      * if enrichment had never been attempted.
+     *
+     * <p>Deliberately not wrapped in one outer {@code @Transactional}: the check-then-fetch-then-
+     * save sequence below can't be made atomic against another concurrent request for the exact
+     * same (url, topic) anyway (Postgres's default isolation lets two requests both see "not
+     * cached yet" before either commits) — the real guarantee is the table's own unique
+     * constraint, and {@link #saveOrReturnExisting} is what makes losing that race harmless
+     * instead of a 500. Wrapping the whole method in one transaction would instead poison a
+     * single shared connection/session across the fetch+AI calls, and on Postgres specifically a
+     * constraint violation aborts the *whole* transaction — a later fetch in the same one would
+     * fail too, "current transaction is aborted". Letting each repository call be its own
+     * short transaction avoids that entirely.
      */
-    @Transactional
     public EnrichmentResponse enrich(String resourceUrl, String stepTopic, String resourceTitle) {
         if (resourceUrl == null || resourceUrl.isBlank()) {
             return null;
@@ -103,8 +113,7 @@ public class ResourceEnrichmentService {
         enrichment.setKind(KIND_WRITTEN);
         enrichment.setFocusPointer(pointer);
         enrichment.setSource(SOURCE_FETCH_FALLBACK);
-        repository.save(enrichment);
-        return toResponse(enrichment);
+        return saveOrReturnExisting(enrichment);
     }
 
     /**
@@ -134,8 +143,7 @@ public class ResourceEnrichmentService {
         enrichment.setSegmentEnd(segment.endSeconds());
         enrichment.setSegmentDescription(segment.description());
         enrichment.setSource(SOURCE_TRANSCRIPT);
-        repository.save(enrichment);
-        return toResponse(enrichment);
+        return saveOrReturnExisting(enrichment);
     }
 
     /**
@@ -155,8 +163,28 @@ public class ResourceEnrichmentService {
         enrichment.setKind(KIND_VIDEO);
         enrichment.setFocusPointer(pointer);
         enrichment.setSource(SOURCE_DESCRIPTION_FALLBACK);
-        repository.save(enrichment);
-        return toResponse(enrichment);
+        return saveOrReturnExisting(enrichment);
+    }
+
+    /**
+     * Saves a freshly-computed enrichment — or, if a concurrent request for the exact same
+     * (url, topic) already committed one first (the table's only unique constraint is precisely
+     * this cache key), returns the winner's row instead of surfacing its constraint violation as
+     * a 500. Both computations would have produced a materially equivalent answer; whichever
+     * request's insert landed first is fine to serve to the one that lost the race. Real scenario,
+     * not just a test artifact: the cache is intentionally shared across roadmaps (RES-1), so two
+     * deep views open around the same time — even for different roadmaps — can race on the same
+     * resource+topic pair.
+     */
+    private EnrichmentResponse saveOrReturnExisting(ResourceEnrichment candidate) {
+        try {
+            repository.save(candidate);
+            return toResponse(candidate);
+        } catch (DataIntegrityViolationException ex) {
+            return repository.findByResourceUrlAndTopicKey(candidate.getResourceUrl(), candidate.getTopicKey())
+                    .map(ResourceEnrichmentService::toResponse)
+                    .orElse(null);
+        }
     }
 
     /**
@@ -207,7 +235,6 @@ public class ResourceEnrichmentService {
      * already computed. A resource with no matching Exa highlight, or one already cached for
      * this exact topic, is silently skipped (the fallback path picks it up lazily instead).
      */
-    @Transactional
     public void cacheExaHighlights(List<ResourceAiService.Resource> resources,
                                    List<SearchGroundingService.Result> groundingResults,
                                    String stepTopic) {
@@ -237,7 +264,13 @@ public class ResourceEnrichmentService {
             enrichment.setKind(KIND_WRITTEN);
             enrichment.setFocusPointer(highlight.content());
             enrichment.setSource(SOURCE_EXA_HIGHLIGHT);
-            repository.save(enrichment);
+            try {
+                repository.save(enrichment);
+            } catch (DataIntegrityViolationException ex) {
+                // Another concurrent generation call (or a lazy RES-3/4 fallback the founder
+                // triggered) already cached this exact (url, topic) pair first — its result is
+                // just as good, nothing to do.
+            }
         }
     }
 

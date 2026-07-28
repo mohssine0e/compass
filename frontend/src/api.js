@@ -432,6 +432,21 @@ export function getStepCovers(stepId) {
   return request(`/roadmaps/steps/${stepId}/covers`, { method: 'POST' })
 }
 
+/**
+ * RES-5's lazy enrichment lookup: a cache hit (an Exa highlight already reused, or a resource
+ * enriched once before, possibly from a different roadmap) returns instantly; a miss runs the
+ * fallback inline — a written resource gets fetched and summarized, a YouTube one gets its
+ * transcript looked up — and is cached for next time. `resourceTitle` is only used by the video
+ * path's honest fallback when there's no transcript to ground a real pointer in. Returns `null`
+ * (204) when nothing could be produced — the caller shows the plain link, same as before.
+ */
+export function enrichResource(resourceUrl, stepTopic, resourceTitle) {
+  return request('/resources/enrich', {
+    method: 'POST',
+    body: JSON.stringify({ resourceUrl, stepTopic, resourceTitle }),
+  })
+}
+
 /** Start a work session on a step. */
 export function startSession(stepId) {
   return request(`/entries/${stepId}/sessions/start`, { method: 'POST' })

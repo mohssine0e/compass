@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { endSession, explainText, getProfile, getStepCovers, patchEntry, startSession } from '../api'
+import {
+  endSession,
+  enrichResource,
+  explainText,
+  getProfile,
+  getStepCovers,
+  patchEntry,
+  startSession,
+} from '../api'
 import { trapTabKey, useDialogAccessibility } from '../hooks/useDialogAccessibility'
 import ReformulatePanel from './ReformulatePanel'
 import { Badge, Button, ExternalLink, IconModule, IconStep, IconSubstep, IconSubSubstep } from './ui'
@@ -206,6 +214,26 @@ export default function StepDeepView({
   const sessions = (content.sessionHistory || []).filter((s) => s.durationMinutes != null)
   const totalMinutes = sessions.reduce((sum, s) => sum + (s.durationMinutes || 0), 0)
 
+  // RES-5: for each attached resource, check the enrichment cache (a cache hit resolves near-
+  // instantly) or run the appropriate lazy fallback — each resource resolves independently, so
+  // one slow fetch never blocks the rest of the deep view or the other resources' own notes.
+  const [enrichments, setEnrichments] = useState({})
+  useEffect(() => {
+    let alive = true
+    setEnrichments({})
+    ;(content.resources || []).forEach((r) => {
+      if (!r.url) return
+      setEnrichments((prev) => ({ ...prev, [r.url]: { loading: true, data: null } }))
+      enrichResource(r.url, content.text, r.title)
+        .then((res) => alive && setEnrichments((prev) => ({ ...prev, [r.url]: { loading: false, data: res } })))
+        .catch(() => alive && setEnrichments((prev) => ({ ...prev, [r.url]: { loading: false, data: null } })))
+    })
+    return () => {
+      alive = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step.id])
+
   return (
     <div className="deep-overlay" onClick={onClose}>
       <div
@@ -327,13 +355,16 @@ export default function StepDeepView({
             <ul className="deep-resources">
               {resources.map((r) => (
                 <li key={r.id || r.url} className="deep-resource">
-                  <ExternalLink href={r.url} className="deep-resource-title">
-                    {r.title}
-                  </ExternalLink>
-                  <span className="deep-resource-meta">
-                    {r.format && <Badge>{r.format}</Badge>}
-                    {r.estimatedTime && <span className="deep-faint">{r.estimatedTime}</span>}
-                  </span>
+                  <div className="deep-resource-row">
+                    <ExternalLink href={r.url} className="deep-resource-title">
+                      {r.title}
+                    </ExternalLink>
+                    <span className="deep-resource-meta">
+                      {r.format && <Badge>{r.format}</Badge>}
+                      {r.estimatedTime && <span className="deep-faint">{r.estimatedTime}</span>}
+                    </span>
+                  </div>
+                  <ResourceEnrichmentNote state={enrichments[r.url]} />
                 </li>
               ))}
             </ul>
@@ -454,6 +485,33 @@ function openSessionStart(content) {
 function formatElapsed(seconds) {
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+
+// RES-5: the pointer/timestamp note under a resource — a cache hit or freshly-run fallback shows
+// what it found; a miss (fetch failed, nothing useful, still resolving) shows nothing extra, same
+// as before this feature existed. Never a full-screen or blocking loading state (RESSOURCE_BRAIN_
+// TASKS.md decision #4) — just a small note next to the one resource it concerns.
+function ResourceEnrichmentNote({ state }) {
+  if (!state) return null
+  if (state.loading) return <p className="deep-faint deep-resource-pointer">Checking…</p>
+  const data = state.data
+  if (!data) return null
+  if (data.kind === 'video' && data.segmentStart != null) {
+    return (
+      <p className="deep-resource-pointer">
+        {formatTimestamp(data.segmentStart)}–{formatTimestamp(data.segmentEnd)}
+        {data.segmentDescription ? ` — ${data.segmentDescription}` : ''}
+      </p>
+    )
+  }
+  return data.focusPointer ? <p className="deep-resource-pointer">{data.focusPointer}</p> : null
+}
+
+function formatTimestamp(seconds) {
+  if (seconds == null) return ''
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
   return `${m}:${String(s).padStart(2, '0')}`
 }
 

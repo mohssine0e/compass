@@ -145,6 +145,12 @@ button.deep-crumb:hover {
 
 .deep-resource {
   display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.deep-resource-row {
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
@@ -158,6 +164,14 @@ button.deep-crumb:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+/* RES-5: the enrichment pointer/timestamp note under a resource's title row. */
+.deep-resource-pointer {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
 }
 
 .deep-notes {
