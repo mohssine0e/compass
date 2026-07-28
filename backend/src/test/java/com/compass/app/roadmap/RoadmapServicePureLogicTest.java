@@ -46,6 +46,7 @@ class RoadmapServicePureLogicTest {
         service = new RoadmapService(
                 repository,
                 new RoadmapQueryService(repository),
+                mock(RoadmapRetierService.class), // out of scope here — this file covers pure logic only
                 mock(RoadmapAiService.class),
                 mock(ProfileService.class),
                 mock(SearchGroundingService.class),

@@ -93,7 +93,10 @@ class RoadmapServiceBehaviorTest {
         canonicalTopics = mock(CanonicalTopicRepository.class);
         embeddings = mock(EmbeddingService.class);
         reviewAi = mock(ReviewAiService.class);
-        service = new RoadmapService(repository, new RoadmapQueryService(repository), roadmapAi, profileService, searchGrounding,
+        RoadmapQueryService realQueryService = new RoadmapQueryService(repository);
+        RoadmapRetierService realRetierService = new RoadmapRetierService(
+                repository, realQueryService, roadmapAi, entryService, aiVoice, events);
+        service = new RoadmapService(repository, realQueryService, realRetierService, roadmapAi, profileService, searchGrounding,
                 resourceService, entryService, aiVoice, events, topicMatcher, canonicalTopics,
                 embeddings, reviewAi, Executors.newSingleThreadExecutor(), 5);
 
