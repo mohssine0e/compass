@@ -9,7 +9,7 @@ import {
   hasEmptyModule,
   nodeIndexOf,
   seedCollapsed,
-} from '../RoadmapDetail'
+} from '../../roadmapTree'
 
 // A small nested tree: one fully-done module, one in-progress module (containing the current
 // step), and one still-empty (unexpanded) module.
