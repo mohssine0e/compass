@@ -556,6 +556,32 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     })
   }
 
+  // "Jump to current step" (opt-in, never automatic — Section 8's "user-initiated, never pushy"
+  // applies just as well to scrolling as it does to reformulate prompts; someone who scrolled
+  // down on purpose shouldn't get yanked back). Un-collapses whatever ancestor chain is hiding
+  // it, then scrolls once the DOM has actually updated to match — a raw scrollIntoView right
+  // after setCollapsed would run before React commits the newly-expanded nodes.
+  const [pendingJumpToStepId, setPendingJumpToStepId] = useState(null)
+
+  function jumpToCurrentStep(stepId) {
+    const ancestors = findNodePath(children, stepId) || []
+    if (ancestors.length > 0) {
+      setCollapsed((prev) => {
+        const next = new Set(prev)
+        for (const ancestor of ancestors) next.delete(ancestor.id)
+        return next
+      })
+    }
+    setPendingJumpToStepId(stepId)
+  }
+
+  useEffect(() => {
+    if (pendingJumpToStepId == null) return
+    document.getElementById(`roadmap-node-${pendingJumpToStepId}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setPendingJumpToStepId(null)
+  }, [pendingJumpToStepId, collapsed])
+
   if (error) {
     return (
       <div className="roadmap-detail">
@@ -742,6 +768,11 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           </>
         ) : (
           <>
+            {view === 'tree' && progress.currentStepId != null && (
+              <Button variant="ghost" onClick={() => jumpToCurrentStep(progress.currentStepId)}>
+                Jump to current
+              </Button>
+            )}
             <Button variant={view === 'tree' ? 'primary' : 'ghost'} onClick={() => setView('tree')}>
               Tree
             </Button>

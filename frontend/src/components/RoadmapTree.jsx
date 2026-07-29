@@ -31,6 +31,7 @@ function StepRow({ node, depth, parentType, ctx }) {
   ]
   return (
     <li
+      id={`roadmap-node-${node.id}`}
       className={`step-item ${state} depth-${Math.min(depth, 3)}`}
       style={depth ? { marginLeft: depth * 30 } : undefined}
     >
@@ -126,6 +127,7 @@ function GroupNode({ node, depth, parentType, ctx }) {
   return (
     <>
       <li
+        id={`roadmap-node-${node.id}`}
         className={`node-group depth-${Math.min(depth, 3)}`}
         style={depth ? { marginLeft: depth * 30 } : undefined}
         onClick={() => ctx.toggleCollapsed(node.id)}
@@ -168,7 +170,7 @@ function EmptyModuleNode({ node, depth, ctx }) {
   const isDone = job?.status === 'DONE'
   const stepCount = isDone ? (job.result?.steps?.length ?? 0) : 0
   return (
-    <li className="node-group node-group-empty" style={depth ? { marginLeft: depth * 30 } : undefined}>
+    <li id={`roadmap-node-${node.id}`} className="node-group node-group-empty" style={depth ? { marginLeft: depth * 30 } : undefined}>
       <input
         type="checkbox"
         className="node-group-select"
