@@ -141,6 +141,21 @@ export function formatMinutes(total) {
   return `${hours}h ${minutes} min`
 }
 
+// A done, AI-verified step's next spaced-recheck date (Phase 8's VerificationService.
+// scheduleRecheck writes content.nextRecheckAt) as a short label for the tree row — the
+// mechanism runs invisibly between resurfacing prompts otherwise, easy to forget it's there at
+// all. Null for anything not on a recheck schedule (self-reported "off" mode steps never get
+// one — there's no verified baseline to recheck against).
+export function recheckDueLabel(nextRecheckAt, now = new Date()) {
+  if (!nextRecheckAt) return null
+  const due = new Date(nextRecheckAt)
+  if (Number.isNaN(due.getTime())) return null
+  const days = Math.ceil((due.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+  if (days <= 0) return 'recheck due'
+  if (days === 1) return 'recheck in 1 day'
+  return `recheck in ${days} days`
+}
+
 // Ids of every node (module, step, or substep — any depth) whose own text contains `query`,
 // case-insensitive, in tree order. Matches on a node's own text only, not its descendants' — a
 // module doesn't "match" just because something inside it does; that's what auto-expanding the

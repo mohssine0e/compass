@@ -1,4 +1,4 @@
-import { dependencyInfo, nodeText } from '../roadmapTree'
+import { dependencyInfo, nodeText, recheckDueLabel } from '../roadmapTree'
 import { truncateAtWord } from '../text'
 import { Badge, Button, IconDelete, IconEdit, IconModule, IconStep, IconSubSubstep, IconSubstep, IconUndo, Menu } from './ui'
 
@@ -19,6 +19,10 @@ function StepRow({ node, depth, parentType, ctx }) {
   // is a reminder only — the founder can still complete the step regardless.
   const dep = dependencyInfo(node, ctx.nodeIndex)
   const blocked = Boolean(dep && !dep.done && !dep.crossModule)
+  // Spaced retrieval (Phase 8) runs invisibly between resurfacing prompts otherwise — a quiet
+  // reminder it's still tracking this step. Only ever set on a step that passed an actual
+  // AI-graded check; self-reported "off" mode steps have nothing to recheck against.
+  const recheckLabel = isDone ? recheckDueLabel(node.content?.nextRecheckAt) : null
   const menuItems = [
     { label: 'Edit', onClick: () => ctx.startEdit(node), icon: <IconEdit /> },
     { label: 'Break down', onClick: () => ctx.startBreakDown(node) },
@@ -59,7 +63,8 @@ function StepRow({ node, depth, parentType, ctx }) {
           {(node.content?.kind === 'project' ||
             node.content?.weight ||
             node.content?.skeletonOnly ||
-            dep) && (
+            dep ||
+            recheckLabel) && (
             <span className="step-tags">
               {node.content?.skeletonOnly && (
                 <Badge tone="danger" title="Every AI provider was unavailable when this was drafted — details fill in on their own once one recovers.">
@@ -82,6 +87,11 @@ function StepRow({ node, depth, parentType, ctx }) {
                   }
                 >
                   {blocked ? '🔒' : '⛓️'} needs: {dep.text}
+                </span>
+              )}
+              {recheckLabel && (
+                <span className={'step-recheck' + (recheckLabel === 'recheck due' ? ' is-due' : '')}>
+                  {recheckLabel}
                 </span>
               )}
             </span>

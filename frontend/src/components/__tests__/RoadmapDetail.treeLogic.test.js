@@ -8,6 +8,7 @@ import {
   fullyDoneGroups,
   hasEmptyModule,
   nodeIndexOf,
+  recheckDueLabel,
   searchMatches,
   seedCollapsed,
   sessionStats,
@@ -193,6 +194,35 @@ describe('sessionStats', () => {
       { id: 2, type: 'roadmap_step', content: { text: 'b', sessionHistory: [{ durationMinutes: 5 }] } },
     ]
     expect(sessionStats(flat)).toEqual({ totalMinutes: 15, sessionCount: 2 })
+  })
+})
+
+describe('recheckDueLabel', () => {
+  const now = new Date('2026-07-29T12:00:00Z')
+
+  it('null when there is no recheck scheduled', () => {
+    expect(recheckDueLabel(null, now)).toBeNull()
+    expect(recheckDueLabel(undefined, now)).toBeNull()
+  })
+
+  it('null for an unparseable date', () => {
+    expect(recheckDueLabel('not-a-date', now)).toBeNull()
+  })
+
+  it('overdue (in the past) reads as due now, not a negative count', () => {
+    expect(recheckDueLabel('2026-07-20T12:00:00Z', now)).toBe('recheck due')
+  })
+
+  it('due exactly now reads as due', () => {
+    expect(recheckDueLabel('2026-07-29T12:00:00Z', now)).toBe('recheck due')
+  })
+
+  it('singular wording for exactly one day out', () => {
+    expect(recheckDueLabel('2026-07-30T12:00:00Z', now)).toBe('recheck in 1 day')
+  })
+
+  it('plural wording for multiple days out', () => {
+    expect(recheckDueLabel('2026-08-05T12:00:00Z', now)).toBe('recheck in 7 days')
   })
 })
 

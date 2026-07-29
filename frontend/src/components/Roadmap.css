@@ -83,6 +83,17 @@
   border-left-color: var(--danger);
 }
 
+/* A done, AI-verified step's spaced-recheck schedule (Phase 8) — quiet by design, this is a
+   reminder the mechanism is tracking the step, not an alert demanding action. */
+.step-recheck {
+  font-size: 0.78rem;
+  color: var(--faint);
+}
+
+.step-recheck.is-due {
+  color: var(--muted);
+}
+
 .step-text-openable {
   cursor: pointer;
 }
