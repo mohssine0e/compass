@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useReducer, useState } from 'react'
 import {
   applyReplan,
   applyReTierProposal,
@@ -177,6 +177,42 @@ export function formatMinutes(total) {
   return `${hours}h ${minutes} min`
 }
 
+// V3-5.2: "which panel/modal is open" as one discriminated union instead of ~11 independent
+// useState flags — see the long comment at its call site in RoadmapDetail for why. Every action
+// but 'close' opens exactly the named panel, replacing whatever (if anything) was open before.
+export const CLOSED_PANEL = { type: null }
+
+export function panelReducer(panel, action) {
+  switch (action.type) {
+    case 'close':
+      return CLOSED_PANEL
+    case 'deepView':
+      return { type: 'deepView', stepId: action.stepId }
+    case 'verify':
+      return { type: 'verify', stepId: action.stepId }
+    case 'expandModule':
+      return { type: 'expandModule', moduleId: action.moduleId }
+    case 'batchExpand':
+      return { type: 'batchExpand', modules: action.modules }
+    case 'regenerateModule':
+      return { type: 'regenerateModule', moduleId: action.moduleId }
+    case 'insertModule':
+      return { type: 'insertModule' }
+    case 'replan':
+      return { type: 'replan' }
+    case 'retierProposal':
+      return { type: 'retierProposal', target: action.target, proposal: action.proposal }
+    case 'suggestAddition':
+      return { type: 'suggestAddition' }
+    case 'breakDown':
+      return { type: 'breakDown', step: action.step }
+    case 'careerReflection':
+      return { type: 'careerReflection', text: action.text }
+    default:
+      return panel
+  }
+}
+
 export default function RoadmapDetail({ id, onBack, onGone }) {
   const [roadmap, setRoadmap] = useState(null)
   const [error, setError] = useState(null)
@@ -188,8 +224,18 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   const [insertAtIndex, setInsertAtIndex] = useState(null)
   const [insertText, setInsertText] = useState('')
   const [savingInsert, setSavingInsert] = useState(false)
-  const [deepStepId, setDeepStepId] = useState(null)
-  const [verifyStepId, setVerifyStepId] = useState(null)
+  // V3-5.2: the ~11 "which panel/modal is open" flags below (deep view, verify, expand-module,
+  // batch-expand, regenerate-module, insert-module, replan, re-tier proposal, suggest-addition,
+  // break-down, career reflection) collapse into one activePanel reducer — see panelReducer below
+  // this component. Nothing in the JSX or handlers past this point had to change: the derived
+  // `const`s right after the early-return guards below reconstruct each old variable name/shape
+  // exactly, so every existing read site keeps working unchanged; only the ~20 write sites
+  // (`setX(...)` calls) become `dispatchPanel({ type: ... })`. The real change isn't cosmetic —
+  // today, nothing stops two of these firing at once (each is an independent useState, and the
+  // JSX just renders whichever happen to be truthy); a discriminated union makes "exactly one
+  // panel, or none" true by construction instead of by accident, matching what the JSX already
+  // assumed. RoadmapDetail.panels.test.jsx pins this down.
+  const [panel, dispatchPanel] = useReducer(panelReducer, CLOSED_PANEL)
   // Reorder mode (Phase 12): drag-to-reorder the top-level nodes, saved explicitly.
   const [reorderMode, setReorderMode] = useState(false)
   const [draftOrder, setDraftOrder] = useState([])
@@ -199,19 +245,10 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   const [collapsed, setCollapsed] = useState(null)
   // For a flat roadmap: collapse the run of completed steps above the current one (Phase 12).
   const [showCompleted, setShowCompleted] = useState(false)
-  // The module currently being expanded into steps (Phase 13), or null.
-  const [expandingModuleId, setExpandingModuleId] = useState(null)
   // Modules picked for a batch expansion (Phase 19) — an explicit, opt-in action; the default
-  // stays expanding one module at a time. A Set of module ids, or the batch modal's module list
-  // once the founder confirms.
+  // stays expanding one module at a time. A Set of module ids, until the batch modal opens with
+  // the confirmed list (see the batchExpand panel below).
   const [selectedModuleIds, setSelectedModuleIds] = useState(new Set())
-  const [batchExpanding, setBatchExpanding] = useState(null)
-  // The module currently being redrafted (Phase 18: "regenerate this module"), or null.
-  const [regeneratingModuleId, setRegeneratingModuleId] = useState(null)
-  // Whether a new module is being drafted to insert (Phase 18), or null.
-  const [insertingModule, setInsertingModule] = useState(false)
-  // Whether the remaining unexpanded modules are being replanned (Phase 18), or null.
-  const [replanning, setReplanning] = useState(false)
   // Structural tree vs. the ordered "what's next" learning path (Phase 13).
   const [view, setView] = useState('tree')
   // Background-draft status per unexpanded module id, e.g. {status, result, error} — see
@@ -219,26 +256,19 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   // appears, so this is usually already DONE by the time the founder opens one.
   const [prefetch, setPrefetch] = useState({})
 
-  // The re-tier escape hatch (RB-2.5): null, or a pending AI-drafted proposal the founder must
-  // confirm/cancel before anything actually changes ({ kind: 'regroup'|'arc_order', groups }).
-  const [reTierProposal, setReTierProposal] = useState(null)
-  const [reTierTarget, setReTierTarget] = useState(null)
   const [reTiering, setReTiering] = useState(false)
 
   // Topic evolution (RB-3.10): the canonical topic this roadmap was created as/from, if it has
   // one — null while unknown/loading, false once confirmed there isn't one.
   const [canonicalTopic, setCanonicalTopic] = useState(null)
-  const [suggestingAddition, setSuggestingAddition] = useState(false)
+  // The "suggest a topic addition" form's own working data — stays separate from the panel
+  // reducer (unlike whether the panel is open) since it changes on every keystroke and is only
+  // ever read while that one panel is open anyway.
   const [additionSuggestion, setAdditionSuggestion] = useState('')
   const [additionProposal, setAdditionProposal] = useState(null)
   const [additionBusy, setAdditionBusy] = useState(false)
 
-  // The one-time CAREER completion reflection (RB-4.7), shown once when it first arrives.
-  const [careerReflection, setCareerReflection] = useState(null)
-
-  // Break-down review (RB-4.8) — same propose/apply reformulation endpoint the resurfacing flow
-  // already uses, now also triggered directly from any step here. null when not open.
-  const [breakDownStep, setBreakDownStep] = useState(null)
+  // The break-down review's own editable proposal — same reasoning as additionSuggestion above.
   const [breakDownSteps, setBreakDownSteps] = useState([])
   const [breakDownBusy, setBreakDownBusy] = useState(false)
 
@@ -303,7 +333,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
       // tier — only worth asking at all for that tier, so gate the call itself.
       if (roadmap?.tier === 'CAREER') {
         checkCareerCompletion(roadmap.id)
-          .then((res) => res?.reflection && setCareerReflection(res.reflection))
+          .then((res) => res?.reflection && dispatchPanel({ type: 'careerReflection', text: res.reflection }))
           .catch(() => {}) // best-effort — a missed reflection isn't worth surfacing an error for
       }
     } catch (err) {
@@ -318,7 +348,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   function requestMarkDone(node) {
     const mode = (node.content && node.content.verify) || (roadmap && roadmap.verify)
     if (mode === 'light' || mode === 'full') {
-      setVerifyStepId(node.id)
+      dispatchPanel({ type: 'verify', stepId: node.id })
     } else {
       markDone(node.id)
     }
@@ -438,8 +468,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     try {
       const res = await reTierRoadmap(id, tier)
       if (res.status === 'proposal') {
-        setReTierTarget(tier)
-        setReTierProposal(res.proposal)
+        dispatchPanel({ type: 'retierProposal', target: tier, proposal: res.proposal })
       } else if (res.taskEntryId) {
         // Converted to a task — this roadmap is archived now, nothing left to show here.
         onGone?.()
@@ -459,8 +488,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     setError(null)
     try {
       await applyReTierProposal(id, reTierProposal.kind, reTierProposal.groups)
-      setReTierProposal(null)
-      setReTierTarget(null)
+      dispatchPanel({ type: 'close' })
       await load()
     } catch (err) {
       setError(err.message)
@@ -470,8 +498,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   }
 
   function cancelReTierProposal() {
-    setReTierProposal(null)
-    setReTierTarget(null)
+    dispatchPanel({ type: 'close' })
   }
 
   // Topic evolution (RB-3.10): the founder suggests a specific addition to the canonical topic
@@ -505,7 +532,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   }
 
   function closeAdditionPrompt() {
-    setSuggestingAddition(false)
+    dispatchPanel({ type: 'close' })
     setAdditionSuggestion('')
     setAdditionProposal(null)
   }
@@ -573,7 +600,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     setError(null)
     try {
       const proposal = await proposeReformulate(node.id, 'break_down')
-      setBreakDownStep(node)
+      dispatchPanel({ type: 'breakDown', step: node })
       setBreakDownSteps(fromProposedSteps(proposal.steps))
     } catch (err) {
       setError(err.message)
@@ -588,7 +615,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     setError(null)
     try {
       await applyReformulate(breakDownStep.id, { kind: 'break_down', draftSteps: toDraftSteps(breakDownSteps) })
-      setBreakDownStep(null)
+      dispatchPanel({ type: 'close' })
       setBreakDownSteps([])
       await load()
     } catch (err) {
@@ -657,6 +684,21 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
       </div>
     )
   }
+
+  // Reconstructing each pre-reducer variable name/shape exactly, so every read site below is
+  // unchanged — only the write sites (setX calls) became dispatchPanel(...).
+  const deepStepId = panel.type === 'deepView' ? panel.stepId : null
+  const verifyStepId = panel.type === 'verify' ? panel.stepId : null
+  const expandingModuleId = panel.type === 'expandModule' ? panel.moduleId : null
+  const batchExpanding = panel.type === 'batchExpand' ? panel.modules : null
+  const regeneratingModuleId = panel.type === 'regenerateModule' ? panel.moduleId : null
+  const insertingModule = panel.type === 'insertModule'
+  const replanning = panel.type === 'replan'
+  const reTierProposal = panel.type === 'retierProposal' ? panel.proposal : null
+  const reTierTarget = panel.type === 'retierProposal' ? panel.target : null
+  const suggestingAddition = panel.type === 'suggestAddition'
+  const breakDownStep = panel.type === 'breakDown' ? panel.step : null
+  const careerReflection = panel.type === 'careerReflection' ? panel.text : null
 
   const { title, notes, progress } = roadmap
   const children = roadmap.children || []
@@ -751,7 +793,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
         ) : (
           <span
             className="step-text step-text-openable"
-            onDoubleClick={() => setDeepStepId(node.id)}
+            onDoubleClick={() => dispatchPanel({ type: 'deepView', stepId: node.id })}
             title="Double-click for details"
           >
             <span className="step-text-main">{truncateAtWord(node.content?.text)}</span>
@@ -890,13 +932,13 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           {nodeText(node)}
           {node.content?.scope && <span className="node-group-scope"> — {node.content.scope}</span>}
         </span>
-        <Button variant="ghost" onClick={() => setRegeneratingModuleId(node.id)}>
+        <Button variant="ghost" onClick={() => dispatchPanel({ type: 'regenerateModule', moduleId: node.id })}>
           Regenerate scope
         </Button>
         {isPending ? (
           <span className="node-group-working" aria-live="polite">Working on it…</span>
         ) : (
-          <Button variant="ghost" onClick={() => setExpandingModuleId(node.id)}>
+          <Button variant="ghost" onClick={() => dispatchPanel({ type: 'expandModule', moduleId: node.id })}>
             {isDone ? `Review ${stepCount} step${stepCount === 1 ? '' : 's'}` : 'Expand this module'}
           </Button>
         )}
@@ -945,7 +987,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
         <p className="roadmap-pace-note">
           At your current pace, this will take roughly {Math.round(progress.paceMultiplier * 10) / 10}x
           longer than estimated.{' '}
-          <button className="roadmap-pace-action" onClick={() => setReplanning(true)}>
+          <button className="roadmap-pace-action" onClick={() => dispatchPanel({ type: 'replan' })}>
             Redraft the remaining modules for where you actually are?
           </button>
         </p>
@@ -954,7 +996,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
         <p className="roadmap-pace-note">
           At your current pace, this is going roughly {Math.round((1 / progress.paceMultiplier) * 10) / 10}x
           faster than estimated.{' '}
-          <button className="roadmap-pace-action" onClick={() => setReplanning(true)}>
+          <button className="roadmap-pace-action" onClick={() => dispatchPanel({ type: 'replan' })}>
             Redraft the remaining modules for where you actually are?
           </button>
         </p>
@@ -1007,7 +1049,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
                   onClick: () => reTier(t),
                 })),
                 ...(canonicalTopic
-                  ? [{ label: 'Suggest a topic addition', onClick: () => setSuggestingAddition(true) }]
+                  ? [{ label: 'Suggest a topic addition', onClick: () => dispatchPanel({ type: 'suggestAddition' }) }]
                   : []),
                 { label: 'Archive', onClick: archiveRoadmap, icon: <IconArchive /> },
                 { label: 'Delete roadmap', onClick: deleteWholeRoadmap, danger: true, icon: <IconDelete /> },
@@ -1031,7 +1073,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
               const picked = [...selectedModuleIds]
                 .map((id) => findNode(children, id))
                 .filter(Boolean)
-              setBatchExpanding(picked)
+              dispatchPanel({ type: 'batchExpand', modules: picked })
             }}
           >
             Expand {selectedModuleIds.size} selected
@@ -1040,9 +1082,9 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
       )}
 
       {view === 'path' && !reorderMode ? (
-        <LearningPathView roadmap={roadmap} onOpenStep={setDeepStepId} />
+        <LearningPathView roadmap={roadmap} onOpenStep={(stepId) => dispatchPanel({ type: 'deepView', stepId })} />
       ) : view === 'projects' && !reorderMode ? (
-        <ProjectsView roadmap={roadmap} onChanged={load} onOpenStep={setDeepStepId} />
+        <ProjectsView roadmap={roadmap} onChanged={load} onOpenStep={(stepId) => dispatchPanel({ type: 'deepView', stepId })} />
       ) : reorderMode ? (
         <ol className="step-list is-reordering">
           {draftOrder.map((node, index) => (
@@ -1089,11 +1131,11 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           <li className="step-insert-row">
             {hasModules ? (
               <>
-                <button className="step-insert-btn" onClick={() => setInsertingModule(true)}>
+                <button className="step-insert-btn" onClick={() => dispatchPanel({ type: 'insertModule' })}>
                   + Insert a module
                 </button>
                 {hasRemainingModules && (
-                  <button className="step-insert-btn" onClick={() => setReplanning(true)}>
+                  <button className="step-insert-btn" onClick={() => dispatchPanel({ type: 'replan' })}>
                     Replan remaining modules
                   </button>
                 )}
@@ -1126,10 +1168,10 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
             // Root or a module goes back to the tree (expanding that module); an ancestor
             // step opens its own deep view instead.
             if (seg.id != null && seg.type === 'roadmap_step') {
-              setDeepStepId(seg.id)
+              dispatchPanel({ type: 'deepView', stepId: seg.id })
               return
             }
-            setDeepStepId(null)
+            dispatchPanel({ type: 'close' })
             if (seg.id != null) {
               setCollapsed((prev) => {
                 const next = new Set(prev)
@@ -1138,7 +1180,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
               })
             }
           }}
-          onClose={() => setDeepStepId(null)}
+          onClose={() => dispatchPanel({ type: 'close' })}
           onChanged={load}
         />
       )}
@@ -1146,16 +1188,16 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
       {verifyStepId && findNode(children, verifyStepId) && (
         <VerifyModal
           step={toStepShape(findNode(children, verifyStepId))}
-          onClose={() => setVerifyStepId(null)}
+          onClose={() => dispatchPanel({ type: 'close' })}
           onChanged={load}
           onPassed={async () => {
-            setVerifyStepId(null)
+            dispatchPanel({ type: 'close' })
             setDoneNote(null)
             await load()
           }}
           onOverride={async () => {
             const target = verifyStepId
-            setVerifyStepId(null)
+            dispatchPanel({ type: 'close' })
             await markDone(target)
           }}
         />
@@ -1168,9 +1210,9 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           prefetched={
             prefetch[expandingModuleId]?.status === 'DONE' ? prefetch[expandingModuleId].result : undefined
           }
-          onClose={() => setExpandingModuleId(null)}
+          onClose={() => dispatchPanel({ type: 'close' })}
           onApplied={async () => {
-            setExpandingModuleId(null)
+            dispatchPanel({ type: 'close' })
             await load()
           }}
         />
@@ -1181,7 +1223,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           roadmapId={id}
           modules={batchExpanding}
           onClose={() => {
-            setBatchExpanding(null)
+            dispatchPanel({ type: 'close' })
             setSelectedModuleIds(new Set())
           }}
           onApplied={load}
@@ -1194,9 +1236,9 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           roadmapId={id}
           draft={() => regenerateModuleScope(id, regeneratingModuleId)}
           accept={(roadmapId, moduleTitle, scope) => updateModule(roadmapId, regeneratingModuleId, moduleTitle, scope)}
-          onClose={() => setRegeneratingModuleId(null)}
+          onClose={() => dispatchPanel({ type: 'close' })}
           onApplied={async () => {
-            setRegeneratingModuleId(null)
+            dispatchPanel({ type: 'close' })
             await load()
           }}
         />
@@ -1208,9 +1250,9 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           roadmapId={id}
           draft={proposeNewModule}
           accept={(roadmapId, moduleTitle, scope) => insertModule(roadmapId, moduleTitle, scope, null)}
-          onClose={() => setInsertingModule(false)}
+          onClose={() => dispatchPanel({ type: 'close' })}
           onApplied={async () => {
-            setInsertingModule(false)
+            dispatchPanel({ type: 'close' })
             await load()
           }}
         />
@@ -1221,9 +1263,9 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           roadmapId={id}
           draft={replanModules}
           accept={applyReplan}
-          onClose={() => setReplanning(false)}
+          onClose={() => dispatchPanel({ type: 'close' })}
           onApplied={async () => {
-            setReplanning(false)
+            dispatchPanel({ type: 'close' })
             await load()
           }}
         />
@@ -1318,12 +1360,12 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
       )}
 
       {breakDownStep && (
-        <Modal onClose={() => setBreakDownStep(null)} title={`Break down "${nodeText(breakDownStep)}"`} size="lg">
+        <Modal onClose={() => dispatchPanel({ type: 'close' })} title={`Break down "${nodeText(breakDownStep)}"`} size="lg">
           <p className="roadmap-lead">These substeps replace the step above. Edit before confirming.</p>
           <StepProposalEditor steps={breakDownSteps} onChange={setBreakDownSteps} />
           {error && <p className="roadmap-error">{error}</p>}
           <div className="roadmap-actions">
-            <Button variant="ghost" onClick={() => setBreakDownStep(null)} disabled={breakDownBusy}>
+            <Button variant="ghost" onClick={() => dispatchPanel({ type: 'close' })} disabled={breakDownBusy}>
               Cancel
             </Button>
             <Button variant="primary" onClick={confirmBreakDown} disabled={breakDownBusy}>
@@ -1334,10 +1376,10 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
       )}
 
       {careerReflection && (
-        <Modal onClose={() => setCareerReflection(null)}>
+        <Modal onClose={() => dispatchPanel({ type: 'close' })}>
           <p className="gen-task-ack">{careerReflection}</p>
           <div className="roadmap-actions">
-            <Button variant="primary" onClick={() => setCareerReflection(null)}>
+            <Button variant="primary" onClick={() => dispatchPanel({ type: 'close' })}>
               Done
             </Button>
           </div>
