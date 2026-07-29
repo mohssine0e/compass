@@ -339,7 +339,7 @@ public class RoadmapController {
      * via {@link #insertModule}.
      */
     @PostMapping("/{id}/modules/subtopic-proposal")
-    public RoadmapService.SubtopicModuleProposal proposeSubtopicModule(@PathVariable Long id,
+    public RoadmapGenerationService.SubtopicModuleProposal proposeSubtopicModule(@PathVariable Long id,
                                                                        @RequestBody SubtopicProposalRequest request) {
         return service.proposeSubtopicModule(id, request.focusGoal());
     }
