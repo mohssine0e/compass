@@ -32,7 +32,7 @@ function StepRow({ node, depth, parentType, ctx }) {
   return (
     <li
       id={`roadmap-node-${node.id}`}
-      className={`step-item ${state} depth-${Math.min(depth, 3)}`}
+      className={`step-item ${state} depth-${Math.min(depth, 3)}` + (ctx.searchMatchIds?.has(node.id) ? ' is-search-match' : '')}
       style={depth ? { marginLeft: depth * 30 } : undefined}
     >
       <span className="step-marker" aria-hidden="true">
@@ -128,7 +128,7 @@ function GroupNode({ node, depth, parentType, ctx }) {
     <>
       <li
         id={`roadmap-node-${node.id}`}
-        className={`node-group depth-${Math.min(depth, 3)}`}
+        className={`node-group depth-${Math.min(depth, 3)}` + (ctx.searchMatchIds?.has(node.id) ? ' is-search-match' : '')}
         style={depth ? { marginLeft: depth * 30 } : undefined}
         onClick={() => ctx.toggleCollapsed(node.id)}
       >

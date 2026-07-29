@@ -8,6 +8,7 @@ import {
   fullyDoneGroups,
   hasEmptyModule,
   nodeIndexOf,
+  searchMatches,
   seedCollapsed,
   sessionStats,
 } from '../../roadmapTree'
@@ -192,6 +193,30 @@ describe('sessionStats', () => {
       { id: 2, type: 'roadmap_step', content: { text: 'b', sessionHistory: [{ durationMinutes: 5 }] } },
     ]
     expect(sessionStats(flat)).toEqual({ totalMinutes: 15, sessionCount: 2 })
+  })
+})
+
+describe('searchMatches', () => {
+  it('empty query matches nothing', () => {
+    expect(searchMatches(sampleTree(), '')).toEqual([])
+    expect(searchMatches(sampleTree(), '   ')).toEqual([])
+  })
+
+  it('matches a module by its title, case-insensitive', () => {
+    expect(searchMatches(sampleTree(), 'module a')).toEqual([1])
+  })
+
+  it('matches leaf steps by their own text, in tree order', () => {
+    expect(searchMatches(sampleTree(), 'b')).toEqual([2, 21, 22])
+  })
+
+  it('a module does not match just because a descendant does', () => {
+    // "A1"/"A2" only appear on the leaves under module 1, not on module 1's own title.
+    expect(searchMatches(sampleTree(), 'a1')).toEqual([11])
+  })
+
+  it('no matches for a query nothing contains', () => {
+    expect(searchMatches(sampleTree(), 'xyz-not-present')).toEqual([])
   })
 })
 

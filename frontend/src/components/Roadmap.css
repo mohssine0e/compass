@@ -120,6 +120,34 @@
   border-color: var(--faint);
 }
 
+.roadmap-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.roadmap-search input {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 0.85rem;
+  width: 200px;
+  outline: none;
+}
+
+.roadmap-search input:focus-visible {
+  border-color: var(--faint);
+}
+
+.roadmap-search-count {
+  color: var(--faint);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .roadmap-empty {
   color: var(--muted);
   font-size: 1.05rem;
@@ -417,6 +445,14 @@
 .node-group.depth-2,
 .node-group.depth-3 {
   background: var(--surface);
+}
+
+/* A live search match (RoadmapDetail's in-tree search) — same treatment on a step row or a
+   group header, just enough to catch the eye scanning a long expanded tree. */
+.step-item.is-search-match,
+.node-group.is-search-match {
+  outline: 1px solid var(--brass);
+  outline-offset: -1px;
 }
 
 .node-group-caret {

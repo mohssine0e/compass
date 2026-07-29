@@ -45,6 +45,7 @@ import {
   hasEmptyModule,
   nodeIndexOf,
   nodeText,
+  searchMatches,
   seedCollapsed,
   sessionStats,
 } from '../roadmapTree'
@@ -131,6 +132,11 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   const [dragIndex, setDragIndex] = useState(null)
   // Which container nodes are collapsed (Phase 13). Seeded from fully-done groups on first load.
   const [collapsed, setCollapsed] = useState(null)
+  // In-tree search (tree view only): find a step/module by name in a large, partly-collapsed
+  // roadmap without expanding everything by hand first. searchMatchIndex is which match Enter
+  // last jumped to, so repeated Enters cycle rather than re-jumping to the same one.
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchMatchIndex, setSearchMatchIndex] = useState(0)
   // For a flat roadmap: collapse the run of completed steps above the current one (Phase 12).
   const [showCompleted, setShowCompleted] = useState(false)
   // Modules picked for a batch expansion (Phase 19) — an explicit, opt-in action; the default
@@ -556,15 +562,16 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     })
   }
 
-  // "Jump to current step" (opt-in, never automatic — Section 8's "user-initiated, never pushy"
-  // applies just as well to scrolling as it does to reformulate prompts; someone who scrolled
-  // down on purpose shouldn't get yanked back). Un-collapses whatever ancestor chain is hiding
-  // it, then scrolls once the DOM has actually updated to match — a raw scrollIntoView right
-  // after setCollapsed would run before React commits the newly-expanded nodes.
-  const [pendingJumpToStepId, setPendingJumpToStepId] = useState(null)
+  // Scroll a node into view, used by both "Jump to current" and search's Enter-to-jump (opt-in,
+  // never automatic — Section 8's "user-initiated, never pushy" applies just as well to scrolling
+  // as it does to reformulate prompts; someone who scrolled down on purpose shouldn't get yanked
+  // back). Un-collapses whatever ancestor chain is hiding the target, then scrolls once the DOM
+  // has actually updated to match — a raw scrollIntoView right after setCollapsed would run
+  // before React commits the newly-expanded nodes.
+  const [pendingScrollToId, setPendingScrollToId] = useState(null)
 
-  function jumpToCurrentStep(stepId) {
-    const ancestors = findNodePath(children, stepId) || []
+  function scrollToTreeNode(nodeId) {
+    const ancestors = findNodePath(children, nodeId) || []
     if (ancestors.length > 0) {
       setCollapsed((prev) => {
         const next = new Set(prev)
@@ -572,15 +579,15 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
         return next
       })
     }
-    setPendingJumpToStepId(stepId)
+    setPendingScrollToId(nodeId)
   }
 
   useEffect(() => {
-    if (pendingJumpToStepId == null) return
-    document.getElementById(`roadmap-node-${pendingJumpToStepId}`)
+    if (pendingScrollToId == null) return
+    document.getElementById(`roadmap-node-${pendingScrollToId}`)
       ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    setPendingJumpToStepId(null)
-  }, [pendingJumpToStepId, collapsed])
+    setPendingScrollToId(null)
+  }, [pendingScrollToId, collapsed])
 
   if (error) {
     return (
@@ -620,6 +627,29 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   // already tracked per step (StepDeepView's session log). Silent below one real session; a
   // lone "0h invested" is noise, not signal.
   const { totalMinutes: investedMinutes, sessionCount } = sessionStats(children)
+  // In-tree search (tree view only): matches are found against every node's own text, wherever
+  // in the tree it sits; any collapsed group standing between a match and the top level is force-
+  // opened for the duration of the search (not persisted as a real collapse-state change — the
+  // founder's actual collapseOverrides underneath are untouched, this is purely a view override).
+  const searchMatchIds = searchMatches(children, searchQuery)
+  const searchMatchIdSet = new Set(searchMatchIds)
+  const searchAncestorsToOpen = new Set()
+  for (const matchId of searchMatchIds) {
+    for (const ancestor of findNodePath(children, matchId) || []) {
+      searchAncestorsToOpen.add(ancestor.id)
+    }
+  }
+  const visibleCollapsed = searchAncestorsToOpen.size > 0
+    ? new Set([...(collapsed || [])].filter((id) => !searchAncestorsToOpen.has(id)))
+    : collapsed
+
+  function goToSearchMatch(delta) {
+    if (searchMatchIds.length === 0) return
+    const nextIndex = (searchMatchIndex + delta + searchMatchIds.length) % searchMatchIds.length
+    setSearchMatchIndex(nextIndex)
+    scrollToTreeNode(searchMatchIds[nextIndex])
+  }
+
   const nodeIndex = nodeIndexOf(children)
   // Every step, roadmap-wide, for the dependency picker (RB-4.9) — a founder can link across
   // modules on purpose; whether it blocks completion is decided separately (dependencyInfo).
@@ -688,12 +718,13 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     graduateStepAction,
     undoStep,
     deleteStep,
-    collapsed,
+    collapsed: visibleCollapsed,
     toggleCollapsed,
     flattenStepAction,
     selectedModuleIds,
     setSelectedModuleIds,
     prefetch,
+    searchMatchIds: searchMatchIdSet,
   }
 
   return (
@@ -768,8 +799,34 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           </>
         ) : (
           <>
+            {view === 'tree' && (
+              <span className="roadmap-search">
+                <input
+                  type="search"
+                  placeholder="Find a step or module…"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value)
+                    // -1 so the first Enter lands on the first match (index 0), not the second.
+                    setSearchMatchIndex(-1)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return
+                    e.preventDefault()
+                    goToSearchMatch(e.shiftKey ? -1 : 1)
+                  }}
+                />
+                {searchQuery.trim() && (
+                  <span className="roadmap-search-count">
+                    {searchMatchIds.length === 0
+                      ? 'No matches'
+                      : `${(searchMatchIndex % searchMatchIds.length) + 1} of ${searchMatchIds.length}`}
+                  </span>
+                )}
+              </span>
+            )}
             {view === 'tree' && progress.currentStepId != null && (
-              <Button variant="ghost" onClick={() => jumpToCurrentStep(progress.currentStepId)}>
+              <Button variant="ghost" onClick={() => scrollToTreeNode(progress.currentStepId)}>
                 Jump to current
               </Button>
             )}

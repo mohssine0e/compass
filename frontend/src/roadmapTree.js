@@ -141,6 +141,24 @@ export function formatMinutes(total) {
   return `${hours}h ${minutes} min`
 }
 
+// Ids of every node (module, step, or substep — any depth) whose own text contains `query`,
+// case-insensitive, in tree order. Matches on a node's own text only, not its descendants' — a
+// module doesn't "match" just because something inside it does; that's what auto-expanding the
+// ancestor chain of an actual match is for (see RoadmapDetail's search handling).
+export function searchMatches(nodes, query) {
+  const q = query.trim().toLowerCase()
+  if (!q) return []
+  const out = []
+  const walk = (list) => {
+    for (const n of list) {
+      if ((nodeText(n) || '').toLowerCase().includes(q)) out.push(n.id)
+      if (n.children) walk(n.children)
+    }
+  }
+  walk(nodes)
+  return out
+}
+
 export function findNode(nodes, targetId) {
   for (const n of nodes) {
     if (n.id === targetId) return n
