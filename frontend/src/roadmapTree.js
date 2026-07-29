@@ -72,6 +72,30 @@ export function seedCollapsed(data) {
   return base
 }
 
+// Real time invested, rolled up across every leaf's session history in the tree — the
+// CLAUDE.md-sanctioned alternative to a streak ("total sessions or time invested, never an
+// unbroken streak"). Same "only count a session with a real logged duration" rule StepDeepView
+// already uses per-step; this just sums it roadmap-wide instead of one step at a time.
+export function sessionStats(nodes) {
+  let totalMinutes = 0
+  let sessionCount = 0
+  for (const n of nodes) {
+    if (n.children && n.children.length > 0) {
+      const nested = sessionStats(n.children)
+      totalMinutes += nested.totalMinutes
+      sessionCount += nested.sessionCount
+    } else if (Array.isArray(n.content?.sessionHistory)) {
+      for (const s of n.content.sessionHistory) {
+        if (s.durationMinutes != null) {
+          totalMinutes += s.durationMinutes
+          sessionCount += 1
+        }
+      }
+    }
+  }
+  return { totalMinutes, sessionCount }
+}
+
 // True if any module anywhere in the tree has no steps of its own yet — worth polling
 // background-draft status for. Once every module's expanded, this goes false and polling stops.
 export function hasEmptyModule(nodes) {

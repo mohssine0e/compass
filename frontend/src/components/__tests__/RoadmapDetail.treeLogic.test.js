@@ -9,6 +9,7 @@ import {
   hasEmptyModule,
   nodeIndexOf,
   seedCollapsed,
+  sessionStats,
 } from '../../roadmapTree'
 
 // A small nested tree: one fully-done module, one in-progress module (containing the current
@@ -161,6 +162,36 @@ describe('formatMinutes', () => {
 
   it('zero renders as 0 min, not blank', () => {
     expect(formatMinutes(0)).toBe('0 min')
+  })
+})
+
+describe('sessionStats', () => {
+  it('zero for a tree with no session history anywhere', () => {
+    expect(sessionStats(sampleTree())).toEqual({ totalMinutes: 0, sessionCount: 0 })
+  })
+
+  it('sums durationMinutes across leaves in different modules', () => {
+    const tree = sampleTree()
+    tree[0].children[0].content.sessionHistory = [{ durationMinutes: 30 }, { durationMinutes: 15 }]
+    tree[1].children[0].content.sessionHistory = [{ durationMinutes: 45 }]
+    expect(sessionStats(tree)).toEqual({ totalMinutes: 90, sessionCount: 3 })
+  })
+
+  it('ignores an in-progress session with no logged duration yet', () => {
+    const tree = sampleTree()
+    tree[0].children[0].content.sessionHistory = [
+      { durationMinutes: 20 },
+      { startedAt: '2026-07-29T10:00:00Z', durationMinutes: null },
+    ]
+    expect(sessionStats(tree)).toEqual({ totalMinutes: 20, sessionCount: 1 })
+  })
+
+  it('a flat roadmap (leaf steps at the top level) is summed the same way', () => {
+    const flat = [
+      { id: 1, type: 'roadmap_step', content: { text: 'a', sessionHistory: [{ durationMinutes: 10 }] } },
+      { id: 2, type: 'roadmap_step', content: { text: 'b', sessionHistory: [{ durationMinutes: 5 }] } },
+    ]
+    expect(sessionStats(flat)).toEqual({ totalMinutes: 15, sessionCount: 2 })
   })
 })
 

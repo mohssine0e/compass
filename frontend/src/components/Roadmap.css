@@ -258,6 +258,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+.roadmap-time-invested {
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.8;
+}
+
 .roadmap-done-note {
   margin: -14px 0 22px;
   color: var(--brass);

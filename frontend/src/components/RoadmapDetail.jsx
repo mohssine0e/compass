@@ -46,6 +46,7 @@ import {
   nodeIndexOf,
   nodeText,
   seedCollapsed,
+  sessionStats,
 } from '../roadmapTree'
 import { NodeRenderer } from './RoadmapTree'
 import StepDeepView from './StepDeepView'
@@ -589,6 +590,10 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
 
   const { title, notes, progress } = roadmap
   const children = roadmap.children || []
+  // Not gamification (CLAUDE.md: no streaks) — just the honest total, rolled up from data
+  // already tracked per step (StepDeepView's session log). Silent below one real session; a
+  // lone "0h invested" is noise, not signal.
+  const { totalMinutes: investedMinutes, sessionCount } = sessionStats(children)
   const nodeIndex = nodeIndexOf(children)
   // Every step, roadmap-wide, for the dependency picker (RB-4.9) — a founder can link across
   // modules on purpose; whether it blocks completion is decided separately (dependencyInfo).
@@ -688,6 +693,11 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
                 : ''
             }`}
         </span>
+        {sessionCount > 0 && (
+          <span className="roadmap-time-invested">
+            ~{formatMinutes(investedMinutes)} invested across {sessionCount} session{sessionCount === 1 ? '' : 's'}
+          </span>
+        )}
       </div>
 
       {hasRemainingModules && progress.paceMultiplier != null && progress.paceMultiplier > 2 && (
