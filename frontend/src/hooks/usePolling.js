@@ -9,10 +9,10 @@ import { useEffect } from 'react'
  * reached) without unmounting the caller — the effect cleans up and does nothing until a
  * dependency change brings a real `fetchFn` back.
  *
- * Centralises the interval + cleanup + "is this result still relevant" pattern that
- * `RoadmapMap.jsx` and `RoadmapDetail.jsx` each hand-rolled separately for the same
- * `getModulePrefetchStatus` poll (V3-5.4) — a failed poll is silently retried next tick in both,
- * since these are best-effort background status checks, never a user-facing error.
+ * Centralises the interval + cleanup + "is this result still relevant" pattern around the
+ * `getModulePrefetchStatus` poll (V3-5.4) that `RoadmapDetail.jsx` uses to reflect background
+ * module drafting — a failed poll is silently retried next tick, since this is a best-effort
+ * background status check, never a user-facing error.
  */
 export function usePolling(fetchFn, intervalMs, onData, deps) {
   useEffect(() => {

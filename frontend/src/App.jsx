@@ -4,7 +4,6 @@ import NewRoadmapScreen from './components/NewRoadmapScreen'
 import GenerateRoadmapScreen from './components/GenerateRoadmapScreen'
 import RoadmapsScreen from './components/RoadmapsScreen'
 import RoadmapDetail from './components/RoadmapDetail'
-import RoadmapMap from './components/RoadmapMap'
 import AllEntriesScreen from './components/AllEntriesScreen'
 import AdminEventsScreen from './components/AdminEventsScreen'
 import ClassifyTestScreen from './components/ClassifyTestScreen'
@@ -38,22 +37,21 @@ const PATHS = {
   debug: '/debug',
 }
 
-// Views that take the whole viewport instead of the centred reading column.
-const FULL_BLEED = new Set(['roadmap'])
-
 function viewToPath(view) {
   if (view.name === 'roadmap') return `/roadmap/${view.id}`
-  if (view.name === 'roadmapClassic') return `/roadmap/${view.id}/classic`
   return PATHS[view.name] || '/'
 }
 
 // Only views that are meaningful to land on directly are parsed back. `resurfacing` and
 // `generateRoadmap` carry in-memory payloads (a prompt, a draft result) that a cold URL can't
 // reconstruct, so they fall back to their own starting point rather than rendering half-empty.
+//
+// `/roadmap/:id/classic` used to be a distinct view (RoadmapMap was the default at
+// `/roadmap/:id`, RoadmapDetail was the opt-in "classic" list). RoadmapMap is gone — the list
+// view is the only one now — but an old link with the `/classic` suffix still resolves here
+// rather than 404ing.
 function pathToView(pathname) {
-  const classic = pathname.match(/^\/roadmap\/(\d+)\/classic$/)
-  if (classic) return { name: 'roadmapClassic', id: Number(classic[1]) }
-  const roadmap = pathname.match(/^\/roadmap\/(\d+)$/)
+  const roadmap = pathname.match(/^\/roadmap\/(\d+)(?:\/classic)?$/)
   if (roadmap) return { name: 'roadmap', id: Number(roadmap[1]) }
   const name = Object.keys(PATHS).find((k) => PATHS[k] === pathname)
   if (name === 'generateRoadmap') return { name: 'roadmaps' }
@@ -110,7 +108,7 @@ export default function App() {
           </NavLink>
           <NavLink
             active={
-              view.name.startsWith('roadmap') ||
+              view.name === 'roadmap' ||
               view.name === 'newRoadmap' ||
               view.name === 'generateRoadmap'
             }
@@ -134,7 +132,7 @@ export default function App() {
         </nav>
       </header>
 
-      <main className={'app-main' + (FULL_BLEED.has(view.name) ? ' app-main--full' : '')}>
+      <main className="app-main">
         {/* Keyed on the view so a crash in one screen doesn't leave the boundary stuck showing
             the error after navigating somewhere else. */}
         <ErrorBoundary key={view.name} onReset={() => go('capture')}>
@@ -171,17 +169,6 @@ export default function App() {
           />
         )}
         {view.name === 'roadmap' && (
-          <RoadmapMap
-            id={view.id}
-            onBack={() => go('roadmaps')}
-            onGone={() => go('roadmaps')}
-            onOpenClassic={() => go('roadmapClassic', { id: view.id })}
-          />
-        )}
-        {/* The list view, reached from the map's "Edit structure". The map covers reading the
-            roadmap, drafting a module, verifying, reformulating and finding resources; this
-            still owns the structural edits — reordering, replanning, re-tiering, inserting. */}
-        {view.name === 'roadmapClassic' && (
           <RoadmapDetail
             id={view.id}
             onBack={() => go('roadmaps')}
