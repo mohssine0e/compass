@@ -53,7 +53,11 @@ export default function IdeaDetailModal({ idea, tasks = [], onClose, onChanged, 
   const log = Array.isArray(idea.content.resurfaceLog) ? [...idea.content.resurfaceLog].reverse() : []
 
   return (
-    <Modal onClose={onClose} size="md">
+    // A title so the dialog has an accessible name (V4-4.2, 2026-07-30 user audit — this and
+    // VerifyModal were the two Modal consumers that skipped it). Deliberately generic rather
+    // than repeating the idea's own text: that's already the very next thing in the modal, in
+    // an editable textarea — a title that duplicated it would just be visual noise.
+    <Modal onClose={onClose} size="md" title="Edit idea">
       <TextArea
         className="idea-detail-text"
         value={text}

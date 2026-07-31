@@ -56,6 +56,7 @@ import StepDeepView from './StepDeepView'
 import VerifyModal from './VerifyModal'
 import {
   Button,
+  ConfirmDialog,
   IconArchive,
   IconDelete,
   IconExport,
@@ -100,6 +101,18 @@ export function panelReducer(panel, action) {
       return { type: 'breakDown', step: action.step }
     case 'careerReflection':
       return { type: 'careerReflection', text: action.text }
+    // V4-4.4 (2026-07-30 user audit): replaces the three `window.confirm(...)` call sites
+    // (delete roadmap, delete step, flatten step) with the app's own dialog — folded into this
+    // same reducer rather than a separate piece of state so a confirm dialog gets the existing
+    // "exactly one panel open at a time" guarantee for free, same as every other panel here.
+    case 'confirm':
+      return {
+        type: 'confirm',
+        title: action.title,
+        message: action.message,
+        confirmLabel: action.confirmLabel,
+        onConfirm: action.onConfirm,
+      }
     default:
       return panel
   }
@@ -433,8 +446,17 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     setAdditionProposal(null)
   }
 
-  async function deleteWholeRoadmap() {
-    if (!window.confirm(`Delete "${roadmap.title}" and all its steps? This can't be undone.`)) return
+  function deleteWholeRoadmap() {
+    dispatchPanel({
+      type: 'confirm',
+      title: 'Delete this roadmap?',
+      message: `Delete "${roadmap.title}" and all its steps? This can't be undone.`,
+      onConfirm: reallyDeleteWholeRoadmap,
+    })
+  }
+
+  async function reallyDeleteWholeRoadmap() {
+    dispatchPanel({ type: 'close' })
     setError(null)
     try {
       await deleteRoadmap(id)
@@ -461,8 +483,17 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     URL.revokeObjectURL(url)
   }
 
-  async function deleteStep(node) {
-    if (!window.confirm(`Delete "${nodeText(node)}"? This can't be undone.`)) return
+  function deleteStep(node) {
+    dispatchPanel({
+      type: 'confirm',
+      title: 'Delete this step?',
+      message: `Delete "${nodeText(node)}"? This can't be undone.`,
+      onConfirm: () => reallyDeleteStep(node),
+    })
+  }
+
+  async function reallyDeleteStep(node) {
+    dispatchPanel({ type: 'close' })
     setBusyStepId(node.id)
     setError(null)
     try {
@@ -479,8 +510,18 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   // no real progress on them, enforced server-side); graduate reparents a substep to be its
   // parent's sibling instead of nested beneath it. Neither is AI-generated, so no propose/approve
   // round trip — just a direct action, same as delete.
-  async function flattenStepAction(node) {
-    if (!window.confirm(`Remove the substeps under "${nodeText(node)}" and make it a plain step again?`)) return
+  function flattenStepAction(node) {
+    dispatchPanel({
+      type: 'confirm',
+      title: 'Flatten this step?',
+      message: `Remove the substeps under "${nodeText(node)}" and make it a plain step again?`,
+      confirmLabel: 'Flatten',
+      onConfirm: () => reallyFlattenStep(node),
+    })
+  }
+
+  async function reallyFlattenStep(node) {
+    dispatchPanel({ type: 'close' })
     setBusyStepId(node.id)
     setError(null)
     try {
@@ -639,6 +680,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   const suggestingAddition = panel.type === 'suggestAddition'
   const breakDownStep = panel.type === 'breakDown' ? panel.step : null
   const careerReflection = panel.type === 'careerReflection' ? panel.text : null
+  const confirmDialog = panel.type === 'confirm' ? panel : null
 
   const { title, notes, progress } = roadmap
   const children = roadmap.children || []
@@ -1214,6 +1256,16 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
             </Button>
           </div>
         </Modal>
+      )}
+
+      {confirmDialog && (
+        <ConfirmDialog
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmLabel={confirmDialog.confirmLabel}
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => dispatchPanel({ type: 'close' })}
+        />
       )}
     </div>
   )

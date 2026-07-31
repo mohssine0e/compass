@@ -161,7 +161,10 @@
   margin-top: 6px;
   background: transparent;
   border: none;
-  color: var(--faint);
+  /* --faint fails WCAG AA contrast for text — found live during the 2026-07-30 user audit,
+     this was the actual concrete case (hard to read against the dark background). See
+     App.css's .nav-link for the fuller explanation. */
+  color: var(--muted);
   font-size: 0.9rem;
   padding: 4px 0;
 }

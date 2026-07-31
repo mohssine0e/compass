@@ -281,7 +281,23 @@ function EntryGroup({ label, count, open, onToggle, items, tasksByParent, onOpen
   onOpenIdea, onSetIdeaStatus, onToggleTask, onDraft, children }) {
   return (
     <section className="all-group">
-      <div className="all-group-head" onClick={onToggle}>
+      {/* role="button" + tabIndex/onKeyDown rather than a real <button> element (V4-4.3,
+          2026-07-30 user audit found this had neither, so keyboard/screen-reader users couldn't
+          collapse/expand a group at all) — this row contains its own real <button> ("Draft a
+          roadmap") and other interactive children, and a <button> can't contain another
+          <button> without breaking HTML validity/accessibility further. */}
+      <div
+        className="all-group-head"
+        onClick={onToggle}
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter' && e.key !== ' ') return
+          e.preventDefault()
+          onToggle()
+        }}
+      >
         <span className="all-group-caret" aria-hidden="true">{open ? '▾' : '▸'}</span>
         <span className="all-group-label">{label}</span>
         <Badge>{count}</Badge>

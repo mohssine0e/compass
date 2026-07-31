@@ -50,7 +50,12 @@
   display: inline-block;
   background: transparent;
   border: none;
-  color: var(--faint);
+  /* --faint (~2.9:1 on --bg) fails WCAG AA for text this size — found live during the
+     2026-07-30 user audit. --muted (~5.65:1) is the readable-text tier; --faint stays for
+     genuinely decorative use (borders, disabled-state chrome) where contrast rules don't
+     apply the same way. Same fix applied to .resurface-skip (ResurfacingScreen.css), the
+     "Skip for now" link that was the concrete case found hard to read live. */
+  color: var(--muted);
   font-size: 0.9rem;
   padding: 6px 10px;
   border-radius: 6px;

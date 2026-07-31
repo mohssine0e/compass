@@ -108,7 +108,12 @@ export default function VerifyModal({ step, onClose, onPassed, onOverride, onCha
   const isChoice = format === 'multiple_choice'
 
   return (
-    <Modal onClose={onClose} size="md">
+    // A title so the dialog has an accessible name (V4-4.2, 2026-07-30 user audit — this and
+    // IdeaDetailModal were the two Modal consumers that skipped it, leaving a screen reader
+    // announcing an unnamed "dialog"). Visually near-identical to before: the verify-context
+    // line right below already reads "Before this counts as done:", so this doesn't repeat
+    // that — it's here for the accessible name, not as new visible copy.
+    <Modal onClose={onClose} size="md" title="Check your understanding">
       <p className="verify-context">Before this counts as done:</p>
 
       <div className="verify-format-row">

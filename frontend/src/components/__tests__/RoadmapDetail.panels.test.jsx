@@ -319,6 +319,47 @@ describe('RoadmapDetail non-panel state', () => {
     expect(screen.getByRole('button', { name: 'Mark done' })).not.toBeDisabled()
   })
 
+  // V4-4.4 (2026-07-30 user audit): deleting a step used to go straight through
+  // `window.confirm(...)`; it now opens the app's own ConfirmDialog first — nothing calls the
+  // delete API until the dialog is explicitly confirmed.
+  it('deleting a step opens a confirm dialog rather than deleting immediately', async () => {
+    const user = userEvent.setup()
+    await renderWith(flatRoadmap())
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Step one' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Delete' }))
+
+    expect(screen.getByRole('dialog', { name: 'Delete this step?' })).toBeInTheDocument()
+    expect(screen.getByText('Delete "Step one"? This can\'t be undone.')).toBeInTheDocument()
+    expect(api.deleteRoadmapStep).not.toHaveBeenCalled()
+  })
+
+  it('confirming the delete-step dialog calls the API and closes the dialog', async () => {
+    const user = userEvent.setup()
+    api.deleteRoadmapStep.mockResolvedValue({})
+    await renderWith(flatRoadmap())
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Step one' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Delete' }))
+    await user.click(screen.getByRole('button', { name: 'Delete' }))
+
+    await waitFor(() => expect(api.deleteRoadmapStep).toHaveBeenCalledWith(1, 21))
+    expect(screen.queryByRole('dialog', { name: 'Delete this step?' })).not.toBeInTheDocument()
+  })
+
+  it('cancelling the delete-step dialog leaves the step untouched', async () => {
+    const user = userEvent.setup()
+    await renderWith(flatRoadmap())
+
+    await user.click(screen.getByRole('button', { name: 'Actions for Step one' }))
+    await user.click(screen.getByRole('menuitem', { name: 'Delete' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(api.deleteRoadmapStep).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog', { name: 'Delete this step?' })).not.toBeInTheDocument()
+    expect(screen.getByText('Step one')).toBeInTheDocument()
+  })
+
   it('editing a step saves the new text and exits edit mode', async () => {
     const user = userEvent.setup()
     api.patchEntry.mockResolvedValue({})
