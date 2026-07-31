@@ -375,4 +375,30 @@ describe('RoadmapDetail non-panel state', () => {
     expect(api.reorderRoadmapSteps).not.toHaveBeenCalled()
     expect(screen.queryByText('Save order')).not.toBeInTheDocument()
   })
+
+  // V4-3.3 (2026-07-30 user audit): a freshly created roadmap whose modules haven't finished
+  // background-expanding into steps yet has zero total steps, so currentStepId is null the same
+  // way it is once every step is genuinely done — without a total === 0 special case, this read
+  // as "All 0 done.", which looks broken rather than "nothing here yet."
+  it('shows "No steps yet." rather than "All 0 done." for a roadmap with no steps at all', async () => {
+    await renderWith(
+      flatRoadmap({
+        progress: { done: 0, total: 0, currentStepId: null, estimatedTotalMinutes: 0, paceMultiplier: null },
+        children: [],
+      }),
+    )
+
+    expect(screen.getByText('No steps yet.')).toBeInTheDocument()
+    expect(screen.queryByText(/All 0 done/)).not.toBeInTheDocument()
+  })
+
+  it('still shows "All N done." once every step is genuinely done', async () => {
+    await renderWith(
+      flatRoadmap({
+        progress: { done: 2, total: 2, currentStepId: null, estimatedTotalMinutes: 0, paceMultiplier: null },
+      }),
+    )
+
+    expect(screen.getByText('All 2 done.')).toBeInTheDocument()
+  })
 })

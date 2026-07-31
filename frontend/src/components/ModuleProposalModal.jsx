@@ -63,8 +63,9 @@ export default function ModuleProposalModal({ title: modalTitle, roadmapId, draf
             placeholder="Module title"
             autoFocus
           />
-          <input
+          <textarea
             className="step-input gen-module-scope"
+            rows={2}
             value={scope}
             onChange={(e) => setScope(e.target.value)}
             placeholder="What falls under this module (optional)"

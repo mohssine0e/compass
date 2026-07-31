@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createRoadmap, generateRoadmap, insertModule, proposeSubtopicModule, suggestResources } from '../api'
-import { Button, Card } from './ui'
-import StepProposalEditor, { attachIssueCids, fromProposedSteps, toDraftSteps } from './StepProposalEditor'
+import { Button, Card, ExternalLink } from './ui'
+import StepProposalEditor, { attachIssueCids, fromProposedSteps, sourceHost, toDraftSteps } from './StepProposalEditor'
 import './NewRoadmapScreen.css'
 import './GenerateRoadmapScreen.css'
 
@@ -548,8 +548,9 @@ export default function GenerateRoadmapScreen({ initialGoal, initialResult, onCr
                     ×
                   </button>
                 </div>
-                <input
+                <textarea
                   className="step-input gen-module-scope"
+                  rows={2}
                   value={m.scope}
                   onChange={(e) => setModuleField(m.cid, 'scope', e.target.value)}
                   placeholder="What falls under this module (optional)"
@@ -565,7 +566,16 @@ export default function GenerateRoadmapScreen({ initialGoal, initialResult, onCr
               <span className="gen-sources-label">Grounded in:</span>
               <ul className="gen-sources-list">
                 {sources.map((s, i) => (
-                  <li key={i}>{s}</li>
+                  <li key={i}>
+                    {s.url ? (
+                      <ExternalLink href={s.url}>
+                        {s.title}
+                        {sourceHost(s.url) && <span className="gen-source-host"> — {sourceHost(s.url)}</span>}
+                      </ExternalLink>
+                    ) : (
+                      s.title
+                    )}
+                  </li>
                 ))}
               </ul>
             </div>

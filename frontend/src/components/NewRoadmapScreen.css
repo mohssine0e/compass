@@ -23,6 +23,15 @@
   color: var(--text);
   font-size: 1.6rem;
   padding: 0;
+  /* A single-line <input> can't wrap, so a long AI-generated title (e.g. "Understanding
+     Zero-Knowledge Proofs for Effective Explanation") used to clip mid-word with no visual hint
+     there was more text than shown — found live during the 2026-07-30 user audit, on exactly the
+     screen where actually reading what you're approving matters most. An ellipsis at least makes
+     the truncation visible; it doesn't fully solve reading a long title without clicking in, but
+     titles are short by nature far more often than module descriptions are (see .gen-module-scope
+     for those, switched to a wrapping textarea instead). */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .roadmap-title::placeholder {
@@ -85,6 +94,11 @@
   font-size: 1rem;
   outline: none;
   transition: border-color 0.15s ease;
+  /* Same reasoning as .roadmap-title just above: makes silent clipping at least visible.
+     Module/step titles are usually short, but not always — this is the honest fallback for
+     when they aren't, short of switching every one of these to a textarea too. */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .step-input:focus {

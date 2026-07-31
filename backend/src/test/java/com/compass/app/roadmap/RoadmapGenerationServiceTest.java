@@ -328,6 +328,36 @@ class RoadmapGenerationServiceTest {
         verify(roadmapAi, never()).moduleOutline(any(), any(), any(), any(), any(), any(), any());
     }
 
+    // V4-3.2 (2026-07-30 user audit): "Grounded in" sources used to carry a real url all the way
+    // to SearchGroundingService.toGrounding() and then discard it, formatting a plain "title —
+    // host" string instead — the DTO never had anything for the frontend to link to. Pins down
+    // that a real grounding result's url survives all the way out to the response.
+    @Test
+    @DisplayName("a grounded generation's sources carry the real source url through to the response")
+    void generateSourcesCarryRealUrls() {
+        when(roadmapAi.isAvailable()).thenReturn(true);
+        when(roadmapAi.classifyTier(any(), any())).thenReturn(null);
+        when(topicMatcher.match(any())).thenReturn(null);
+        when(roadmapAi.clarifyingQuestions(any(), any())).thenReturn(List.of());
+        SearchGroundingService.Result result = new SearchGroundingService.Result(
+                "Zero-knowledge proof", "https://en.wikipedia.org/wiki/Zero-knowledge_proof", "snippet", false);
+        when(searchGrounding.ground(any())).thenReturn(
+                new SearchGroundingService.Grounding("context", List.of(result), List.of(result)));
+        when(roadmapAi.assessGoal(any(), any(), any(), any())).thenReturn(
+                new RoadmapAiService.GoalAssessment(2, 5, "domain", "none", "flat", "quick_task"));
+        when(roadmapAi.proposeFlat(any(), any(), any(), any(), any(), any())).thenReturn(
+                new RoadmapAiService.FlatProposal("Title", null, List.of(
+                        new RoadmapAiService.DraftStep("step 1", "concept", "small", null, null, null)),
+                        List.of()));
+        GenerateRoadmapRequest req = new GenerateRoadmapRequest("Goal", null, false, null, false);
+
+        GenerateRoadmapResponse resp = service.generate(req);
+
+        assertThat(resp.sources()).hasSize(1);
+        assertThat(resp.sources().get(0).title()).isEqualTo("Zero-knowledge proof");
+        assertThat(resp.sources().get(0).url()).isEqualTo("https://en.wikipedia.org/wiki/Zero-knowledge_proof");
+    }
+
     @Test
     @DisplayName("clarifyingQuestions returning null (AI unavailable mid-call) throws")
     void generateThrowsWhenClarifyingQuestionsFail() {

@@ -63,8 +63,9 @@ export default function ReplanModulesModal({ roadmapId, draft, accept, onClose, 
                   placeholder={`Module ${i + 1}`}
                 />
               </div>
-              <input
+              <textarea
                 className="step-input gen-module-scope"
+                rows={2}
                 value={m.scope || ''}
                 onChange={(e) => setField(m.moduleId, 'scope', e.target.value)}
                 placeholder="What falls under this module (optional)"

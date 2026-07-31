@@ -242,7 +242,8 @@ public class RoadmapGenerationService {
         // when it isn't, and generation proceeds ungrounded. Shared by assessment and drafting.
         SearchGroundingService.Grounding grounding = searchGrounding.ground(goal);
         String groundingContext = grounding == null ? null : grounding.contextTop(maxGroundingSnippets);
-        List<String> sources = grounding == null ? List.of() : grounding.sources();
+        List<GenerateRoadmapResponse.ProposedSource> sources = grounding == null ? List.of()
+                : grounding.sources().stream().map(GenerateRoadmapResponse.ProposedSource::from).toList();
 
         onStage.accept(GenerationStage.ASSESSING);
         RoadmapAiService.GoalAssessment assessment = roadmapAi.assessGoal(
@@ -427,7 +428,8 @@ public class RoadmapGenerationService {
                 moduleTitle + " official documentation",
                 moduleTitle + " common mistakes beginners make"));
         String groundingContext = grounding == null ? null : grounding.contextTop(maxGroundingSnippets);
-        List<String> sources = grounding == null ? List.of() : grounding.sources();
+        List<GenerateRoadmapResponse.ProposedSource> sources = grounding == null ? List.of()
+                : grounding.sources().stream().map(GenerateRoadmapResponse.ProposedSource::from).toList();
 
         // Foundational (first) module gets no portfolio-project expectation even for a
         // career-scale roadmap — the mandate only applies once past foundations (Phase 24).

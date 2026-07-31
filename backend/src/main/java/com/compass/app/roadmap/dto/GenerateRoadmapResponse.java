@@ -53,7 +53,7 @@ public record GenerateRoadmapResponse(
         List<ProposedModule> modules,
         List<ProposedStep> steps,
         List<String> skipped,
-        List<String> sources,
+        List<ProposedSource> sources,
         ProposedAssessment assessment,
         boolean skeletonOnly,
         List<ProposedIssue> issues,
@@ -107,6 +107,18 @@ public record GenerateRoadmapResponse(
             return new ProposedIssue(i.severity(), i.message(), i.stepIndex(), i.suggestedFix());
         }
     }
+    /**
+     * One real search result this generation was grounded in — shown as "Grounded in:" on the
+     * review screen. Carries the real {@code url} so the frontend can render an actual link
+     * (V4-3.2, 2026-07-30 user audit: the url used to be computed and then discarded before
+     * reaching this DTO, leaving the founder unable to click through to a cited source at all).
+     */
+    public record ProposedSource(String title, String url) {
+        public static ProposedSource from(com.compass.app.ai.SearchGroundingService.Result r) {
+            return new ProposedSource(r.title(), r.url());
+        }
+    }
+
     /** A proposed top-level module (Phase 13): a short title and its one-line scope. */
     public record ProposedModule(String title, String scope) {
         public static ProposedModule from(RoadmapAiService.OutlineModule m) {
@@ -158,7 +170,7 @@ public record GenerateRoadmapResponse(
     /** A top-level module outline (Phase 13) — no steps yet; each module is expanded on demand. */
     public static GenerateRoadmapResponse outline(String title, String interpretation,
                                                    List<RoadmapAiService.OutlineModule> modules,
-                                                   List<String> skipped, List<String> sources,
+                                                   List<String> skipped, List<ProposedSource> sources,
                                                    RoadmapAiService.GoalAssessment assessment) {
         List<ProposedModule> proposedModules = modules.stream().map(ProposedModule::from).toList();
         return new GenerateRoadmapResponse("outline", null, title, interpretation, proposedModules,
@@ -173,7 +185,7 @@ public record GenerateRoadmapResponse(
     public static GenerateRoadmapResponse proposal(String title, String interpretation,
                                                    List<RoadmapAiService.DraftStep> steps,
                                                    List<List<ResourceAiService.Resource>> resources,
-                                                   List<String> skipped, List<String> sources,
+                                                   List<String> skipped, List<ProposedSource> sources,
                                                    RoadmapAiService.GoalAssessment assessment,
                                                    Map<Long, String> priorStepTextById) {
         return proposal(title, interpretation, steps, resources, skipped, sources, assessment,
@@ -184,7 +196,7 @@ public record GenerateRoadmapResponse(
     public static GenerateRoadmapResponse proposal(String title, String interpretation,
                                                    List<RoadmapAiService.DraftStep> steps,
                                                    List<List<ResourceAiService.Resource>> resources,
-                                                   List<String> skipped, List<String> sources,
+                                                   List<String> skipped, List<ProposedSource> sources,
                                                    RoadmapAiService.GoalAssessment assessment,
                                                    Map<Long, String> priorStepTextById,
                                                    boolean skeletonOnly) {
@@ -196,7 +208,7 @@ public record GenerateRoadmapResponse(
     public static GenerateRoadmapResponse proposal(String title, String interpretation,
                                                    List<RoadmapAiService.DraftStep> steps,
                                                    List<List<ResourceAiService.Resource>> resources,
-                                                   List<String> skipped, List<String> sources,
+                                                   List<String> skipped, List<ProposedSource> sources,
                                                    RoadmapAiService.GoalAssessment assessment,
                                                    Map<Long, String> priorStepTextById,
                                                    boolean skeletonOnly,

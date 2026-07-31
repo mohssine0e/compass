@@ -162,11 +162,25 @@
   font-size: 1rem;
 }
 
+/* A <textarea> now (was a single-line <input>) — a module's scope/description is often a full
+   AI-generated sentence ("Delving into specific zero-knowledge proof protocols (e.g., Schnorr
+   Protocol, ZK-SNARKs, ZK-STARKs) with illustrative examples..."), and a single-line field just
+   clipped it with no way to read the rest without clicking in. Found live during the
+   2026-07-30 user audit, on exactly the screen where reading what you're approving matters most.
+   Overrides .step-input's ellipsis rule (added for the shorter title fields, see
+   NewRoadmapScreen.css) back to real wrapping, since this field is the opposite case. */
 .gen-module-scope {
   margin-left: 32px;
   width: calc(100% - 32px);
   color: var(--muted);
   font-size: 0.9rem;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  resize: vertical;
+  min-height: 2.4em;
+  line-height: 1.4;
+  font-family: inherit;
 }
 
 .gen-depends {

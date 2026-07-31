@@ -2,6 +2,20 @@ import { useState } from 'react'
 import { Badge, Button, ExternalLink } from './ui'
 import './GenerateRoadmapScreen.css'
 
+// The display host of a source url (e.g. "en.wikipedia.org") — V4-3.2 (2026-07-30 user audit):
+// "Grounded in" sources used to render as plain unclickable text, formatted server-side as
+// "title — host"; now the backend sends the real {title, url} and this is the frontend's own
+// small piece of that same formatting, next to a real link instead of dead text. Exported so
+// GenerateRoadmapScreen's own "Grounded in" list (the module-outline phase, which doesn't use
+// this editor) can render the same way without duplicating it.
+export function sourceHost(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return null
+  }
+}
+
 // Stable client ids for proposed steps/resources, so dependency links and React keys survive
 // edits/removals. Shared by any screen that edits an AI step proposal (Phase 4/13).
 let cidCounter = 0
@@ -259,7 +273,16 @@ export default function StepProposalEditor({
           <span className="gen-sources-label">Grounded in:</span>
           <ul className="gen-sources-list">
             {sources.map((s, i) => (
-              <li key={i}>{s}</li>
+              <li key={i}>
+                {s.url ? (
+                  <ExternalLink href={s.url}>
+                    {s.title}
+                    {sourceHost(s.url) && <span className="gen-source-host"> — {sourceHost(s.url)}</span>}
+                  </ExternalLink>
+                ) : (
+                  s.title
+                )}
+              </li>
             ))}
           </ul>
         </div>

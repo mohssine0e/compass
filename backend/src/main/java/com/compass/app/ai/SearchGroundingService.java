@@ -246,7 +246,6 @@ public class SearchGroundingService {
 
     private static Grounding toGrounding(List<Result> raw) {
         StringBuilder context = new StringBuilder();
-        List<String> sources = new ArrayList<>();
         List<Result> results = new ArrayList<>();
         for (Result r : raw) {
             if (r.title() == null || r.title().isBlank()) {
@@ -262,22 +261,18 @@ public class SearchGroundingService {
             }
             context.append('\n');
             String url = r.url() == null ? "" : r.url().strip();
-            sources.add(!url.isBlank() ? r.title().strip() + " — " + host(url) : r.title().strip());
             results.add(new Result(r.title().strip(), url, snippet, r.isExaHighlight()));
         }
-        if (sources.isEmpty()) {
+        if (results.isEmpty()) {
             return null;
         }
-        return new Grounding(context.toString().strip(), sources, results);
-    }
-
-    private static String host(String url) {
-        try {
-            String h = URI.create(url).getHost();
-            return h == null ? url : h.replaceFirst("^www\\.", "");
-        } catch (RuntimeException ex) {
-            return url;
-        }
+        // `sources` and `results` are the same entries — `sources` is just the subset of each
+        // Result's fields (title, url) the "Grounded in:" display actually needs, kept as a
+        // separate named field because that's the display-facing contract, not because the data
+        // differs. Formatting a "title — host" display string used to happen here, discarding
+        // the real url in the process (V4-3.2, 2026-07-30 user audit) — now the DTO carries the
+        // real url through, and building a display label from it is the frontend's job.
+        return new Grounding(context.toString().strip(), results, results);
     }
 
     private static SimpleClientHttpRequestFactory timeoutFactory(int timeoutSeconds) {
@@ -294,10 +289,13 @@ public class SearchGroundingService {
     /**
      * Grounding for a generation: snippet {@code context} for the prompt,
      * {@code sources} to
-     * show, and the raw {@code results} (with real URLs) that resource discovery
-     * draws from.
+     * show (real {@link Result}s, not pre-formatted strings, so the frontend can render an
+     * actual link instead of a plain "title — host" string it can't click through — V4-3.2, the
+     * 2026-07-30 user audit found the real url was being computed and then thrown away before
+     * ever reaching the DTO layer), and the raw {@code results} (with real URLs) that resource
+     * discovery draws from.
      */
-    public record Grounding(String context, List<String> sources, List<Result> results) {
+    public record Grounding(String context, List<Result> sources, List<Result> results) {
 
         /**
          * {@code context}, truncated to its top {@code maxEntries} snippets (Phase 19) — results

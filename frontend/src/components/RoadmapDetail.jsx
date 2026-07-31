@@ -756,9 +756,16 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
       <div className="roadmap-detail-progress">
         <ProgressBar done={progress.done} total={progress.total} />
         <span className="roadmap-detail-count">
-          {progress.currentStepId === null
-            ? `All ${progress.total} done.`
-            : `${progress.done} of ${progress.total} done`}
+          {progress.total === 0
+            ? // A freshly created roadmap whose modules haven't finished background-expanding
+              // into steps yet also has currentStepId === null (nothing to be "current" among
+              // zero steps) — without this branch that fell into the "done" case below and
+              // showed "All 0 done.", which reads as broken rather than as "nothing here yet."
+              // Found live during the 2026-07-30 user audit.
+              'No steps yet.'
+            : progress.currentStepId === null
+              ? `All ${progress.total} done.`
+              : `${progress.done} of ${progress.total} done`}
           {progress.estimatedTotalMinutes > 0 &&
             // RB-4.6: a simple qualifier, not a real min/typical/max spread — "expect more if
             // new to this" matters most for a CAREER-scale time commitment; falls back to the
