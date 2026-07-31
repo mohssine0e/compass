@@ -9,7 +9,18 @@
   padding: 18px 24px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  /* V4-2.1: originally `justify-content: space-between` with .wordmark and .app-header-right as
+     the only two flex items, wrapped via .app-header-right's own `flex-wrap`. That nested
+     wrap-inside-a-wrap turned out unreliable — found live at an ordinary ~800px desktop width,
+     not just phone-narrow: .app-header-right's own intrinsic width, as computed for its PARENT's
+     wrap decision, doesn't reliably account for the fact that ITS children can also wrap, so the
+     outer .app-header never wrapped and the notification bell (and sometimes "Profile") got
+     pushed past the edge with no way to reach it, same failure as the unwrapped version. Fixed
+     by flattening: .app-header-right and .app-nav are both `display: contents` now (see below),
+     so every nav link and the bell are direct flex items of THIS single wrapping container —
+     one level of wrap, not two, which is what actually wraps reliably at any width. */
+  flex-wrap: wrap;
+  row-gap: 10px;
   gap: 16px;
 }
 
@@ -21,17 +32,18 @@
   font-size: 0.95rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  /* Pushes everything after it (nav links, bell) to the right, same visual result
+     `justify-content: space-between` gave with two items — but works with any number of flex
+     items, which flattening .app-header-right/.app-nav into this container now needs. */
+  margin-right: auto;
 }
 
-.app-header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
+.app-header-right,
 .app-nav {
-  display: flex;
-  gap: 6px;
+  /* Contributes no box of its own — its children (nav links; the bell) become direct flex
+     items of .app-header, so the whole header wraps as one flat group instead of two nested
+     ones. See .app-header's own comment for why the nested version didn't reliably wrap. */
+  display: contents;
 }
 
 .nav-link {
@@ -73,4 +85,24 @@
   justify-content: flex-start;
   padding: 0;
   overflow: hidden;
+}
+
+/* V4-2.2: a real phone-width breakpoint for the header — same threshold as the one existing
+   precedent in the codebase (AdminEventsScreen.css), but that one's on a developer-only screen;
+   this is the one surface every screen shares. Tighter padding and a smaller wordmark buy back
+   room for the nav so it wraps to fewer, shorter rows instead of stacking six link rows deep. */
+@media (max-width: 640px) {
+  .app-header {
+    padding: 14px 16px;
+    gap: 10px;
+  }
+
+  .wordmark {
+    font-size: 0.85rem;
+  }
+
+  .nav-link {
+    padding: 6px 8px;
+    font-size: 0.85rem;
+  }
 }

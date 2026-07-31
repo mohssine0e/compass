@@ -101,6 +101,8 @@
 .roadmap-toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  row-gap: 10px;
   gap: 12px;
   margin-bottom: 20px;
 }
@@ -135,6 +137,14 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  /* An explicit flex-basis (not the default `auto`) so this resolves through the normal
+     flex grow/shrink algorithm within .roadmap-toolbar instead of sizing to its own content
+     first — the same nested-auto-sizing trap the header nav overflow bug (V4-2.1) turned out
+     to be. min-width: 0 lets it actually shrink below the input's content width instead of
+     forcing .roadmap-toolbar wider than the viewport, which is what broke the roadmap tree
+     view specifically on a phone-width screen (found live during the V4-2 responsive pass). */
+  flex: 1 1 160px;
+  min-width: 0;
 }
 
 .roadmap-search input {
@@ -144,7 +154,11 @@
   border-radius: 8px;
   padding: 5px 10px;
   font-size: 0.85rem;
-  width: 200px;
+  /* Percentage of .roadmap-search's own now-definite (flex-resolved) width, capped so it
+     doesn't keep growing past a sensible search-box size on a wide toolbar row. */
+  width: 100%;
+  max-width: 200px;
+  min-width: 0;
   outline: none;
 }
 
@@ -438,6 +452,8 @@
 .node-group {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  row-gap: 8px;
   gap: 10px;
   padding: 12px 14px;
   margin-top: 10px;
@@ -467,7 +483,16 @@
 }
 
 .node-group-title {
-  flex: 1;
+  /* An explicit, moderate flex-basis rather than plain `flex: 1` (which resolves to
+     `flex-basis: auto`, i.e. this item's own full unwrapped-text width when the row is
+     deciding whether to wrap at all). With `auto`, the browser found it could always just
+     shrink this span down to near-nothing instead of ever wrapping the action buttons onto
+     their own line — technically no page overflow, but a near-unreadable single-word-per-line
+     sliver next to buttons that visually overlapped it. A concrete 120px floor gives the
+     wrap-or-shrink decision a sane number to work with: below that, wrap the buttons down
+     instead of squeezing the title further. Found live during the V4-2 responsive pass. */
+  flex: 1 1 120px;
+  min-width: 0;
   color: var(--text);
   font-weight: 500;
 }
