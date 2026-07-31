@@ -1,6 +1,6 @@
 package com.compass.app.entry;
 
-import com.compass.app.ai.AiVoiceService;
+import com.compass.app.ai.AiVoiceWorker;
 import com.compass.app.entry.dto.CreateEntryRequest;
 import com.compass.app.entry.dto.EndSessionRequest;
 import com.compass.app.entry.dto.EntryResponse;
@@ -22,19 +22,24 @@ import java.util.List;
 public class EntryController {
 
     private final EntryService service;
-    private final AiVoiceService aiVoice;
+    private final AiVoiceWorker aiVoiceWorker;
 
-    public EntryController(EntryService service, AiVoiceService aiVoice) {
+    public EntryController(EntryService service, AiVoiceWorker aiVoiceWorker) {
         this.service = service;
-        this.aiVoice = aiVoice;
+        this.aiVoiceWorker = aiVoiceWorker;
     }
 
-    /** Capture an entry. Defaults to an idea; returns the stored entry + a voice line. */
+    /**
+     * Capture an entry. Defaults to an idea; returns the stored entry immediately — capture
+     * must never wait on an AI call (CLAUDE.md Section 2: low friction beats features). The
+     * voice line, when there is one, arrives a few seconds later as a notification instead of
+     * blocking this response.
+     */
     @PostMapping
     public ResponseEntity<EntryResponse> create(@RequestBody CreateEntryRequest request) {
         Entry entry = service.create(request);
-        String ack = aiVoice.acknowledge(entry);
-        return ResponseEntity.status(HttpStatus.CREATED).body(EntryResponse.of(entry, ack));
+        aiVoiceWorker.acknowledgeAsync(entry);
+        return ResponseEntity.status(HttpStatus.CREATED).body(EntryResponse.of(entry, null));
     }
 
     /** List all entries, newest first. */
@@ -61,13 +66,18 @@ public class EntryController {
         return service.clusterIdeas();
     }
 
-    /** Partial update — self-report completion with {"status":"done"}. */
+    /**
+     * Partial update — self-report completion with {"status":"done"}. Completions are
+     * acknowledged in the self-talk voice, same as capture: never synchronously, always as a
+     * follow-up notification once the line exists.
+     */
     @PatchMapping("/{id}")
     public EntryResponse patch(@PathVariable Long id, @RequestBody PatchEntryRequest request) {
         Entry entry = service.update(id, request);
-        // Acknowledge completions in the self-talk voice; other edits pass through quietly.
-        String ack = entry.getStatus() == EntryStatus.DONE ? aiVoice.acknowledge(entry) : null;
-        return EntryResponse.of(entry, ack);
+        if (entry.getStatus() == EntryStatus.DONE) {
+            aiVoiceWorker.acknowledgeAsync(entry);
+        }
+        return EntryResponse.of(entry, null);
     }
 
     /** Start a lightweight work session on a step (Phase 7.5). */

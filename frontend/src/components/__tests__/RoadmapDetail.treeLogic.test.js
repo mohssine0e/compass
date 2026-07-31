@@ -9,6 +9,7 @@ import {
   hasEmptyModule,
   nodeIndexOf,
   recheckDueLabel,
+  roadmapToMermaid,
   searchMatches,
   seedCollapsed,
   sessionStats,
@@ -282,5 +283,82 @@ describe('seedCollapsed', () => {
       collapseOverrides: { 2: true, 1: false },
     }
     expect(seedCollapsed(data)).toEqual(new Set([2]))
+  })
+})
+
+describe('roadmapToMermaid', () => {
+  it('opens with a spacing/font init directive, then the flowchart declaration and root node', () => {
+    const out = roadmapToMermaid({ title: 'My Roadmap', children: [] })
+    const lines = out.split('\n')
+    expect(lines[0]).toMatch(/^%%\{init:.*nodeSpacing.*rankSpacing.*fontSize.*\}%%$/)
+    expect(lines[1]).toBe('flowchart TD')
+    expect(out).toContain('root["My Roadmap"]')
+  })
+
+  it('renders modules as stadium-shaped nodes and steps as rectangles, with containment edges', () => {
+    const out = roadmapToMermaid({ title: 'T', children: sampleTree() })
+    expect(out).toContain('n1(["Module A (done)"])') // module -> stadium shape
+    expect(out).toContain('n11["A1"]') // step -> rectangle
+    expect(out).toContain('root --> n1')
+    expect(out).toContain('n1 --> n11')
+  })
+
+  it('assigns a status classDef to done, active, and dropped nodes, and none to a plain captured one', () => {
+    const out = roadmapToMermaid({ title: 'T', children: sampleTree() })
+    expect(out).toContain('class n11 done')
+    expect(out).not.toMatch(/class n22 \w/) // step 22 is 'captured' — no status class at all
+  })
+
+  it('renders a real dependsOn as a dashed edge, separate from the containment edge', () => {
+    const out = roadmapToMermaid({ title: 'T', children: sampleTree() })
+    expect(out).toContain('n21 -.-> n22') // step 22 dependsOn step 21
+  })
+
+  it('a dependsOn pointing at a node outside the tree is silently skipped, not a broken edge', () => {
+    const children = [
+      { id: 1, type: 'roadmap_step', content: { text: 'Orphaned dependency' }, dependsOn: 999 },
+    ]
+    const out = roadmapToMermaid({ title: 'T', children })
+    expect(out).not.toContain('n999')
+    expect(out).not.toContain('-.->')
+  })
+
+  it('sanitizes quotes and newlines out of labels, and truncates long ones', () => {
+    const children = [
+      { id: 1, type: 'roadmap_step', content: { text: 'Say "hi"\nto everyone' } },
+      { id: 2, type: 'roadmap_step', content: { text: 'x'.repeat(120) } },
+    ]
+    const out = roadmapToMermaid({ title: 'T', children })
+    expect(out).toContain('n1["Say \'hi\' to everyone"]')
+    expect(out).toMatch(/n2\["x{79}…"\]/)
+  })
+
+  it('a node with no text at all falls back to "Untitled" rather than an empty label', () => {
+    const children = [{ id: 1, type: 'roadmap_step', content: {} }]
+    const out = roadmapToMermaid({ title: 'T', children })
+    expect(out).toContain('n1["Untitled"]')
+  })
+
+  it('a flat roadmap (leaf steps directly under root, no modules) renders just as well', () => {
+    const children = [
+      { id: 1, type: 'roadmap_step', content: { text: 'Step one' }, status: 'done' },
+      { id: 2, type: 'roadmap_step', content: { text: 'Step two' }, status: 'captured' },
+    ]
+    const out = roadmapToMermaid({ title: 'Flat plan', children })
+    expect(out).toContain('root --> n1')
+    expect(out).toContain('root --> n2')
+    expect(out).toContain('class n1 done')
+  })
+
+  it('an empty roadmap still produces a valid single-node diagram', () => {
+    const out = roadmapToMermaid({ title: 'Nothing yet', children: [] })
+    expect(out).toBe(
+      "%%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 70}, 'themeVariables': {'fontSize': '16px'}}}%%\n" +
+        'flowchart TD\n' +
+        '  root["Nothing yet"]\n' +
+        '  classDef done fill:#2f6f4f,stroke:#8fd9b6,color:#eafff5;\n' +
+        '  classDef active fill:#6f5a2f,stroke:#d9b98f,color:#fff5ea;\n' +
+        '  classDef dropped fill:#3a3a3a,stroke:#777777,color:#aaaaaa,stroke-dasharray: 3 3;',
+    )
   })
 })

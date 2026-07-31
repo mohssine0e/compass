@@ -299,3 +299,105 @@
   border-color: var(--brass);
   background: var(--brass-dim);
 }
+
+/* --- Toast (V3-10: global notification feed) --- */
+@keyframes ui-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.ui-toast-stack {
+  position: fixed;
+  right: var(--space-4, 16px);
+  bottom: var(--space-4, 16px);
+  z-index: 70;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--space-2, 8px);
+  max-width: min(360px, calc(100vw - 32px));
+}
+.ui-toast {
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+  animation: ui-toast-in 200ms ease-out;
+}
+.ui-toast--info {
+  border-color: var(--brass-dim);
+}
+.ui-toast--danger {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: var(--danger-dim);
+}
+
+/* --- Notification history (V3-10: "past notifications," separate from the active toast stack) --- */
+.ui-notif-history {
+  position: relative;
+  display: inline-flex;
+}
+.ui-notif-history__trigger {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  padding: 4px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+}
+.ui-notif-history__trigger:hover {
+  color: var(--text);
+}
+.ui-notif-history__panel {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  width: 320px;
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+}
+.ui-notif-history__empty {
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding: 10px;
+}
+.ui-notif-history__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border-left: 2px solid var(--brass-dim);
+}
+.ui-notif-history__item--danger {
+  border-left-color: var(--danger);
+}
+.ui-notif-history__message {
+  color: var(--text);
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+.ui-notif-history__time {
+  color: var(--faint);
+  font-size: var(--text-xs);
+}

@@ -131,6 +131,74 @@ export function dependencyInfo(node, nodeIndex) {
   }
 }
 
+// A compact Mermaid flowchart of the roadmap's structure (export feature): module/step
+// containment as solid edges, real dependsOn links (RB-4.9 — a genuine prerequisite, distinct
+// from tree position) as dashed ones, status as a color class. Built straight from the
+// already-loaded tree — the same shape `GET /roadmaps/{id}` and `/export` both return — so this
+// needs no network call of its own; the JSON export and this one read the identical data.
+const MERMAID_LABEL_MAX = 80
+
+// Mermaid's own defaults pack nodes tightly enough that a roadmap of any real size renders
+// unreadably small once a viewer fits the whole (very wide/tall) diagram to its window — this
+// widens the gaps between nodes/ranks and bumps the font so the diagram is legibly larger, not
+// just "technically correct." Must be the file's first line to take effect.
+const MERMAID_INIT =
+  "%%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 70}, 'themeVariables': {'fontSize': '16px'}}}%%"
+
+function mermaidLabel(text) {
+  // Double quotes would end the label early inside Mermaid's own `"..."` syntax — swapped for
+  // single quotes rather than stripped outright, so a quoted word stays legible.
+  const clean = (text || 'Untitled').replace(/"/g, "'").replace(/[\n\r]/g, ' ').replace(/\s+/g, ' ').trim() || 'Untitled'
+  return clean.length > MERMAID_LABEL_MAX ? `${clean.slice(0, MERMAID_LABEL_MAX - 1).trimEnd()}…` : clean
+}
+
+function mermaidStatusClass(status) {
+  if (status === 'done') return 'done'
+  if (status === 'in_motion' || status === 'developing') return 'active'
+  if (status === 'dropped' || status === 'archived') return 'dropped'
+  return null
+}
+
+export function roadmapToMermaid(roadmap) {
+  const children = roadmap?.children || []
+  const lines = [MERMAID_INIT, 'flowchart TD']
+  const classLines = []
+  const rootId = 'root'
+  lines.push(`  ${rootId}["${mermaidLabel(roadmap?.title)}"]`)
+
+  function walk(node, parentId) {
+    const id = `n${node.id}`
+    // Modules (type 'roadmap', however deep — the tree-position concept, not the DB row shape)
+    // get a stadium shape so the hierarchy reads at a glance without relying on indentation
+    // alone, the way the tree view's own module/step icon distinction already works.
+    const [open, close] = node.type === 'roadmap' ? ['([', '])'] : ['[', ']']
+    lines.push(`  ${id}${open}"${mermaidLabel(nodeText(node))}"${close}`)
+    lines.push(`  ${parentId} --> ${id}`)
+    const cls = mermaidStatusClass(node.status)
+    if (cls) classLines.push(`  class ${id} ${cls}`)
+    for (const child of node.children || []) {
+      walk(child, id)
+    }
+  }
+  for (const child of children) {
+    walk(child, rootId)
+  }
+
+  const nodeIndex = nodeIndexOf(children)
+  for (const { node } of nodeIndex.values()) {
+    if (node.dependsOn && nodeIndex.has(node.dependsOn)) {
+      lines.push(`  n${node.dependsOn} -.-> n${node.id}`)
+    }
+  }
+
+  lines.push('  classDef done fill:#2f6f4f,stroke:#8fd9b6,color:#eafff5;')
+  lines.push('  classDef active fill:#6f5a2f,stroke:#d9b98f,color:#fff5ea;')
+  lines.push('  classDef dropped fill:#3a3a3a,stroke:#777777,color:#aaaaaa,stroke-dasharray: 3 3;')
+  lines.push(...classLines)
+
+  return lines.join('\n')
+}
+
 // The estimated-time rollup (Phase 18) is minutes; render it the way the resource estimates
 // that feed it are already written ("~1h 30 min", "~45 min").
 export function formatMinutes(total) {

@@ -1,6 +1,7 @@
 package com.compass.app.roadmap;
 
 import com.compass.app.events.EventService;
+import com.compass.app.notifications.NotificationService;
 import com.compass.app.roadmap.dto.ModulePrefetchStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -44,12 +45,15 @@ public class ModulePrefetchService {
 
     private final RoadmapService roadmapService;
     private final EventService events;
+    private final NotificationService notifications;
     private final ExecutorService executor = Executors.newFixedThreadPool(MAX_CONCURRENT);
     private final Map<Long, ModulePrefetchJob> jobs = new ConcurrentHashMap<>();
 
-    public ModulePrefetchService(RoadmapService roadmapService, EventService events) {
+    public ModulePrefetchService(RoadmapService roadmapService, EventService events,
+                                  NotificationService notifications) {
         this.roadmapService = roadmapService;
         this.events = events;
+        this.notifications = notifications;
     }
 
     /** Start background drafting for these modules, skipping any already tracked for this id. */
@@ -65,9 +69,13 @@ public class ModulePrefetchService {
                         if (ex != null) {
                             events.aiWarning("provider_error",
                                     "Background module prefetch failed: " + rootMessage(ex), null);
-                            job.fail(friendlyMessage(ex));
+                            String message = friendlyMessage(ex);
+                            job.fail(message);
+                            notifications.push(message, "danger", Map.of("moduleId", moduleId));
                         } else {
                             job.complete(result);
+                            notifications.push("A module finished drafting — ready to review.",
+                                    Map.of("moduleId", moduleId, "roadmapId", roadmapId));
                         }
                     });
         }

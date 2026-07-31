@@ -39,4 +39,22 @@ class AsyncConfig {
         executor.initialize();
         return executor.getThreadPoolExecutor();
     }
+
+    /**
+     * A separate, small pool for capture/mark-done voice acknowledgments ({@code AiVoiceWorker}).
+     * Deliberately not shared with {@link #expansionExecutor()}: a batch module expansion can
+     * occupy all 4 of those threads for a while, and an acknowledgment is short and frequent
+     * enough that it shouldn't queue behind one.
+     */
+    @Bean(destroyMethod = "shutdown", name = "voiceExecutor")
+    ThreadPoolTaskExecutor voiceExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(2);
+        executor.setThreadNamePrefix("voice-");
+        executor.setWaitForTasksToCompleteOnShutdown(true);
+        executor.setAwaitTerminationSeconds(10);
+        executor.initialize();
+        return executor;
+    }
 }

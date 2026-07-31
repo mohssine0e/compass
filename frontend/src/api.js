@@ -79,9 +79,9 @@ function sleep(delayMs) {
   return new Promise((resolve) => setTimeout(resolve, delayMs))
 }
 
-// Exported so tests can exercise the timeout/abort contract directly — none of the domain
-// functions below forward an options object (no caller passes a signal yet; see V3-5.4), so
-// there's no other way to reach this from outside the module.
+// Exported so tests can exercise the timeout/abort contract directly. Most domain functions
+// below don't forward an options object (see V3-5.4) — `classifyIntent` is the one exception
+// (V3-10), since capture needs to enforce its own hard deadline on that specific call.
 export async function request(path, options = {}) {
   const { timeoutMs = DEFAULT_TIMEOUT_MS, signal: callerSignal, ...init } = options
 
@@ -463,12 +463,33 @@ export function endSession(stepId, body = {}) {
 /**
  * In-content help for selected text (Phase 8.5). `context` is
  * { stepId?, action, preferredDepth?, preferredLanguage? }. Returns { response }.
+ *
+ * Runs as a background job + poll under the hood (V3-10) — the answer is a real FAST-tier AI
+ * call that can iterate several providers before one answers, well past what a single blocking
+ * request should hold open. Callers don't need to know this: the signature and return shape are
+ * unchanged from the old synchronous version, so `StepDeepView`'s and `UnifiedIntakeScreen`'s
+ * existing "Thinking…" loading states already cover the wait honestly, with no caller changes.
  */
-export function explainText(selectedText, context) {
-  return request('/ai/explain', {
+export async function explainText(selectedText, context) {
+  const { jobId } = await request('/ai/explain/start', {
     method: 'POST',
     body: JSON.stringify({ selectedText, context }),
   })
+  for (;;) {
+    await sleep(1200)
+    let job
+    try {
+      job = await request(`/ai/explain/jobs/${jobId}`, { timeoutMs: POLL_TIMEOUT_MS })
+    } catch (err) {
+      // A dropped poll isn't a failed explain — the job runs on the server regardless.
+      if (err instanceof TimeoutError) continue
+      throw err
+    }
+    if (job.status === 'DONE') return { response: job.response }
+    if (job.status === 'FAILED') {
+      throw new Error(job.error || "Couldn't help with that right now.")
+    }
+  }
 }
 
 /**
@@ -673,12 +694,15 @@ export function applyTopicAddition(topicId, field, value) {
 
 /**
  * The unified intake's first step (RB-5.1/5.2) — classify what one piece of input actually
- * wants before anything else runs. Returns { intent, confidence, reasoning }.
+ * wants before anything else runs. Returns { intent, confidence, reasoning }. `options` can
+ * carry `{ signal }` so a caller can enforce its own hard deadline (capture never waits past a
+ * few seconds on this — see `UnifiedIntakeScreen.submit`) instead of the generous shared default.
  */
-export function classifyIntent(input) {
+export function classifyIntent(input, options = {}) {
   return request('/intake/classify', {
     method: 'POST',
     body: JSON.stringify({ input }),
+    ...options,
   })
 }
 
@@ -700,6 +724,24 @@ export function downloadExport() {
 /** Per-provider AI health: what's working, what's benched, and how fast (V3-2.3). */
 export function getProviderHealth() {
   return request('/admin/providers')
+}
+
+/**
+ * The global notification feed (V3-10) — background work (a capture acknowledgment, a roadmap
+ * finishing generation, a module finishing drafting) delivers here instead of blocking the
+ * request that started it. `afterId` is the id of the last notification already shown; pass 0
+ * on first load. A missed poll just retries next tick, so this uses the short job-poll timeout.
+ */
+export function pollNotifications(afterId) {
+  return request(`/notifications/poll?after=${afterId}`, { timeoutMs: POLL_TIMEOUT_MS })
+}
+
+/**
+ * Past notifications regardless of the toast feed's own cursor — for a "what did I miss" history
+ * panel, independent of what's currently showing (or already dismissed/expired) as a toast.
+ */
+export function getNotificationHistory(limit) {
+  return request(`/notifications/history${limit ? `?limit=${limit}` : ''}`)
 }
 
 /** This one roadmap as a downloadable JSON file — the tree exactly as the app renders it. */

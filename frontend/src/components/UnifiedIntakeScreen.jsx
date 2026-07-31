@@ -63,6 +63,10 @@ function nextCid() {
   return cidCounter
 }
 
+// V3-10: capture must never wait more than a few seconds on this classification — CLAUDE.md's
+// low-friction rule applies to routing, not just the AI voice line that used to block after it.
+const SUBMIT_CLASSIFY_TIMEOUT_MS = 3000
+
 // One consistent fade/slide plays every time `stage` changes (RB-6.3) — a single shared
 // transform, not a different transition hand-tuned per card type.
 const MORPH_CLASS = 'intake-morph'
@@ -136,7 +140,9 @@ export default function UnifiedIntakeScreen({ onOpenRoadmap, onOpenRoadmapBuilde
   const speech = useSpeechRecognition({ onFinalText: appendSpokenText })
 
   // RB-6.2: fires ~700ms after typing stops; a stale in-flight response (text changed again
-  // before it returned) is discarded via the request-id check, never shown.
+  // before it returned) is discarded via the request-id check, never shown. Keeps the input it
+  // was computed for alongside the result (V3-10) so `submit()` can reuse it instead of
+  // re-classifying the same text a second time.
   useEffect(() => {
     if (stage !== 'idle' || !text.trim()) {
       setAmbient(null)
@@ -144,9 +150,10 @@ export default function UnifiedIntakeScreen({ onOpenRoadmap, onOpenRoadmapBuilde
     }
     const id = ++ambientReqId.current
     const t = setTimeout(async () => {
+      const input = text.trim()
       try {
-        const res = await classifyIntent(text.trim())
-        if (ambientReqId.current === id) setAmbient(res)
+        const result = await classifyIntent(input)
+        if (ambientReqId.current === id) setAmbient({ input, result })
       } catch {
         if (ambientReqId.current === id) setAmbient(null)
       }
@@ -355,11 +362,23 @@ export default function UnifiedIntakeScreen({ onOpenRoadmap, onOpenRoadmapBuilde
     setGenStage(null)
     try {
       let intent = 'IDEA'
-      try {
-        intent = (await classifyIntent(input)).intent
-      } catch {
-        // Best-effort, same discipline as every other AI call in this codebase (CLAUDE.md) — a
-        // down/unconfigured provider never blocks capture, it just falls back to plain IDEA.
+      if (ambient && ambient.input === input) {
+        // The debounced ambient classification already answered this exact text — no reason to
+        // ask again and make the founder wait a second time for the same result.
+        intent = ambient.result.intent
+      } else {
+        // No fresh ambient result (fast typer, dictation, paste-and-enter) — classify now, but
+        // never open-endedly: a hard local deadline, not the AI layer's own generous timeouts.
+        const controller = new AbortController()
+        const deadline = setTimeout(() => controller.abort(), SUBMIT_CLASSIFY_TIMEOUT_MS)
+        try {
+          intent = (await classifyIntent(input, { signal: controller.signal })).intent
+        } catch {
+          // Best-effort, same discipline as every other AI call in this codebase (CLAUDE.md) — a
+          // down/unconfigured/too-slow provider never blocks capture, it falls back to plain IDEA.
+        } finally {
+          clearTimeout(deadline)
+        }
       }
       await route(intent, input)
     } catch (err) {
@@ -401,7 +420,7 @@ export default function UnifiedIntakeScreen({ onOpenRoadmap, onOpenRoadmapBuilde
           {speech.listening && speech.interim && <p className="capture-interim">{speech.interim}</p>}
           {stage === 'idle' && ambient && text.trim() && (
             <p className="intake-ambient">
-              {INTENT_LABELS[ambient.intent] || ambient.intent.toLowerCase()}
+              {INTENT_LABELS[ambient.result.intent] || ambient.result.intent.toLowerCase()}
             </p>
           )}
         </div>

@@ -216,10 +216,22 @@ export default function ProfileScreen() {
     setPickingConfidenceFor(null)
   }
 
+  // A format can't be both avoided and preferred at once — picking one clears the other.
   function toggleAvoidFormat(format) {
     setAvoidFormats((prev) =>
       prev.includes(format) ? prev.filter((f) => f !== format) : [...prev, format]
     )
+    setPreferFormats((prev) => prev.filter((f) => f !== format))
+    setSaved(false)
+  }
+
+  // Mirrors toggleAvoidFormat — previously preferFormats could only ever be set indirectly via
+  // the inference "Keep" action (below), with no direct control the way avoid always had.
+  function togglePreferFormat(format) {
+    setPreferFormats((prev) =>
+      prev.includes(format) ? prev.filter((f) => f !== format) : [...prev, format]
+    )
+    setAvoidFormats((prev) => prev.filter((f) => f !== format))
     setSaved(false)
   }
 
@@ -481,8 +493,9 @@ export default function ProfileScreen() {
 
       <Section
         title="Learning formats"
-        hint="Formats you'd rather avoid — a generated roadmap won't suggest resources in these."
+        hint="Formats you'd rather avoid or see more of — a generated roadmap adjusts its resource suggestions accordingly."
       >
+        <span className="skill-cloud-label">Avoid</span>
         <div className="format-options">
           {FORMATS.map((f) => (
             <Chip
@@ -493,6 +506,21 @@ export default function ProfileScreen() {
               onClick={() => toggleAvoidFormat(f.value)}
             >
               {avoidFormats.includes(f.value) ? 'avoid: ' : ''}
+              {f.label}
+            </Chip>
+          ))}
+        </div>
+        <span className="skill-cloud-label format-row-label">Prefer more of</span>
+        <div className="format-options">
+          {FORMATS.map((f) => (
+            <Chip
+              key={f.value}
+              toggle
+              tone="brass"
+              pressed={preferFormats.includes(f.value)}
+              onClick={() => togglePreferFormat(f.value)}
+            >
+              {preferFormats.includes(f.value) ? 'prefer: ' : ''}
               {f.label}
             </Chip>
           ))}
@@ -549,8 +577,15 @@ export default function ProfileScreen() {
 
       <div className="profile-actions">
         {error && <span className="profile-error">{error}</span>}
-        {saved && <span className="profile-saved">Saved.</span>}
-        {!saved && confirmedAt && <span className="profile-hint">Unsaved changes</span>}
+        {saved && <span className="profile-saved">Confirmed.</span>}
+        {!saved && confirmedAt && (
+          <span className="profile-hint">
+            Unsaved changes — the confirmed version above is still what generation uses.
+          </span>
+        )}
+        {!saved && !confirmedAt && (
+          <span className="profile-hint">Not confirmed yet — generation won&apos;t read this until you save.</span>
+        )}
         <Button variant="primary" onClick={save} disabled={saving}>
           {saving ? 'Saving…' : 'Save profile'}
         </Button>

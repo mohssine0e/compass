@@ -13,6 +13,9 @@ import ReviewScreen from './components/ReviewScreen'
 import ResurfacingScreen from './components/ResurfacingScreen'
 import ErrorBoundary from './components/ErrorBoundary'
 import Button from './components/ui/Button'
+import ToastStack from './components/ui/Toast'
+import NotificationHistory from './components/ui/NotificationHistory'
+import { useNotificationFeed } from './hooks/useNotificationFeed'
 import { getNextResurfacing } from './api'
 import './App.css'
 
@@ -61,6 +64,9 @@ function pathToView(pathname) {
 export default function App() {
   // Start in a brief check so a stalled thing can surface *before* the capture screen.
   const [view, setView] = useState({ name: 'loading' })
+  // Global background-work feed (V3-10) — mounted once here, not per-screen, so a toast still
+  // shows up after navigating away from whatever started the work.
+  const { toasts, dismiss } = useNotificationFeed()
 
   const go = (name, params = {}) => {
     const next = { name, ...params }
@@ -102,34 +108,37 @@ export default function App() {
         <button className="wordmark" onClick={() => go('capture')}>
           Compass
         </button>
-        <nav className="app-nav">
-          <NavLink active={view.name === 'capture'} href={PATHS.capture} onClick={() => go('capture')}>
-            Capture
-          </NavLink>
-          <NavLink
-            active={
-              view.name === 'roadmap' ||
-              view.name === 'newRoadmap' ||
-              view.name === 'generateRoadmap'
-            }
-            href={PATHS.roadmaps}
-            onClick={() => go('roadmaps')}
-          >
-            Roadmaps
-          </NavLink>
-          <NavLink active={view.name === 'focus'} href={PATHS.focus} onClick={() => go('focus')}>
-            Focus
-          </NavLink>
-          <NavLink active={view.name === 'review'} href={PATHS.review} onClick={() => go('review')}>
-            Review
-          </NavLink>
-          <NavLink active={view.name === 'all'} href={PATHS.all} onClick={() => go('all')}>
-            All
-          </NavLink>
-          <NavLink active={view.name === 'profile'} href={PATHS.profile} onClick={() => go('profile')}>
-            Profile
-          </NavLink>
-        </nav>
+        <div className="app-header-right">
+          <nav className="app-nav">
+            <NavLink active={view.name === 'capture'} href={PATHS.capture} onClick={() => go('capture')}>
+              Capture
+            </NavLink>
+            <NavLink
+              active={
+                view.name === 'roadmap' ||
+                view.name === 'newRoadmap' ||
+                view.name === 'generateRoadmap'
+              }
+              href={PATHS.roadmaps}
+              onClick={() => go('roadmaps')}
+            >
+              Roadmaps
+            </NavLink>
+            <NavLink active={view.name === 'focus'} href={PATHS.focus} onClick={() => go('focus')}>
+              Focus
+            </NavLink>
+            <NavLink active={view.name === 'review'} href={PATHS.review} onClick={() => go('review')}>
+              Review
+            </NavLink>
+            <NavLink active={view.name === 'all'} href={PATHS.all} onClick={() => go('all')}>
+              All
+            </NavLink>
+            <NavLink active={view.name === 'profile'} href={PATHS.profile} onClick={() => go('profile')}>
+              Profile
+            </NavLink>
+          </nav>
+          <NotificationHistory />
+        </div>
       </header>
 
       <main className="app-main">
@@ -196,6 +205,10 @@ export default function App() {
         )}
         </ErrorBoundary>
       </main>
+
+      {/* Outside the per-view ErrorBoundary on purpose — a screen crash shouldn't take the
+          toast layer down with it. */}
+      <ToastStack toasts={toasts} onDismiss={dismiss} />
     </div>
   )
 }

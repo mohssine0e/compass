@@ -7,6 +7,7 @@ import {
   checkCareerCompletion,
   deleteRoadmap,
   deleteRoadmapStep,
+  downloadRoadmapExport,
   flattenStep,
   getCanonicalTopicForRoadmap,
   getModulePrefetchStatus,
@@ -45,6 +46,7 @@ import {
   hasEmptyModule,
   nodeIndexOf,
   nodeText,
+  roadmapToMermaid,
   searchMatches,
   seedCollapsed,
   sessionStats,
@@ -56,6 +58,7 @@ import {
   Button,
   IconArchive,
   IconDelete,
+  IconExport,
   Menu,
   Modal,
   TextArea,
@@ -106,7 +109,6 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   const [roadmap, setRoadmap] = useState(null)
   const [error, setError] = useState(null)
   const [busyStepId, setBusyStepId] = useState(null)
-  const [doneNote, setDoneNote] = useState(null)
   const [editingStepId, setEditingStepId] = useState(null)
   const [editText, setEditText] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
@@ -217,8 +219,9 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     setBusyStepId(stepId)
     setError(null)
     try {
-      const updated = await patchEntry(stepId, { status: 'done' })
-      setDoneNote(updated.acknowledgment || null)
+      await patchEntry(stepId, { status: 'done' })
+      // The acknowledgment, if any, arrives moments later as a toast (V3-10) rather than
+      // synchronously here — marking done no longer waits on an AI call.
       // RB-4.8/4.12: roll completion up/down (substeps <-> parent step, steps -> module) before
       // reloading, so the refreshed tree already reflects it — best-effort, never blocks.
       await syncStepCompletion(stepId).catch(() => {})
@@ -261,7 +264,6 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   async function undoStep(stepId) {
     setBusyStepId(stepId)
     setError(null)
-    setDoneNote(null)
     try {
       await patchEntry(stepId, { status: 'captured' })
       await load()
@@ -440,6 +442,23 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     } catch (err) {
       setError(err.message)
     }
+  }
+
+  // Client-generated, unlike the JSON export (a server download) — the tree's already fully
+  // loaded here, same shape /export would return, so this needs no request of its own.
+  function downloadMermaidExport() {
+    const slug = (roadmap.title || 'roadmap').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'roadmap'
+    const date = new Date().toISOString().slice(0, 10)
+    const content = `# ${roadmap.title || 'Roadmap'}\n\n\`\`\`mermaid\n${roadmapToMermaid(roadmap)}\n\`\`\`\n`
+    const blob = new Blob([content], { type: 'text/markdown' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `compass-${slug}-${date}.md`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
   }
 
   async function deleteStep(node) {
@@ -856,6 +875,8 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
                 ...(canonicalTopic
                   ? [{ label: 'Suggest a topic addition', onClick: () => dispatchPanel({ type: 'suggestAddition' }) }]
                   : []),
+                { label: 'Export as JSON', onClick: () => downloadRoadmapExport(roadmap.id), icon: <IconExport /> },
+                { label: 'Export as Mermaid diagram', onClick: downloadMermaidExport, icon: <IconExport /> },
                 { label: 'Archive', onClick: archiveRoadmap, icon: <IconArchive /> },
                 { label: 'Delete roadmap', onClick: deleteWholeRoadmap, danger: true, icon: <IconDelete /> },
               ]}
@@ -863,8 +884,6 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           </>
         )}
       </div>
-
-      {doneNote && <p className="roadmap-done-note">{doneNote}</p>}
 
       {selectedModuleIds.size >= 2 && !reorderMode && (
         <div className="roadmap-batch-bar">
@@ -997,7 +1016,6 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           onChanged={load}
           onPassed={async () => {
             dispatchPanel({ type: 'close' })
-            setDoneNote(null)
             await load()
           }}
           onOverride={async () => {

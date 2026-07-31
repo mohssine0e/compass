@@ -266,6 +266,10 @@
   gap: 8px;
 }
 
+.format-row-label {
+  margin-top: 12px;
+}
+
 .pref-groups {
   display: flex;
   flex-direction: column;

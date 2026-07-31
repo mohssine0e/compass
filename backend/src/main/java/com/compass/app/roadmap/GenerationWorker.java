@@ -1,6 +1,7 @@
 package com.compass.app.roadmap;
 
 import com.compass.app.events.EventService;
+import com.compass.app.notifications.NotificationService;
 import com.compass.app.roadmap.dto.GenerateRoadmapRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapResponse;
 import org.springframework.scheduling.annotation.Async;
@@ -17,10 +18,12 @@ class GenerationWorker {
 
     private final RoadmapService roadmapService;
     private final EventService events;
+    private final NotificationService notifications;
 
-    GenerationWorker(RoadmapService roadmapService, EventService events) {
+    GenerationWorker(RoadmapService roadmapService, EventService events, NotificationService notifications) {
         this.roadmapService = roadmapService;
         this.events = events;
+        this.notifications = notifications;
     }
 
     @Async
@@ -28,11 +31,14 @@ class GenerationWorker {
         try {
             GenerateRoadmapResponse result = roadmapService.generate(req, job::setStage);
             job.complete(result);
+            notifications.push("Roadmap ready to review.", null);
         } catch (RuntimeException ex) {
             // A brief, honest note (CLAUDE.md: system_events stays short, not a stack trace) —
             // the same pattern every other AI-call failure in this codebase already uses.
             events.aiWarning("provider_error", "Roadmap generation job failed: " + ex.getMessage(), null);
-            job.fail(friendlyMessage(ex));
+            String message = friendlyMessage(ex);
+            job.fail(message);
+            notifications.push(message, "danger", null);
         }
     }
 

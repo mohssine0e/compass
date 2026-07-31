@@ -23,6 +23,12 @@
   text-transform: uppercase;
 }
 
+.app-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .app-nav {
   display: flex;
   gap: 6px;

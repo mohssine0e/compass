@@ -1,6 +1,7 @@
 package com.compass.app.verification;
 
 import com.compass.app.config.ConflictException;
+import com.compass.app.ai.AiVoiceWorker;
 import com.compass.app.ai.RoadmapAiService;
 import com.compass.app.ai.VerificationAiService;
 import com.compass.app.entry.Entry;
@@ -46,16 +47,19 @@ public class VerificationService {
   private final VerificationAiService verifyAi;
   private final RoadmapAiService roadmapAi;
   private final com.compass.app.roadmap.RoadmapService roadmapService;
+  private final AiVoiceWorker aiVoiceWorker;
 
   public VerificationService(EntryRepository repository, VerificationAiService verifyAi,
                              RoadmapAiService roadmapAi,
                              @org.springframework.context.annotation.Lazy
-                             com.compass.app.roadmap.RoadmapService roadmapService) {
+                             com.compass.app.roadmap.RoadmapService roadmapService,
+                             AiVoiceWorker aiVoiceWorker) {
     this.repository = repository;
     this.verifyAi = verifyAi;
     this.roadmapAi = roadmapAi;
     // @Lazy: RoadmapService -> ... -> VerificationService closes a constructor cycle otherwise.
     this.roadmapService = roadmapService;
+    this.aiVoiceWorker = aiVoiceWorker;
   }
 
   /** A step's default check format (Phase 26) from its {@code kind} — always overridable. */
@@ -198,6 +202,10 @@ public class VerificationService {
       step.setStatus(EntryStatus.DONE);
       Entry saved = repository.save(step);
       touchParent(saved);
+      // Same async acknowledgment the self-report ("mark done anyway") path gets via
+      // EntryController — an AI-verified pass is at least as much a real completion as a
+      // self-report, and previously got no acknowledgment of any kind, ever.
+      aiVoiceWorker.acknowledgeAsync(saved);
       return new VerifyResult(true, null, null, null);
     }
 

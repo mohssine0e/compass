@@ -2,6 +2,7 @@ package com.compass.app.roadmap;
 
 import com.compass.app.entry.Entry;
 import com.compass.app.events.EventService;
+import com.compass.app.notifications.NotificationService;
 import com.compass.app.roadmap.dto.GenerateRoadmapResponse;
 import com.compass.app.roadmap.dto.ModulePrefetchStatus;
 import org.junit.jupiter.api.DisplayName;
@@ -38,7 +39,8 @@ class ModulePrefetchServiceSelfHealTest {
     void redraftsUntrackedUnexpandedModule() {
         RoadmapService roadmapService = mock(RoadmapService.class);
         EventService events = mock(EventService.class);
-        ModulePrefetchService service = new ModulePrefetchService(roadmapService, events);
+        NotificationService notifications = mock(NotificationService.class);
+        ModulePrefetchService service = new ModulePrefetchService(roadmapService, events, notifications);
 
         Entry roadmap = roadmapEntryWithId(100L);
         when(roadmapService.listRoadmaps()).thenReturn(List.of(roadmap));
@@ -57,7 +59,8 @@ class ModulePrefetchServiceSelfHealTest {
     void doesNotDoubleSubmitAnAlreadyTrackedModule() {
         RoadmapService roadmapService = mock(RoadmapService.class);
         EventService events = mock(EventService.class);
-        ModulePrefetchService service = new ModulePrefetchService(roadmapService, events);
+        NotificationService notifications = mock(NotificationService.class);
+        ModulePrefetchService service = new ModulePrefetchService(roadmapService, events, notifications);
 
         Entry roadmap = roadmapEntryWithId(100L);
         when(roadmapService.listRoadmaps()).thenReturn(List.of(roadmap));
@@ -84,7 +87,8 @@ class ModulePrefetchServiceSelfHealTest {
     void fullyExpandedRoadmapTriggersNothing() {
         RoadmapService roadmapService = mock(RoadmapService.class);
         EventService events = mock(EventService.class);
-        ModulePrefetchService service = new ModulePrefetchService(roadmapService, events);
+        NotificationService notifications = mock(NotificationService.class);
+        ModulePrefetchService service = new ModulePrefetchService(roadmapService, events, notifications);
 
         Entry roadmap = roadmapEntryWithId(100L);
         when(roadmapService.listRoadmaps()).thenReturn(List.of(roadmap));

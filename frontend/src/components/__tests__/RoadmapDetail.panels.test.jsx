@@ -301,17 +301,18 @@ describe('RoadmapDetail non-panel state', () => {
     cleanup()
   })
 
-  it('marking the current step done shows the acknowledgment and clears the busy flag', async () => {
+  it('marking the current step done syncs completion and clears the busy flag', async () => {
     const user = userEvent.setup()
-    api.patchEntry.mockResolvedValue({ acknowledgment: 'Held.' })
+    // V3-10: PATCH /entries/{id} no longer returns a synchronous acknowledgment — the real line,
+    // if any, arrives later via the global notification toast, not inline on this screen.
+    api.patchEntry.mockResolvedValue({ acknowledgment: null })
     api.syncStepCompletion.mockResolvedValue({})
     await renderWith(flatRoadmap())
 
     await user.click(screen.getByRole('button', { name: 'Mark done' }))
 
-    expect(await screen.findByText('Held.')).toBeInTheDocument()
+    await waitFor(() => expect(api.syncStepCompletion).toHaveBeenCalledWith(22))
     expect(api.patchEntry).toHaveBeenCalledWith(22, { status: 'done' })
-    expect(api.syncStepCompletion).toHaveBeenCalledWith(22)
     // Busy flag cleared: the button is enabled/interactive again (re-fetched roadmap still has a
     // current step in this fixture's mocked response, since getRoadmap always returns the same
     // fixture here — the button existing at all confirms the busy state didn't get stuck).

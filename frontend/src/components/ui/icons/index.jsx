@@ -102,3 +102,22 @@ export function IconSubSubstep(props) {
     </Icon>
   )
 }
+
+export function IconBell(props) {
+  return (
+    <Icon {...props}>
+      <path d="M4 6.5a4 4 0 0 1 8 0v2.3l1 2.2H3l1-2.2z" />
+      <path d="M6.5 12.5a1.5 1.5 0 0 0 3 0" />
+    </Icon>
+  )
+}
+
+export function IconExport(props) {
+  return (
+    <Icon {...props}>
+      <path d="M8 2.5v6.5" />
+      <path d="M5.2 6.3L8 9l2.8-2.7" />
+      <path d="M2.5 10.5v2a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-2" />
+    </Icon>
+  )
+}

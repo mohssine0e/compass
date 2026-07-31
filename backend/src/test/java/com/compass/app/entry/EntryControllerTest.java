@@ -1,6 +1,6 @@
 package com.compass.app.entry;
 
-import com.compass.app.ai.AiVoiceService;
+import com.compass.app.ai.AiVoiceWorker;
 import com.compass.app.config.ApiExceptionHandler;
 import com.compass.app.entry.dto.PatchEntryRequest;
 import com.compass.app.events.EventService;
@@ -31,7 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * The HTTP contract of {@link EntryController}: status codes and the {@link ApiExceptionHandler}
  * shape for the domain failures the service layer actually throws. No DB, no AI call — {@link
- * EntryService} and {@link AiVoiceService} are mocked.
+ * EntryService} and {@link AiVoiceWorker} are mocked.
  */
 @WebMvcTest(EntryController.class)
 @Import(ApiExceptionHandler.class)
@@ -44,25 +44,26 @@ class EntryControllerTest {
     private EntryService service;
 
     @MockBean
-    private AiVoiceService aiVoice;
+    private AiVoiceWorker aiVoiceWorker;
 
     // ApiExceptionHandler depends on EventService; @Import doesn't pull in its own bean graph.
     @MockBean
     private EventService events;
 
     @Test
-    @DisplayName("POST /entries with text creates an idea and returns 201 with an acknowledgment")
-    void createReturns201WithAcknowledgment() throws Exception {
+    @DisplayName("POST /entries with text creates an idea, returns 201 immediately with no acknowledgment")
+    void createReturns201WithoutBlockingOnAcknowledgment() throws Exception {
         Entry entry = entry(EntryType.IDEA, EntryStatus.CAPTURED);
         when(service.create(any())).thenReturn(entry);
-        when(aiVoice.acknowledge(entry)).thenReturn("Held.");
 
         mvc.perform(post("/entries")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"text\":\"Build a CLI tool\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.type").value("idea"))
-                .andExpect(jsonPath("$.acknowledgment").value("Held."));
+                .andExpect(jsonPath("$.acknowledgment").doesNotExist());
+
+        verify(aiVoiceWorker).acknowledgeAsync(entry);
     }
 
     @Test
@@ -89,17 +90,18 @@ class EntryControllerTest {
     }
 
     @Test
-    @DisplayName("PATCH marking a step done triggers an acknowledgment; other edits stay quiet")
+    @DisplayName("PATCH marking a step done queues an acknowledgment in the background; other edits stay quiet")
     void patchToDoneAcknowledges() throws Exception {
         Entry done = entry(EntryType.ROADMAP_STEP, EntryStatus.DONE);
         when(service.update(eq(1L), any(PatchEntryRequest.class))).thenReturn(done);
-        when(aiVoice.acknowledge(done)).thenReturn("Marked done.");
 
         mvc.perform(patch("/entries/1")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"status\":\"done\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.acknowledgment").value("Marked done."));
+                .andExpect(jsonPath("$.acknowledgment").doesNotExist());
+
+        verify(aiVoiceWorker).acknowledgeAsync(done);
     }
 
     @Test
@@ -114,7 +116,7 @@ class EntryControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.acknowledgment").doesNotExist());
 
-        verify(aiVoice, never()).acknowledge(any());
+        verify(aiVoiceWorker, never()).acknowledgeAsync(any());
     }
 
     @Test
