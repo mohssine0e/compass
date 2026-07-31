@@ -67,6 +67,14 @@ public class RoadmapGenerationService {
     // trip rate limits across the whole provider chain at once. Owned by AsyncConfig now, not
     // created here, so Spring drains it on shutdown instead of leaving threads mid-AI-call.
     private final ExecutorService expansionExecutor;
+    // A lazy self-reference (resolves to the Spring-proxied bean, not `this`) so
+    // `expandOneForBatch` can call `expandModule` THROUGH the proxy instead of as a same-class
+    // method call. A same-class call bypasses Spring AOP entirely — `@Transactional` on
+    // `expandModule` silently wouldn't apply on the batch path without this, the exact class of
+    // bug `GenerationWorker`'s own javadoc documents for `@Async` (same underlying mechanism,
+    // different annotation). `@Lazy` is required: without it, constructing this bean would need
+    // itself to already exist.
+    private final RoadmapGenerationService self;
 
     public RoadmapGenerationService(EntryRepository repository, RoadmapQueryService queryService,
                                     RoadmapStructureService structureService, RoadmapAiService roadmapAi,
@@ -75,7 +83,8 @@ public class RoadmapGenerationService {
                                     AiVoiceService aiVoice, EventService events,
                                     TopicMatcherService topicMatcher, ExecutorService expansionExecutor,
                                     @org.springframework.beans.factory.annotation.Value(
-                                            "${compass.search.max-context-snippets:5}") int maxGroundingSnippets) {
+                                            "${compass.search.max-context-snippets:5}") int maxGroundingSnippets,
+                                    @org.springframework.context.annotation.Lazy RoadmapGenerationService self) {
         this.repository = repository;
         this.queryService = queryService;
         this.structureService = structureService;
@@ -89,6 +98,7 @@ public class RoadmapGenerationService {
         this.topicMatcher = topicMatcher;
         this.expansionExecutor = expansionExecutor;
         this.maxGroundingSnippets = maxGroundingSnippets;
+        this.self = self;
     }
 
     /**
@@ -316,7 +326,10 @@ public class RoadmapGenerationService {
 
     private ModuleExpansionResult expandOneForBatch(Long roadmapId, Long moduleId) {
         try {
-            return new ModuleExpansionResult(moduleId, expandModule(roadmapId, moduleId), null);
+            // Through `self`, not a direct call — see the field's javadoc. A direct
+            // `expandModule(...)` call here would bypass the Spring proxy and silently drop
+            // `expandModule`'s `@Transactional(readOnly = true)` for the entire batch path.
+            return new ModuleExpansionResult(moduleId, self.expandModule(roadmapId, moduleId), null);
         } catch (RuntimeException ex) {
             return new ModuleExpansionResult(moduleId, null, ex.getMessage());
         }
@@ -592,6 +605,14 @@ public class RoadmapGenerationService {
     /**
      * Redraft one module's title/scope (Phase 18) — propose half of "regenerate this module";
      * nothing changes until {@code updateModule} is called with the (possibly edited) result.
+     *
+     * <p>{@code readOnly = true} is safe here: this method only reads via {@code queryService}/
+     * {@code repository} and calls {@code roadmapAi} (no persistence anywhere in its call
+     * chain). If a future change adds a write reachable from here, give that write its own
+     * {@code REQUIRES_NEW} transaction — see
+     * {@code com.compass.app.resource.ResourceEnrichmentService#cacheExaHighlights} for why: a
+     * write inherited into a read-only transaction fails at the driver level, not with a
+     * validation error, and does so silently unless something is watching for it.
      */
     @Transactional(readOnly = true)
     public GenerateRoadmapResponse.ProposedModule regenerateModuleScope(Long roadmapId, Long moduleId) {
@@ -612,6 +633,10 @@ public class RoadmapGenerationService {
     /**
      * Draft one new module to insert into this roadmap's outline (Phase 18) — propose half of
      * "insert a module here"; nothing changes until {@code insertModule} is called.
+     *
+     * <p>{@code readOnly = true} is safe here — read + AI call only, no persistence in this
+     * method's call chain. See {@link #regenerateModuleScope} for what to do before adding a
+     * write reachable from a read-only method like this one.
      */
     @Transactional(readOnly = true)
     public GenerateRoadmapResponse.ProposedModule proposeNewModule(Long roadmapId) {
@@ -634,6 +659,10 @@ public class RoadmapGenerationService {
      * {@code insertModule} — direct reuse of Phase 18's existing insert-module mechanic, not a
      * new insertion path. {@code possibleDuplicate} is a soft, non-blocking flag (RB-3.8's
      * "lightweight duplication check") — never a reason to reject the proposal outright.
+     *
+     * <p>{@code readOnly = true} is safe here — read + AI call only, no persistence in this
+     * method's call chain. See {@link #regenerateModuleScope} for what to do before adding a
+     * write reachable from a read-only method like this one.
      */
     @Transactional(readOnly = true)
     public SubtopicModuleProposal proposeSubtopicModule(Long roadmapId, String focusGoal) {
@@ -694,6 +723,10 @@ public class RoadmapGenerationService {
      * remaining modules." Propose half; nothing changes until {@code applyReplan} is called
      * with the (possibly edited) result. Each item carries its module's real id so accepting it
      * doesn't need any index translation.
+     *
+     * <p>{@code readOnly = true} is safe here — read + AI call only, no persistence in this
+     * method's call chain. See {@link #regenerateModuleScope} for what to do before adding a
+     * write reachable from a read-only method like this one.
      */
     @Transactional(readOnly = true)
     public List<ReplanModuleItem> replanRemainingModules(Long roadmapId) {

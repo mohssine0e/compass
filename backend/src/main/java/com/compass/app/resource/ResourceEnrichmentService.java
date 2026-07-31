@@ -6,6 +6,8 @@ import com.compass.app.events.EventService;
 import com.compass.app.resource.dto.EnrichmentResponse;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Locale;
@@ -234,7 +236,15 @@ public class ResourceEnrichmentService {
      * pointer for {@code stepTopic} — no AI call, no fetch, just surfacing something Exa had
      * already computed. A resource with no matching Exa highlight, or one already cached for
      * this exact topic, is silently skipped (the fallback path picks it up lazily instead).
+     *
+     * <p>{@code REQUIRES_NEW} on purpose, same reasoning as {@link com.compass.app.events.EventWriter}:
+     * this is called from {@code ResourceService.suggestResourcesPerStep}, which is in turn
+     * reachable from {@code RoadmapGenerationService.expandModule}'s
+     * {@code @Transactional(readOnly = true)} — without its own fresh, writable transaction here,
+     * {@link #repository}'s save would inherit that read-only mode and fail with "cannot execute
+     * INSERT in a read-only transaction" on every call, silently dropping the cache write.
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void cacheExaHighlights(List<ResourceAiService.Resource> resources,
                                    List<SearchGroundingService.Result> groundingResults,
                                    String stepTopic) {

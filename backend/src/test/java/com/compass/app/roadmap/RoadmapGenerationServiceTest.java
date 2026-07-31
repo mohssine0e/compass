@@ -78,9 +78,12 @@ class RoadmapGenerationServiceTest {
         aiVoice = mock(AiVoiceService.class);
         events = mock(EventService.class);
         topicMatcher = mock(TopicMatcherService.class);
+        // `self` (the lazy self-reference expandModulesBatch's proxy call needs — see the field's
+        // javadoc) is null here: nothing in this suite exercises expandModulesBatch/
+        // expandOneForBatch, so there's no real proxy to stand in for.
         service = new RoadmapGenerationService(repository, queryService, structureService, roadmapAi,
                 profileService, searchGrounding, resourceService, entryService, aiVoice, events,
-                topicMatcher, Executors.newSingleThreadExecutor(), 5);
+                topicMatcher, Executors.newSingleThreadExecutor(), 5, null);
 
         when(profileService.confirmedProfile()).thenReturn(Optional.empty());
     }
