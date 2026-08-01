@@ -396,14 +396,20 @@ public class RoadmapGenerationService {
 
         // Steps already drafted in genuinely earlier modules (lower order index), offered as
         // real cross-module prerequisites (Phase 18) — not just same-batch ones.
+        //
+        // V4-6.5 (2026-07-30 user audit): this used to query each earlier sibling's steps in its
+        // own call inside the loop (one query per module in the roadmap so far) — now one batch
+        // query for every earlier sibling's steps together, grouped back into per-sibling lists
+        // in memory.
         List<RoadmapAiService.PriorStep> priorSteps = new ArrayList<>();
         Map<Long, String> priorStepTextById = new HashMap<>();
         if (module.getOrderIndex() != null) {
-            for (Entry sibling : repository.findByParentIdOrderByOrderIndexAsc(roadmapId)) {
-                if (sibling.getOrderIndex() == null || sibling.getOrderIndex() >= module.getOrderIndex()) {
-                    continue;
-                }
-                for (Entry step : repository.findByParentIdOrderByOrderIndexAsc(sibling.getId())) {
+            List<Long> earlierSiblingIds = repository.findByParentIdOrderByOrderIndexAsc(roadmapId).stream()
+                    .filter(sibling -> sibling.getOrderIndex() != null && sibling.getOrderIndex() < module.getOrderIndex())
+                    .map(Entry::getId)
+                    .toList();
+            if (!earlierSiblingIds.isEmpty()) {
+                for (Entry step : repository.findByParentIdInOrderByOrderIndexAsc(earlierSiblingIds)) {
                     if (step.getType() != EntryType.ROADMAP_STEP) {
                         continue;
                     }
@@ -737,13 +743,23 @@ public class RoadmapGenerationService {
             throw new IllegalStateException("Drafting is unavailable right now — edit modules yourself.");
         }
 
+        // V4-6.5 (2026-07-30 user audit): this used to check each module's step count with its
+        // own query inside the loop (one query per top-level module) — now one batch query for
+        // every module's steps together, grouped by parent module id in memory. The same
+        // grouped map is reused by expandedModulesContext below instead of it re-querying too.
+        List<Entry> topLevelModules = repository.findByParentIdOrderByOrderIndexAsc(roadmapId).stream()
+                .filter(m -> m.getType() == EntryType.ROADMAP)
+                .toList();
+        Map<Long, List<Entry>> stepsByModuleId = topLevelModules.isEmpty()
+                ? Map.of()
+                : repository.findByParentIdInOrderByOrderIndexAsc(
+                                topLevelModules.stream().map(Entry::getId).toList()).stream()
+                        .collect(java.util.stream.Collectors.groupingBy(Entry::getParentId));
+
         List<Entry> expanded = new ArrayList<>();
         List<Entry> remaining = new ArrayList<>();
-        for (Entry m : repository.findByParentIdOrderByOrderIndexAsc(roadmapId)) {
-            if (m.getType() != EntryType.ROADMAP) {
-                continue;
-            }
-            boolean hasSteps = !repository.findByParentIdOrderByOrderIndexAsc(m.getId()).isEmpty();
+        for (Entry m : topLevelModules) {
+            boolean hasSteps = !stepsByModuleId.getOrDefault(m.getId(), List.of()).isEmpty();
             (hasSteps ? expanded : remaining).add(m);
         }
         if (remaining.isEmpty()) {
@@ -751,7 +767,7 @@ public class RoadmapGenerationService {
         }
 
         List<RoadmapAiService.OutlineModule> redrafted = roadmapAi.replanModules(
-                stringOf(roadmap, "title"), expandedModulesContext(expanded),
+                stringOf(roadmap, "title"), expandedModulesContext(expanded, stepsByModuleId),
                 remainingModulesContext(remaining), storedAssessmentContext(roadmap), remaining.size());
         if (redrafted == null) {
             throw new IllegalStateException(
@@ -767,11 +783,15 @@ public class RoadmapGenerationService {
         return result;
     }
 
-    /** Already-expanded modules with their real done/total counts, for the replan prompt. */
-    private String expandedModulesContext(List<Entry> modules) {
+    /**
+     * Already-expanded modules with their real done/total counts, for the replan prompt.
+     * {@code stepsByModuleId} is pre-fetched by the caller (V4-6.5) rather than queried here per
+     * module — see {@link #replanRemainingModules}.
+     */
+    private String expandedModulesContext(List<Entry> modules, Map<Long, List<Entry>> stepsByModuleId) {
         StringBuilder sb = new StringBuilder();
         for (Entry m : modules) {
-            List<Entry> steps = repository.findByParentIdOrderByOrderIndexAsc(m.getId());
+            List<Entry> steps = stepsByModuleId.getOrDefault(m.getId(), List.of());
             long done = steps.stream().filter(s -> s.getStatus() == EntryStatus.DONE).count();
             sb.append("- ").append(stringOf(m, "title"));
             String scope = stringOf(m, "scope");

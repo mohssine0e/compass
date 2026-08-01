@@ -22,6 +22,7 @@ import com.compass.app.roadmap.dto.ReplanModulesRequest;
 import com.compass.app.roadmap.dto.RoadmapResponse;
 import com.compass.app.roadmap.dto.SubtopicProposalRequest;
 import com.compass.app.roadmap.dto.UpdateModuleRequest;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -86,7 +87,7 @@ public class RoadmapController {
      * started on one device and checked from another.
      */
     @PostMapping("/generate/start")
-    public Map<String, String> startGeneration(@RequestBody GenerateRoadmapRequest request) {
+    public Map<String, String> startGeneration(@Valid @RequestBody GenerateRoadmapRequest request) {
         return Map.of("jobId", jobs.start(request));
     }
 
@@ -155,7 +156,7 @@ public class RoadmapController {
     /** Insert a new step. Body is {text, position?} — appended when position is omitted. */
     @PostMapping("/{id}/steps")
     public ResponseEntity<RoadmapResponse> insertStep(@PathVariable Long id,
-                                                        @RequestBody InsertStepRequest request) {
+                                                        @Valid @RequestBody InsertStepRequest request) {
         service.insertStep(id, request.text(), request.position());
         Entry roadmap = service.getRoadmap(id);
         RoadmapResponse body = RoadmapResponse.of(roadmap, service::stepsOf);
@@ -165,7 +166,7 @@ public class RoadmapController {
     /** Reorder a roadmap's steps. Body is the full ordered list of step ids. */
     @PutMapping("/{id}/steps/order")
     public RoadmapResponse reorderSteps(@PathVariable Long id,
-                                         @RequestBody ReorderStepsRequest request) {
+                                         @Valid @RequestBody ReorderStepsRequest request) {
         service.reorderSteps(id, request.stepIds());
         Entry roadmap = service.getRoadmap(id);
         return RoadmapResponse.of(roadmap, service::stepsOf);
@@ -316,7 +317,7 @@ public class RoadmapController {
      */
     @PutMapping("/{id}/modules/{moduleId}")
     public RoadmapResponse updateModule(@PathVariable Long id, @PathVariable Long moduleId,
-                                         @RequestBody UpdateModuleRequest request) {
+                                         @Valid @RequestBody UpdateModuleRequest request) {
         service.updateModule(id, moduleId, request.title(), request.scope());
         prefetch.invalidate(moduleId);
         prefetch.prefetchAll(id, List.of(moduleId));
@@ -350,7 +351,7 @@ public class RoadmapController {
      */
     @PostMapping("/{id}/modules")
     public ResponseEntity<RoadmapResponse> insertModule(@PathVariable Long id,
-                                                          @RequestBody InsertModuleRequest request) {
+                                                          @Valid @RequestBody InsertModuleRequest request) {
         Entry module = service.insertModule(id, request.title(), request.scope(), request.position());
         prefetch.prefetchAll(id, List.of(module.getId()));
         Entry roadmap = service.getRoadmap(id);

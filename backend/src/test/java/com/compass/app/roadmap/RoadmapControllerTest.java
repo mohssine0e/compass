@@ -22,6 +22,8 @@ import java.util.NoSuchElementException;
 
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -115,6 +117,51 @@ class RoadmapControllerTest {
 
         mvc.perform(post("/roadmaps/7/modules/3/expand"))
                 .andExpect(status().isConflict());
+    }
+
+    // V4-6.1 (2026-07-30 user audit): a blank `goal` is now rejected by @Valid before the
+    // request ever reaches GenerationJobService, instead of relying on every caller to remember
+    // the same manual check RoadmapGenerationService.generate() already did downstream.
+    @Test
+    @DisplayName("POST /roadmaps/generate/start with a blank goal is rejected by validation as 400")
+    void startGenerationWithBlankGoalIsBadRequest() throws Exception {
+        mvc.perform(post("/roadmaps/generate/start")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"goal\":\"\"}"))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(jobs);
+    }
+
+    @Test
+    @DisplayName("POST /roadmaps/generate/start with a real goal reaches the job service")
+    void startGenerationWithRealGoalStartsAJob() throws Exception {
+        when(jobs.start(org.mockito.ArgumentMatchers.any())).thenReturn("job-1");
+
+        mvc.perform(post("/roadmaps/generate/start")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"goal\":\"Learn Rust\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.jobId").value("job-1"));
+    }
+
+    // V4-6.2 (2026-07-30 user audit): a genuinely unmapped exception (not one of
+    // ApiExceptionHandler's specific domain handlers) used to fall through to Spring Boot's own
+    // default error page instead of this app's consistent ProblemDetail shape.
+    @Test
+    @DisplayName("an exception with no specific handler still gets the app's ProblemDetail shape, not a raw 500 page")
+    void unmappedExceptionGetsProblemDetailShape() throws Exception {
+        when(service.getRoadmap(42L)).thenThrow(new RuntimeException("something exploded"));
+
+        mvc.perform(get("/roadmaps/42"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.detail").value("Something went wrong."))
+                // The real exception message never leaks into the response body.
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("something exploded"))));
+
+        verify(events).systemError(eq("unhandled_exception"), org.mockito.ArgumentMatchers.contains("something exploded"),
+                org.mockito.ArgumentMatchers.isNull());
     }
 
     private static Entry roadmap(Long id, String title) {

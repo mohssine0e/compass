@@ -15,6 +15,7 @@ import com.compass.app.profile.ProfileService;
 import com.compass.app.resource.ResourceService;
 import com.compass.app.roadmap.dto.GenerateRoadmapRequest;
 import com.compass.app.roadmap.dto.GenerateRoadmapResponse;
+import com.compass.app.roadmap.dto.ReplanModuleItem;
 import com.compass.app.topic.TopicMatcherService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -32,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -500,6 +502,63 @@ class RoadmapGenerationServiceTest {
         when(roadmapAi.skeletonModuleSteps(any(), any(), any())).thenReturn(null);
 
         assertThatThrownBy(() -> service.expandModule(1L, 2L)).isInstanceOf(IllegalStateException.class);
+    }
+
+    // ── replanRemainingModules ──────────────────────────────────────────────────────────
+
+    // V4-6.5 (2026-07-30 user audit): replanRemainingModules used to check each top-level
+    // module's step count with its own query inside a loop (an N+1 — one query per module in
+    // the roadmap) — now one batched findByParentIdInOrderByOrderIndexAsc call, grouped in
+    // memory. Pins down both the batching itself and that the expanded/remaining split (which
+    // depends on that grouped data) still comes out correct.
+    @Test
+    @DisplayName("splits modules into expanded/remaining using one batched steps query, not one query per module")
+    void replanRemainingModulesBatchesTheStepsQuery() {
+        Entry r = roadmap(1, "R");
+        when(repository.findById(1L)).thenReturn(Optional.of(r));
+        Entry expandedModule = module(10, 1, "Done-ish module", 0);
+        Entry remainingModule = module(11, 1, "Untouched module", 1);
+        when(repository.findByParentIdOrderByOrderIndexAsc(1L))
+                .thenReturn(List.of(expandedModule, remainingModule));
+        Entry doneStep = step(20, 10, "a step", EntryStatus.DONE, 0);
+        // Only module 10 has steps; module 11 has none — the batched query returns everything
+        // for every top-level module id in one call, and module 11 simply has no entries in it.
+        when(repository.findByParentIdInOrderByOrderIndexAsc(List.of(10L, 11L)))
+                .thenReturn(List.of(doneStep));
+        when(roadmapAi.isAvailable()).thenReturn(true);
+        when(roadmapAi.replanModules(any(), any(), any(), any(), eq(1)))
+                .thenReturn(List.of(new RoadmapAiService.OutlineModule("Redrafted", "new scope")));
+
+        List<ReplanModuleItem> result = service.replanRemainingModules(1L);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).moduleId()).isEqualTo(11L);
+        assertThat(result.get(0).title()).isEqualTo("Redrafted");
+        // The N+1 shape this replaced would have called findByParentIdOrderByOrderIndexAsc
+        // again for each module id (10L, 11L) — confirms that no longer happens.
+        verify(repository, never()).findByParentIdOrderByOrderIndexAsc(10L);
+        verify(repository, never()).findByParentIdOrderByOrderIndexAsc(11L);
+        // The "done modules" context passed to the AI reflects the batched data correctly
+        // (1 of 1 steps done for the expanded module) — not just that batching happened, but
+        // that the grouped-by-parent-id data is the right data.
+        verify(roadmapAi).replanModules(eq("R"), eq("- Done-ish module (1/1 steps done)\n"),
+                eq("- Untouched module\n"), any(), eq(1));
+    }
+
+    @Test
+    @DisplayName("throws when every module is already expanded — nothing to replan")
+    void replanRemainingModulesThrowsWhenNothingRemains() {
+        Entry r = roadmap(1, "R");
+        when(repository.findById(1L)).thenReturn(Optional.of(r));
+        Entry expandedModule = module(10, 1, "M", 0);
+        when(repository.findByParentIdOrderByOrderIndexAsc(1L)).thenReturn(List.of(expandedModule));
+        when(repository.findByParentIdInOrderByOrderIndexAsc(List.of(10L)))
+                .thenReturn(List.of(step(20, 10, "a step", EntryStatus.DONE, 0)));
+        when(roadmapAi.isAvailable()).thenReturn(true);
+
+        assertThatThrownBy(() -> service.replanRemainingModules(1L))
+                .isInstanceOf(IllegalArgumentException.class);
+        verify(roadmapAi, never()).replanModules(any(), any(), any(), any(), anyInt());
     }
 
     // ── retrySkeletonModule ─────────────────────────────────────────────────────────────

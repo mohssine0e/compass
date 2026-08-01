@@ -17,6 +17,15 @@ public interface EntryRepository extends JpaRepository<Entry, Long> {
     /** Steps of a roadmap, in their intended order. */
     List<Entry> findByParentIdOrderByOrderIndexAsc(Long parentId);
 
+    /**
+     * The children of every parent in {@code parentIds}, in one query — for callers that would
+     * otherwise call {@link #findByParentIdOrderByOrderIndexAsc} once per parent in a loop
+     * (V4-6.5, 2026-07-30 user audit found this N+1 shape in
+     * {@code RoadmapGenerationService}'s module-expansion context building). Group the flat
+     * result by {@code getParentId()} to get back the per-parent lists the loop form gave.
+     */
+    List<Entry> findByParentIdInOrderByOrderIndexAsc(java.util.Collection<Long> parentIds);
+
     /** All entries of one type, newest first (e.g. roadmaps for the roadmap list). */
     List<Entry> findByTypeOrderByCreatedAtDesc(EntryType type);
 

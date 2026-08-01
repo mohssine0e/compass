@@ -1,5 +1,7 @@
 package com.compass.app.roadmap.dto;
 
+import jakarta.validation.constraints.NotBlank;
+
 import java.util.List;
 
 /**
@@ -31,7 +33,12 @@ import java.util.List;
  * one" / confirmed "new" — resubmitting without it would just show the same match prompt again.
  */
 public record GenerateRoadmapRequest(
-        String goal,
+        // V4-6.1 (2026-07-30 user audit): `goal` was already required in practice —
+        // RoadmapGenerationService.generate() throws IllegalArgumentException on a blank one —
+        // this just makes that explicit and lets it be caught by @Valid before the request ever
+        // reaches the service, with a consistent 400 shape instead of relying on every caller
+        // remembering the same manual check.
+        @NotBlank(message = "Say what you want a roadmap for first.") String goal,
         List<Clarification> clarifications,
         boolean skipFollowUp,
         String tier,
