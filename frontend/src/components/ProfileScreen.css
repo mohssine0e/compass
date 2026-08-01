@@ -5,6 +5,20 @@
   padding: 0 24px;
 }
 
+/* .app-main centers its content vertically by default — right for a single short card
+   (Capture, Resurfacing) but wrong here: this screen's content (skills, resume, education,
+   learning preferences, formats) is routinely taller than one viewport, and centering an
+   element taller than its container pushes roughly half of it above the visible area. The
+   page then loads at scroll position 0, which lands mid-content (around "Education") instead
+   of at the top ("Your profile", the skills list) — reported as the profile page "looking
+   corrupted." Every other long-content screen already overrides this the same way (see
+   CaptureScreen.css, NewRoadmapScreen.css, Roadmap.css, AllEntries.css) — this one just never
+   got it. */
+.app-main:has(.profile) {
+  justify-content: flex-start;
+  padding: clamp(40px, 10vh, 110px) 0 40px;
+}
+
 /* Desktop: this screen holds real content (skills, resume, preferences) — the 620px cap
    from the mobile/PWA layout leaves most of a full-screen desktop window empty. Widen it
    on screens with the room, keep the narrow column for anything phone-sized. */
