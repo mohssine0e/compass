@@ -659,9 +659,13 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   }
 
   if (!roadmap) {
+    // V4-5.1 (2026-07-30 user audit): this rendered nothing but the back link while the
+    // initial fetch was in flight — one of the most-visited screens in the app showing a
+    // near-blank page instead of any loading affordance.
     return (
       <div className="roadmap-detail">
         <BackLink onBack={onBack} />
+        <p className="roadmap-empty">Loading…</p>
       </div>
     )
   }

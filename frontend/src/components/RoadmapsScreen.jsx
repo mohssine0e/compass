@@ -73,6 +73,11 @@ export default function RoadmapsScreen({ onNew, onDraft, onOpen }) {
 
       {error && <p className="roadmap-error">{error}</p>}
 
+      {/* V4-5.1 (2026-07-30 user audit): this screen rendered nothing at all — not even a
+          spinner or "Loading…" — while the initial fetch was in flight, reading as a blank
+          page rather than a screen that's working on it. */}
+      {list === null && !error && <p className="roadmap-empty">Loading…</p>}
+
       {list && list.length === 0 && (
         <p className="roadmap-empty">
           {showArchived

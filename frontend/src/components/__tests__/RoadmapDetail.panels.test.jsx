@@ -157,6 +157,24 @@ describe('RoadmapDetail panel/modal mutual exclusivity', () => {
     expect(openDialogTestIds()).toEqual([])
   })
 
+  // V4-5.1 (2026-07-30 user audit): this screen used to render only the back link while the
+  // initial getRoadmap fetch was in flight, reading as a near-blank page.
+  it('shows a loading message before the initial fetch resolves', async () => {
+    let resolveRoadmap
+    api.getRoadmap.mockReturnValue(new Promise((resolve) => { resolveRoadmap = resolve }))
+    api.getCanonicalTopicForRoadmap.mockResolvedValue(null)
+    api.getModulePrefetchStatus.mockResolvedValue([])
+
+    render(<RoadmapDetail id={1} onBack={() => {}} onGone={() => {}} />)
+
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
+
+    const roadmap = flatRoadmap()
+    resolveRoadmap(roadmap)
+    await screen.findByText(roadmap.title)
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument()
+  })
+
   it('double-clicking a step opens the deep view, and only the deep view', async () => {
     const user = userEvent.setup()
     await renderWith(flatRoadmap())

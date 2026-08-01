@@ -33,6 +33,13 @@ export function usePolling(fetchFn, intervalMs, onData, deps) {
       alive = false
       clearInterval(timer)
     }
+    // V4-5.2: `deps` IS the dependency array (the caller's, not this hook's own) — the lint
+    // rule can't see through that indirection. `fetchFn`/`onData` are deliberately excluded:
+    // including them would restart the interval on every render where the caller passes a
+    // fresh inline function (the common case), defeating the whole "poll on an interval,
+    // don't poll on every render" point of this hook. Safe as long as callers list everything
+    // their own `fetchFn`/`onData` closures actually read in `deps` — same contract as a plain
+    // `useEffect`, just one level removed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps)
 }

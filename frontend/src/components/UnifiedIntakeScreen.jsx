@@ -172,6 +172,9 @@ export default function UnifiedIntakeScreen({ onOpenRoadmap, onOpenRoadmapBuilde
       textareaRef.current?.focus()
     }, 1600)
     return () => clearTimeout(t)
+    // V4-5.2: `pushTrail` isn't listed — it only calls stable setters (`setTrail`, a state
+    // setter; `nextCid()`, module-scope) and doesn't close over anything that would go stale,
+    // so its identity changing every render has nothing for this effect to miss.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, doneMessage])
 

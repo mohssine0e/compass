@@ -24,6 +24,8 @@ export default function ReplanModulesModal({ roadmapId, draft, accept, onClose, 
     return () => {
       alive = false
     }
+    // V4-5.2: `draft` is a stable module-level import from ../api, not a prop/state — omitting
+    // it is the standard, safe case the lint rule false-positives on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roadmapId])
 

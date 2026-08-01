@@ -10,6 +10,10 @@ function Toast({ id, message, tone = 'info', count = 1, onDismiss }) {
   useEffect(() => {
     const t = setTimeout(() => onDismiss(id), AUTO_DISMISS_MS)
     return () => clearTimeout(t)
+    // V4-5.2: `onDismiss` deliberately excluded — this timer means "auto-dismiss 5s after THIS
+    // toast (identified by `id`) first appeared," not "restart the 5s countdown whenever the
+    // parent happens to re-render with a fresh callback." Same mount-once-per-id shape as
+    // `useDialogAccessibility`'s own documented suppression.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id])
 

@@ -231,6 +231,13 @@ export default function StepDeepView({
     return () => {
       alive = false
     }
+    // V4-5.2: `content`/`content.resources` aren't listed, but that's safe rather than a
+    // masked bug — nothing in this component ever mutates a step's resources (they're only
+    // ever edited in the proposal/generation editor, not from the deep view), so `step.id`
+    // alone is a reliable signal for "this is genuinely a different step to fetch
+    // enrichments for," even though `onChanged` callbacks elsewhere in this file can refresh
+    // `step` (same id, new object) for reasons unrelated to resources (notes, dependsOn,
+    // session state).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step.id])
 
