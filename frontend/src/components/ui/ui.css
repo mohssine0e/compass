@@ -10,7 +10,10 @@
   padding: 9px 18px;
   font-size: 0.95rem;
   border: 1px solid transparent;
-  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  min-height: 42px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 .ui-btn:disabled {
   cursor: default;
@@ -27,6 +30,8 @@
 }
 .ui-btn--primary:hover:not(:disabled) {
   background: rgba(207, 157, 91, 0.22);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0,0,0,.18);
 }
 .ui-btn--ghost {
   background: transparent;
@@ -89,11 +94,11 @@
 .ui-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(7, 10, 14, 0.78);
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 48px 20px;
+  padding: clamp(24px, 7vh, 72px) 20px;
   overflow-y: auto;
   z-index: 50;
 }
@@ -102,8 +107,11 @@
   width: 100%;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 28px 28px 24px;
+  border-radius: 18px;
+  padding: 36px 36px 30px;
+  box-shadow: 0 24px 80px rgba(0,0,0,.36);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -112,7 +120,10 @@
   max-width: 520px;
 }
 .ui-modal--lg {
-  max-width: 560px;
+  max-width: 720px;
+}
+.ui-modal--xl {
+  max-width: 960px;
 }
 
 /* --- ConfirmDialog --- */
@@ -227,7 +238,9 @@
   color: var(--muted);
   font-size: 1.1rem;
   line-height: 1;
-  padding: 4px 8px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
   border-radius: 6px;
 }
 .ui-menu__trigger:hover {
@@ -238,7 +251,7 @@
   top: 100%;
   right: 0;
   margin-top: 4px;
-  min-width: 130px;
+  min-width: 190px;
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: 8px;

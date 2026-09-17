@@ -16,7 +16,6 @@ import Button from './components/ui/Button'
 import ToastStack from './components/ui/Toast'
 import NotificationHistory from './components/ui/NotificationHistory'
 import { useNotificationFeed } from './hooks/useNotificationFeed'
-import { getNextResurfacing } from './api'
 import './App.css'
 
 // View state lives in the URL (V3-5.1). Still no router dependency — the History API is enough
@@ -57,13 +56,12 @@ function pathToView(pathname) {
   const roadmap = pathname.match(/^\/roadmap\/(\d+)(?:\/classic)?$/)
   if (roadmap) return { name: 'roadmap', id: Number(roadmap[1]) }
   const name = Object.keys(PATHS).find((k) => PATHS[k] === pathname)
-  if (name === 'generateRoadmap') return { name: 'roadmaps' }
+  if (name === 'generateRoadmap') return { name: 'generateRoadmap' }
   return name ? { name } : { name: 'capture' }
 }
 
 export default function App() {
-  // Start in a brief check so a stalled thing can surface *before* the capture screen.
-  const [view, setView] = useState({ name: 'loading' })
+  const [view, setView] = useState(() => pathToView(window.location.pathname))
   // Global background-work feed (V3-10) — mounted once here, not per-screen, so a toast still
   // shows up after navigating away from whatever started the work.
   const { toasts, dismiss } = useNotificationFeed()
@@ -78,26 +76,9 @@ export default function App() {
   }
 
   useEffect(() => {
-    let alive = true
-    const landing = pathToView(window.location.pathname)
-
-    // An explicit deep link wins over the resurfacing check — being sent somewhere else after
-    // deliberately opening a roadmap would read as the app losing your place.
-    if (landing.name !== 'capture') {
-      setView(landing)
-    } else {
-      getNextResurfacing()
-        .then((prompt) => {
-          if (!alive) return
-          setView(prompt ? { name: 'resurfacing', prompt } : { name: 'capture' })
-        })
-        .catch(() => alive && setView({ name: 'capture' }))
-    }
-
     const onPop = () => setView(pathToView(window.location.pathname))
     window.addEventListener('popstate', onPop)
     return () => {
-      alive = false
       window.removeEventListener('popstate', onPop)
     }
   }, [])
@@ -208,7 +189,14 @@ export default function App() {
 
       {/* Outside the per-view ErrorBoundary on purpose — a screen crash shouldn't take the
           toast layer down with it. */}
-      <ToastStack toasts={toasts} onDismiss={dismiss} />
+      <ToastStack
+        toasts={toasts}
+        onDismiss={dismiss}
+        onAction={(context) => {
+          if (context?.roadmapId) go('roadmap', { id: context.roadmapId })
+          else if (context?.entryId) go('all')
+        }}
+      />
     </div>
   )
 }

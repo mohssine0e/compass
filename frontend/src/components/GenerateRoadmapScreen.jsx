@@ -91,6 +91,50 @@ export default function GenerateRoadmapScreen({ initialGoal, initialResult, onCr
   const [error, setError] = useState(null)
   // 503 = drafting unavailable; offer the manual form instead of a dead end.
   const [unavailable, setUnavailable] = useState(false)
+  const [restoredDraft, setRestoredDraft] = useState(false)
+
+  // One active draft is intentional: the draft screen is a single in-progress workspace, and
+  // this key remains stable while the user types or changes the goal.
+  const draftKey = 'compass:roadmap-draft:active'
+
+  useEffect(() => {
+    if (initialResult || restoredDraft) return
+    try {
+      const saved = JSON.parse(localStorage.getItem(draftKey) || 'null')
+      if (!saved) return
+      if (saved.goal) setGoal(saved.goal)
+      if (saved.phase && ['questions', 'outline', 'flat'].includes(saved.phase)) setPhase(saved.phase)
+      if (saved.title) setTitle(saved.title)
+      if (saved.questions) setQuestions(saved.questions)
+      if (saved.answers) setAnswers(saved.answers)
+      if (saved.priorClarifications) setPriorClarifications(saved.priorClarifications)
+      if (saved.modules) setModules(saved.modules)
+      if (saved.flatSteps) setFlatSteps(saved.flatSteps)
+      if (saved.interpretation) setInterpretation(saved.interpretation)
+      if (saved.skipped) setSkipped(saved.skipped)
+      if (saved.sources) setSources(saved.sources)
+      if (saved.assessment) setAssessment(saved.assessment)
+      if (saved.tier) setTier(saved.tier)
+      setRestoredDraft(true)
+    } catch {
+      localStorage.removeItem(draftKey)
+    }
+  }, [draftKey, initialResult, restoredDraft])
+
+  useEffect(() => {
+    if (phase === 'goal' || busy || initialResult) return
+    const snapshot = { goal, phase, title, questions, answers, priorClarifications, modules, flatSteps,
+      interpretation, skipped, sources, assessment, tier, savedAt: Date.now() }
+    localStorage.setItem(draftKey, JSON.stringify(snapshot))
+  }, [draftKey, phase, goal, title, questions, answers, priorClarifications, modules, flatSteps,
+    interpretation, skipped, sources, assessment, tier, busy, initialResult])
+
+  function regenerateDraft() {
+    localStorage.removeItem(draftKey)
+    setPhase('goal')
+    setQuestions([]); setAnswers([]); setModules([]); setFlatSteps([])
+    setTitle(''); setInterpretation(null); setError(null); setRestoredDraft(false)
+  }
 
   useEffect(() => {
     if (!busy) {
@@ -506,6 +550,7 @@ export default function GenerateRoadmapScreen({ initialGoal, initialResult, onCr
 
       {phase === 'outline' && (
         <>
+          {restoredDraft && <div className="gen-draft-banner"><span>Saved draft</span><Button variant="ghost" onClick={regenerateDraft}>Regenerate draft</Button></div>}
           <p className="gen-lead">
             A shape, not a full plan yet. Change anything, then expand each module into steps
             when you're ready to work on it.
@@ -594,6 +639,7 @@ export default function GenerateRoadmapScreen({ initialGoal, initialResult, onCr
 
       {phase === 'flat' && (
         <>
+          {restoredDraft && <div className="gen-draft-banner"><span>Saved draft</span><Button variant="ghost" onClick={regenerateDraft}>Regenerate draft</Button></div>}
           <p className="gen-lead">
             A step list, not a full plan yet. Change anything before keeping it.
           </p>

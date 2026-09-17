@@ -4,6 +4,7 @@ import com.compass.app.entry.EntryStatus;
 import com.compass.app.entry.Significance;
 
 import java.util.Map;
+import java.time.Instant;
 
 /**
  * Partial update. Only non-null fields are applied. Phase 1's main use is
@@ -28,11 +29,13 @@ public record PatchEntryRequest(
         EntryStatus status,
         Significance significance,
         String text,
+        String title,
         Long dependsOn,
         String notes,
         String verify,
         Map<String, Object> content,
         String projectUrl,
-        Map<String, Boolean> collapseOverrides
+        Map<String, Boolean> collapseOverrides,
+        Instant expectedUpdatedAt
 ) {
 }

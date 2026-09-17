@@ -6,5 +6,5 @@ package com.compass.app.verification.dto;
  * 0-based index for a {@code multiple_choice} check instead — at most one is actually read,
  * depending on the pending check's format.
  */
-public record VerifyRequest(String answer, Integer selectedIndex) {
+public record VerifyRequest(String answer, Integer selectedIndex, Integer confidence) {
 }

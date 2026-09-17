@@ -12,6 +12,7 @@ import com.compass.app.topic.CanonicalTopic;
 import com.compass.app.topic.CanonicalTopicRepository;
 import com.compass.app.ai.EmbeddingService;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -37,20 +38,31 @@ import java.util.Map;
 @Service
 public class RoadmapStructureService {
 
+    private static final int MAX_CHANGE_HISTORY = 100;
+
     private final EntryRepository repository;
     private final RoadmapQueryService queryService;
     private final CanonicalTopicRepository canonicalTopics;
     private final EmbeddingService embeddings;
     private final ReviewAiService reviewAi;
+    private final RoadmapDependencyService dependencies;
 
+    @Autowired
     public RoadmapStructureService(EntryRepository repository, RoadmapQueryService queryService,
                                    CanonicalTopicRepository canonicalTopics, EmbeddingService embeddings,
-                                   ReviewAiService reviewAi) {
+                                   ReviewAiService reviewAi, RoadmapDependencyService dependencies) {
         this.repository = repository;
         this.queryService = queryService;
         this.canonicalTopics = canonicalTopics;
         this.embeddings = embeddings;
         this.reviewAi = reviewAi;
+        this.dependencies = dependencies;
+    }
+
+    public RoadmapStructureService(EntryRepository repository, RoadmapQueryService queryService,
+                                   CanonicalTopicRepository canonicalTopics, EmbeddingService embeddings,
+                                   ReviewAiService reviewAi) {
+        this(repository, queryService, canonicalTopics, embeddings, reviewAi, null);
     }
 
     @Transactional
@@ -228,7 +240,8 @@ public class RoadmapStructureService {
             // A cross-module id (Phase 18) is already a real, existing step — resolve it
             // directly, no index translation needed.
             if (draft.dependsOnEntryId() != null) {
-                step.setDependsOn(draft.dependsOnEntryId());
+                Entry prerequisite = dependencies.validate(step, draft.dependsOnEntryId());
+                step.setDependsOn(prerequisite.getId());
                 repository.save(step);
                 continue;
             }
@@ -296,6 +309,7 @@ public class RoadmapStructureService {
         module.setContent(content);
         repository.save(module);
         repository.touchUpdatedAt(roadmapId, Instant.now());
+        recordChange(roadmapId, "module_updated", Map.of("moduleId", moduleId));
     }
 
     /** Insert a new, empty module at {@code position} (Phase 18) — accept half of "propose a new module". */
@@ -310,6 +324,10 @@ public class RoadmapStructureService {
         List<Entry> modules = repository.findByParentIdOrderByOrderIndexAsc(roadmapId).stream()
                 .filter(e -> e.getType() == EntryType.ROADMAP)
                 .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        Entry existing = modules.stream()
+                .filter(module -> sameText(module.getContent().get("title"), trimmedTitle))
+                .findFirst().orElse(null);
+        if (existing != null) return existing;
         int insertAt = position == null ? modules.size() : Math.max(0, Math.min(position, modules.size()));
 
         Entry module = new Entry();
@@ -326,6 +344,7 @@ public class RoadmapStructureService {
         modules.add(insertAt, module);
         reindexAndSave(modules);
         repository.touchUpdatedAt(roadmapId, Instant.now());
+        recordChange(roadmapId, "module_inserted", Map.of("moduleId", module.getId()));
         return module;
     }
 
@@ -361,6 +380,7 @@ public class RoadmapStructureService {
         }
         reindexAndSave(reordered);
         repository.touchUpdatedAt(roadmapId, Instant.now());
+        recordChange(roadmapId, "steps_reordered", Map.of("stepIds", orderedStepIds));
     }
 
     /**
@@ -376,6 +396,11 @@ public class RoadmapStructureService {
         }
 
         List<Entry> steps = queryService.stepsOf(roadmapId);
+        Entry existing = steps.stream()
+                .filter(step -> step.getType() == EntryType.ROADMAP_STEP)
+                .filter(step -> sameText(step.getContent().get("text"), trimmed))
+                .findFirst().orElse(null);
+        if (existing != null) return existing;
         int insertAt = position == null
                 ? steps.size()
                 : Math.max(0, Math.min(position, steps.size()));
@@ -391,7 +416,14 @@ public class RoadmapStructureService {
         steps.add(insertAt, step);
         reindexAndSave(steps);
         repository.touchUpdatedAt(roadmapId, Instant.now());
+        recordChange(roadmapId, "step_inserted", Map.of("stepId", step.getId()));
         return step;
+    }
+
+    private static boolean sameText(Object stored, String requested) {
+        if (!(stored instanceof String text)) return false;
+        return text.trim().replaceAll("\\s+", " ").equalsIgnoreCase(
+                requested.trim().replaceAll("\\s+", " "));
     }
 
     /**
@@ -423,6 +455,7 @@ public class RoadmapStructureService {
         createDraftSteps(original.getId(), clean);
         inheritResources(original);
         repository.touchUpdatedAt(roadmapId, Instant.now());
+        recordChange(roadmapId, "step_split", Map.of("stepId", stepId));
     }
 
     /**
@@ -476,6 +509,8 @@ public class RoadmapStructureService {
         target.setDependsOn(prerequisite.getId());
         repository.save(target);
         repository.touchUpdatedAt(roadmapId, Instant.now());
+        recordChange(roadmapId, "prerequisite_added", Map.of(
+                "stepId", stepId, "prerequisiteId", prerequisite.getId()));
         return prerequisite;
     }
 
@@ -502,6 +537,7 @@ public class RoadmapStructureService {
         }
         repository.deleteAll(substeps);
         repository.touchUpdatedAt(roadmapId, Instant.now());
+        recordChange(roadmapId, "step_flattened", Map.of("stepId", stepId));
     }
 
     /** Any sign of real engagement — self-marked progress, notes, or a tracked session. */
@@ -551,6 +587,42 @@ public class RoadmapStructureService {
         newSiblings.add(Math.min(afterOldParent, newSiblings.size()), step);
         reindexAndSave(newSiblings);
         repository.touchUpdatedAt(roadmapId, Instant.now());
+        recordChange(roadmapId, "step_graduated", Map.of("stepId", stepId));
+    }
+
+    @Transactional
+    public Entry promoteStepToModule(Long roadmapId, Long stepId) {
+        Entry roadmap = queryService.getRoadmap(roadmapId);
+        Entry step = repository.findById(stepId)
+                .filter(e -> e.getType() == EntryType.ROADMAP_STEP)
+                .orElseThrow(() -> new java.util.NoSuchElementException("No step " + stepId));
+        if (!roadmapId.equals(step.getParentId())) {
+            throw new IllegalArgumentException("Only a top-level step can become a module.");
+        }
+        String title = step.getContent() != null && step.getContent().get("text") instanceof String s
+                ? s.trim() : "";
+        if (title.isEmpty()) throw new IllegalArgumentException("The step needs text first.");
+        List<Entry> siblings = repository.findByParentIdOrderByOrderIndexAsc(roadmapId);
+        int position = indexOfStep(siblings, stepId, roadmapId);
+        Entry module = new Entry();
+        module.setType(EntryType.ROADMAP);
+        module.setStatus(step.getStatus());
+        module.setParentId(roadmapId);
+        module.setOrderIndex(step.getOrderIndex());
+        Map<String, Object> moduleContent = new HashMap<>();
+        moduleContent.put("title", title);
+        moduleContent.put("scope", "Promoted from a roadmap step.");
+        module.setContent(moduleContent);
+        repository.save(module);
+        step.setParentId(module.getId());
+        step.setOrderIndex(0);
+        repository.save(step);
+        siblings.remove(step);
+        siblings.add(position, module);
+        reindexAndSave(siblings);
+        repository.touchUpdatedAt(roadmapId, Instant.now());
+        recordChange(roadmapId, "step_promoted_to_module", Map.of("stepId", stepId, "moduleId", module.getId()));
+        return module;
     }
 
     private Entry newStep(Long roadmapId, String text) {
@@ -583,12 +655,17 @@ public class RoadmapStructureService {
                 .filter(s -> s.getType() == EntryType.ROADMAP_STEP)
                 .orElseThrow(() -> new java.util.NoSuchElementException(
                         "No step " + stepId + " on roadmap " + roadmapId));
+        List<Entry> ancestors = repository.findAncestors(stepId);
+        if (ancestors.isEmpty() || !roadmapId.equals(ancestors.get(ancestors.size() - 1).getId())) {
+            throw new IllegalArgumentException("That step does not belong to this roadmap.");
+        }
         Long parentId = toDelete.getParentId();
 
         repository.delete(toDelete);
         List<Entry> siblings = repository.findByParentIdOrderByOrderIndexAsc(parentId);
         reindexAndSave(siblings);
         repository.touchUpdatedAt(roadmapId, Instant.now());
+        recordChange(roadmapId, "step_deleted", Map.of("stepId", stepId));
     }
 
     /** Reassigns order_index 0..n-1 to match list order, then persists all of them. */
@@ -607,15 +684,39 @@ public class RoadmapStructureService {
     public Entry setArchived(Long roadmapId, boolean archived) {
         Entry roadmap = queryService.getRoadmap(roadmapId);
         roadmap.setStatus(archived ? EntryStatus.ARCHIVED : EntryStatus.IN_MOTION);
-        return repository.save(roadmap);
+        Entry saved = repository.save(roadmap);
+        recordChange(roadmapId, archived ? "roadmap_archived" : "roadmap_restored", Map.of());
+        return saved;
     }
 
     /** Delete a whole roadmap and every step under it (Phase 12). Not reversible. */
     @Transactional
     public void deleteRoadmap(Long roadmapId) {
-        queryService.getRoadmap(roadmapId); // 404 if it isn't a roadmap
-        repository.deleteAll(queryService.stepsOf(roadmapId));
-        repository.deleteById(roadmapId);
+        Entry roadmap = queryService.getRoadmap(roadmapId);
+        if (roadmap.getParentId() != null) {
+            throw new IllegalArgumentException("Delete modules through their parent roadmap.");
+        }
+        repository.delete(roadmap);
+    }
+
+    @SuppressWarnings("unchecked")
+    public void recordChange(Long roadmapId, String action, Map<String, Object> details) {
+        Entry roadmap = queryService.getRoadmap(roadmapId);
+        Map<String, Object> content = roadmap.getContent() == null
+                ? new HashMap<>() : new HashMap<>(roadmap.getContent());
+        List<Object> history = content.get("changeHistory") instanceof List<?> list
+                ? new ArrayList<>((List<Object>) list) : new ArrayList<>();
+        Map<String, Object> item = new java.util.LinkedHashMap<>();
+        item.put("at", Instant.now().toString());
+        item.put("action", action);
+        if (details != null && !details.isEmpty()) item.put("details", details);
+        history.add(item);
+        if (history.size() > MAX_CHANGE_HISTORY) {
+            history.subList(0, history.size() - MAX_CHANGE_HISTORY).clear();
+        }
+        content.put("changeHistory", history);
+        roadmap.setContent(content);
+        repository.save(roadmap);
     }
 
     /**

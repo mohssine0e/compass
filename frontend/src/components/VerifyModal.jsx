@@ -32,6 +32,7 @@ export default function VerifyModal({ step, onClose, onPassed, onOverride, onCha
   // null | 'accepted' | 'dismissed'
   const [prerequisiteHandled, setPrerequisiteHandled] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [confidence, setConfidence] = useState(null)
   const [error, setError] = useState(null)
 
   function fetchCheck(requestedFormat) {
@@ -75,7 +76,7 @@ export default function VerifyModal({ step, onClose, onPassed, onOverride, onCha
     setPrerequisiteHandled(null)
     try {
       const res = await verifyStep(step.id, isChoice ? null : answer.trim(),
-        isChoice ? selectedIndex : null)
+        isChoice ? selectedIndex : null, confidence)
       if (res.passed) {
         onPassed()
       } else {
@@ -95,7 +96,11 @@ export default function VerifyModal({ step, onClose, onPassed, onOverride, onCha
     setBusy(true)
     setError(null)
     try {
-      await applyReformulate(step.id, { kind: 'add_prerequisite', prerequisite: suggestedPrerequisite })
+      await applyReformulate(step.id, {
+        kind: 'add_prerequisite',
+        prerequisite: suggestedPrerequisite,
+        sourceUpdatedAt: step.updatedAt,
+      })
       setPrerequisiteHandled('accepted')
       onChanged?.()
     } catch (err) {
@@ -189,6 +194,14 @@ export default function VerifyModal({ step, onClose, onPassed, onOverride, onCha
             <p className="verify-prerequisite-done">Added as a step before this one.</p>
           )}
           {error && <p className="verify-error">{error}</p>}
+          <div className="verify-confidence">
+            <span>How sure were you?</span>
+            {[1, 2, 3].map((value) => (
+              <Chip key={value} toggle pressed={confidence === value} onClick={() => setConfidence(value)}>
+                {value === 1 ? 'Not sure' : value === 2 ? 'Somewhat' : 'Very sure'}
+              </Chip>
+            ))}
+          </div>
           <div className="verify-actions">
             <Button variant="danger" className="verify-override" onClick={onOverride} disabled={busy}>
               Mark done anyway

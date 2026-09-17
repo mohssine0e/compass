@@ -50,6 +50,10 @@ public record ResurfacingPrompt(
             Option.restructure("break_down", "break this step down"),
             Option.restructure("add_prerequisite", "something's missing first"));
 
+    private static final List<Option> REPEATED_SKIP_OPTIONS = List.of(
+            Option.respond("defer", "leave it for two weeks"),
+            Option.respond("lost_interest", "drop it"));
+
     /**
      * A normal resurface of a stalled idea/roadmap: an honest question + answer options.
      * {@code canBreakDown} (Phase 20) omits the "break this step down" option once the current
@@ -68,6 +72,10 @@ public record ResurfacingPrompt(
 
     private static List<Option> optionsFor(Entry entry, boolean canBreakDown) {
         List<Option> options = new ArrayList<>(DEFAULT_OPTIONS);
+        if (entry != null && entry.getSkipCount() >= 2) {
+            options.removeIf(option -> "still_relevant".equals(option.value()));
+            options.addAll(REPEATED_SKIP_OPTIONS);
+        }
         if (entry != null && entry.getType() == EntryType.ROADMAP) {
             for (Option o : RESTRUCTURE_OPTIONS) {
                 if (canBreakDown || !"break_down".equals(o.value())) {

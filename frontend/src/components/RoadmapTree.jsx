@@ -15,10 +15,8 @@ function StepRow({ node, depth, parentType, ctx }) {
   const isDropped = node.status === 'dropped'
   const state = isDone ? 'is-done' : isDropped ? 'is-dropped' : isCurrent ? 'is-current' : 'is-upcoming'
   const isEditing = ctx.editingStepId === node.id
-  // RB-4.9: a same-module dependency that isn't done yet blocks completion; a cross-module one
-  // is a reminder only — the founder can still complete the step regardless.
   const dep = dependencyInfo(node, ctx.nodeIndex)
-  const blocked = Boolean(dep && !dep.done && !dep.crossModule)
+  const blocked = Boolean(dep && !dep.done)
   // Spaced retrieval (Phase 8) runs invisibly between resurfacing prompts otherwise — a quiet
   // reminder it's still tracking this step. Only ever set on a step that passed an actual
   // AI-graded check; self-reported "off" mode steps have nothing to recheck against.
@@ -27,6 +25,7 @@ function StepRow({ node, depth, parentType, ctx }) {
     { label: 'Edit', onClick: () => ctx.startEdit(node), icon: <IconEdit /> },
     { label: 'Break down', onClick: () => ctx.startBreakDown(node) },
     ...(depth === 0 ? [{ label: 'Insert step above', onClick: () => ctx.startInsert(node.orderIndex) }] : []),
+    ...(depth === 0 ? [{ label: 'Promote to module', onClick: () => ctx.promoteStepAction(node) }] : []),
     ...(parentType === 'roadmap_step'
       ? [{ label: 'Graduate (move up a level)', onClick: () => ctx.graduateStepAction(node) }]
       : []),
@@ -81,9 +80,7 @@ function StepRow({ node, depth, parentType, ctx }) {
                   title={
                     blocked
                       ? `Blocked until "${dep.text}" is done`
-                      : dep.crossModule
-                        ? `Depends on "${dep.text}" from a different module — reminder only, not a blocker`
-                        : undefined
+                      : `Depends on "${dep.text}"`
                   }
                 >
                   {blocked ? '🔒' : '⛓️'} needs: {dep.text}
@@ -202,16 +199,19 @@ function EmptyModuleNode({ node, depth, ctx }) {
         {nodeText(node)}
         {node.content?.scope && <span className="node-group-scope"> — {node.content.scope}</span>}
       </span>
-      <Button variant="ghost" onClick={() => ctx.dispatchPanel({ type: 'regenerateModule', moduleId: node.id })}>
-        Regenerate scope
-      </Button>
       {isPending ? (
         <span className="node-group-working" aria-live="polite">Working on it…</span>
       ) : (
-        <Button variant="ghost" onClick={() => ctx.dispatchPanel({ type: 'expandModule', moduleId: node.id })}>
+        <Button className="node-group-primary-action" variant="primary" onClick={() => ctx.dispatchPanel({ type: 'expandModule', moduleId: node.id })}>
           {isDone ? `Review ${stepCount} step${stepCount === 1 ? '' : 's'}` : 'Expand this module'}
         </Button>
       )}
+      <Menu
+        label={`Actions for ${nodeText(node)}`}
+        items={[
+          { label: 'Regenerate scope', onClick: () => ctx.dispatchPanel({ type: 'regenerateModule', moduleId: node.id }) },
+        ]}
+      />
     </li>
   )
 }

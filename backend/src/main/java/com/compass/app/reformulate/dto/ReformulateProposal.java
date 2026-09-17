@@ -4,6 +4,7 @@ import com.compass.app.roadmap.dto.GenerateRoadmapResponse;
 
 import java.util.List;
 import java.util.Map;
+import java.time.Instant;
 
 /**
  * A proposed reformulation of one step the user found too hard/big/abstract (Phase 8.5) — not
@@ -25,24 +26,27 @@ public record ReformulateProposal(
         String prerequisite,
         String why,
         List<Map<String, Object>> resources,
-        String note
+        String note,
+        Instant sourceUpdatedAt
 ) {
     public static ReformulateProposal breakDown(Long roadmapId, Long stepId, String stepText,
                                                 List<GenerateRoadmapResponse.ProposedStep> steps,
-                                                String note) {
+                                                String note, Instant sourceUpdatedAt) {
         return new ReformulateProposal("break_down", roadmapId, stepId, stepText, steps,
-                null, null, null, note);
+                null, null, null, note, sourceUpdatedAt);
     }
 
     public static ReformulateProposal prerequisite(Long roadmapId, Long stepId, String stepText,
-                                                   String prerequisite, String why, String note) {
+                                                   String prerequisite, String why, String note,
+                                                   Instant sourceUpdatedAt) {
         return new ReformulateProposal("add_prerequisite", roadmapId, stepId, stepText, null,
-                prerequisite, why, null, note);
+                prerequisite, why, null, note, sourceUpdatedAt);
     }
 
     public static ReformulateProposal resources(Long roadmapId, Long stepId, String stepText,
-                                                List<Map<String, Object>> resources, String note) {
+                                                List<Map<String, Object>> resources, String note,
+                                                Instant sourceUpdatedAt) {
         return new ReformulateProposal("easier_resources", roadmapId, stepId, stepText, null,
-                null, null, resources, note);
+                null, null, resources, note, sourceUpdatedAt);
     }
 }

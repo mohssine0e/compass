@@ -64,7 +64,7 @@ export default function ExpandModulesBatchModal({ roadmapId, modules, onClose, o
   const allApplied = results && results.every((r) => !r.result || appliedIds.has(r.moduleId))
 
   return (
-    <Modal onClose={onClose} title={`Expanding ${modules.length} modules`} size="lg">
+    <Modal onClose={onClose} title={`Expanding ${modules.length} modules`} size="xl">
       {!results && <p className="deep-faint">Drafting steps for {modules.length} modules at once…</p>}
       {error && <p className="roadmap-error">{error}</p>}
       {results && results.map((r) => {

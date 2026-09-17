@@ -32,12 +32,16 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 
 /**
- * The resurfacing engine: decides the one stalled thing worth bringing back before the next
- * capture, and records what the user does about it. Queries {@code entries} generically via
+ * The resurfacing engine: decides the one stalled thing worth bringing back
+ * before the next
+ * capture, and records what the user does about it. Queries {@code entries}
+ * generically via
  * the repository (see CLAUDE.md Section 4) — not tied to any single entry type.
  */
 @Service
 public class ResurfacingService {
+
+    private static final int MAX_RESURFACE_LOG = 100;
 
     private final EntryRepository repository;
     private final AiVoiceService aiVoice;
@@ -50,11 +54,11 @@ public class ResurfacingService {
     private final int snoozeDays;
 
     public ResurfacingService(EntryRepository repository, AiVoiceService aiVoice,
-                              RoadmapAiService roadmapAi, RoadmapService roadmapService,
-                              VerificationService verificationService,
-                              ProfileService profileService, SearchGroundingService searchGrounding,
-                              @Value("${compass.resurfacing.stale-days:3}") int staleDays,
-                              @Value("${compass.resurfacing.snooze-days:1}") int snoozeDays) {
+            RoadmapAiService roadmapAi, RoadmapService roadmapService,
+            VerificationService verificationService,
+            ProfileService profileService, SearchGroundingService searchGrounding,
+            @Value("${compass.resurfacing.stale-days:3}") int staleDays,
+            @Value("${compass.resurfacing.snooze-days:1}") int snoozeDays) {
         this.repository = repository;
         this.aiVoice = aiVoice;
         this.roadmapAi = roadmapAi;
@@ -67,8 +71,10 @@ public class ResurfacingService {
     }
 
     /**
-     * A spaced recheck of a done step that's due, as a resurfacing prompt — checked before the
-     * normal stalled-thing resurface so overdue rechecks come first. Empty when none is due.
+     * A spaced recheck of a done step that's due, as a resurfacing prompt — checked
+     * before the
+     * normal stalled-thing resurface so overdue rechecks come first. Empty when
+     * none is due.
      */
     @Transactional
     public Optional<ResurfacingPrompt> nextRecheckPrompt() {
@@ -79,12 +85,14 @@ public class ResurfacingService {
     }
 
     /**
-     * Answer a spaced recheck. Delegates the judging/rescheduling to the verification service,
-     * and stamps last_resurfaced_at so the same step isn't rechecked again next open.
+     * Answer a spaced recheck. Delegates the judging/rescheduling to the
+     * verification service,
+     * and stamps last_resurfaced_at so the same step isn't rechecked again next
+     * open.
      */
     @Transactional
-    public VerifyResult recheck(Long stepId, String answer) {
-        VerifyResult result = verificationService.recheck(stepId, answer);
+    public VerifyResult recheck(Long stepId, String answer, Integer confidence) {
+        VerifyResult result = verificationService.recheck(stepId, answer, confidence);
         repository.findById(stepId).ifPresent(step -> {
             step.setLastResurfacedAt(Instant.now());
             repository.save(step);
@@ -92,7 +100,9 @@ public class ResurfacingService {
         return result;
     }
 
-    /** The next entry worth resurfacing, or empty if nothing qualifies right now. */
+    /**
+     * The next entry worth resurfacing, or empty if nothing qualifies right now.
+     */
     @Transactional(readOnly = true)
     public Optional<Entry> nextCandidate() {
         Instant now = Instant.now();
@@ -101,15 +111,21 @@ public class ResurfacingService {
                 now.minus(snoozeDays, ChronoUnit.DAYS));
     }
 
-    /** The honest question to ask about an entry, in the self-talk voice (never null). */
+    /**
+     * The honest question to ask about an entry, in the self-talk voice (never
+     * null).
+     */
     public String question(Entry entry) {
         return aiVoice.resurfaceQuestion(entry, currentStepTextOf(entry), entry.getSkipCount());
     }
 
     /**
-     * A self-talk note drawing on THIS thread's own history (per-topic, not global, per
-     * CLAUDE.md), or {@code null} when there's no prior history — which is itself the signal
-     * that the prompt is in generic mode. Kept template-based and specific to the last response.
+     * A self-talk note drawing on THIS thread's own history (per-topic, not global,
+     * per
+     * CLAUDE.md), or {@code null} when there's no prior history — which is itself
+     * the signal
+     * that the prompt is in generic mode. Kept template-based and specific to the
+     * last response.
      */
     @SuppressWarnings("unchecked")
     public String historyNote(Entry entry) {
@@ -135,7 +151,10 @@ public class ResurfacingService {
                 : "This has come up " + times + " times — last time, " + phrase + ".";
     }
 
-    /** The text of the step a stalled roadmap is currently on, or null (not a roadmap / none left). */
+    /**
+     * The text of the step a stalled roadmap is currently on, or null (not a
+     * roadmap / none left).
+     */
     String currentStepTextOf(Entry entry) {
         Entry step = currentStepOf(entry);
         if (step == null) {
@@ -146,8 +165,10 @@ public class ResurfacingService {
     }
 
     /**
-     * Whether the current step (if any) is shallow enough for "break this step down" to still be
-     * a valid restructure option (Phase 20) — checked when building the prompt so the option
+     * Whether the current step (if any) is shallow enough for "break this step
+     * down" to still be
+     * a valid restructure option (Phase 20) — checked when building the prompt so
+     * the option
      * isn't offered only to be rejected on apply.
      */
     public boolean canBreakDownCurrentStep(Entry entry) {
@@ -156,14 +177,22 @@ public class ResurfacingService {
     }
 
     /**
-     * The first not-done, not-dropped <em>leaf</em> step of a roadmap — where you actually are.
+     * The first not-done, not-dropped <em>leaf</em> step of a roadmap — where you
+     * actually are.
      *
-     * <p>This used to take the first unfinished direct child, which on a nested roadmap is a
-     * <em>module</em>, not a step. Modules store {@code {title, scope}} and no {@code text}, so
-     * {@link #currentStepTextOf} then read a field that was always absent and the resurfacing
-     * question fell back to generic phrasing for every TOPIC and CAREER roadmap — precisely the
-     * "genericness breaks the illusion" failure CLAUDE.md §2 calls out. It also meant
-     * {@link #canBreakDownCurrentStep} was depth-checking a module instead of a step.
+     * <p>
+     * This used to take the first unfinished direct child, which on a nested
+     * roadmap is a
+     * <em>module</em>, not a step. Modules store {@code {title, scope}} and no
+     * {@code text}, so
+     * {@link #currentStepTextOf} then read a field that was always absent and the
+     * resurfacing
+     * question fell back to generic phrasing for every TOPIC and CAREER roadmap —
+     * precisely the
+     * "genericness breaks the illusion" failure CLAUDE.md §2 calls out. It also
+     * meant
+     * {@link #canBreakDownCurrentStep} was depth-checking a module instead of a
+     * step.
      */
     Entry currentStepOf(Entry entry) {
         if (entry == null || entry.getType() != com.compass.app.entry.EntryType.ROADMAP) {
@@ -176,10 +205,14 @@ public class ResurfacingService {
     }
 
     /**
-     * Record the user's response to a resurfacing prompt. Every response — including a skip —
-     * stamps {@code last_resurfaced_at} so the same item isn't shown again next open; the
-     * option chosen may also change the entry's state (lost interest → dropped; engaging →
-     * developing). Free text / voice arrives as {@code something_else} with {@code text}.
+     * Record the user's response to a resurfacing prompt. Every response —
+     * including a skip —
+     * stamps {@code last_resurfaced_at} so the same item isn't shown again next
+     * open; the
+     * option chosen may also change the entry's state (lost interest → dropped;
+     * engaging →
+     * developing). Free text / voice arrives as {@code something_else} with
+     * {@code text}.
      */
     @Transactional
     public Entry respond(Long id, String option, String text) {
@@ -195,6 +228,7 @@ public class ResurfacingService {
 
         switch (choice) {
             case "lost_interest" -> entry.setStatus(EntryStatus.DROPPED);
+            case "defer" -> entry.setLastResurfacedAt(Instant.now().plus(13, ChronoUnit.DAYS));
             case "something_else" -> {
                 // Engaging with it, in their own words — nudge it forward and keep the note.
                 if (entry.getStatus() == EntryStatus.CAPTURED) {
@@ -205,13 +239,16 @@ public class ResurfacingService {
                     createNextStepTask(entry, note.trim());
                 }
             }
-            // still_relevant / stuck / skip: no state change, just the resurface stamp below.
+            // still_relevant / stuck / skip: no state change, just the resurface stamp
+            // below.
             default -> {
             }
         }
 
-        // Track a *current streak* of avoidance: a skip adds to it; any real engagement clears
-        // it, so the self-talk voice can tell one skip from a pattern (CLAUDE.md Section 2).
+        // Track a *current streak* of avoidance: a skip adds to it; any real engagement
+        // clears
+        // it, so the self-talk voice can tell one skip from a pattern (CLAUDE.md
+        // Section 2).
         if ("skip".equals(choice)) {
             entry.setSkipCount(entry.getSkipCount() + 1);
         } else {
@@ -220,14 +257,19 @@ public class ResurfacingService {
 
         appendResurfaceLog(content, choice, note);
         entry.setContent(content);
-        entry.setLastResurfacedAt(Instant.now());
+        if (!"defer".equals(choice)) {
+            entry.setLastResurfacedAt(Instant.now());
+        }
         return repository.save(entry);
     }
 
     /**
-     * Draft a restructuring of the roadmap's current step — never applied here (CLAUDE.md
-     * Phase 4: propose, the user approves, only then apply). {@code kind} is {@code break_down}
-     * or {@code add_prerequisite}. Throws {@link IllegalStateException} when the AI can't help
+     * Draft a restructuring of the roadmap's current step — never applied here
+     * (CLAUDE.md
+     * Phase 4: propose, the user approves, only then apply). {@code kind} is
+     * {@code break_down}
+     * or {@code add_prerequisite}. Throws {@link IllegalStateException} when the AI
+     * can't help
      * so the caller surfaces it rather than inventing an edit.
      */
     @Transactional(readOnly = true)
@@ -255,25 +297,26 @@ public class ResurfacingService {
                 SearchGroundingService.Grounding grounding = searchGrounding.ground(stepText);
                 String groundingContext = grounding == null ? null : grounding.context();
 
-                List<RoadmapAiService.DraftStep> smaller =
-                        roadmapAi.breakDownStep(title, stepText, profileContext, groundingContext,
-                                roadmapService.domainOf(roadmap.getId()));
+                List<RoadmapAiService.DraftStep> smaller = roadmapAi.breakDownStep(title, stepText, profileContext,
+                        groundingContext,
+                        roadmapService.domainOf(roadmap.getId()));
                 if (smaller == null) {
                     throw new IllegalStateException("Couldn't draft smaller steps right now.");
                 }
                 // Resources are no longer drafted here — the founder reviews the substep
-                // structure immediately, and the frontend fetches resources as a quick follow-up
+                // structure immediately, and the frontend fetches resources as a quick
+                // follow-up
                 // call (POST /resources/suggest) while the proposal is still open for review.
                 List<List<ResourceAiService.Resource>> noResources = smaller.stream()
                         .map(s -> List.<ResourceAiService.Resource>of()).toList();
                 List<GenerateRoadmapResponse.ProposedStep> proposedSteps = GenerateRoadmapResponse.proposal(
-                                null, null, smaller, noResources, List.of(), List.of(), null, Map.of())
+                        null, null, smaller, noResources, List.of(), List.of(), null, Map.of())
                         .steps();
                 yield RestructureProposal.breakDown(roadmap.getId(), step.getId(), stepText, proposedSteps);
             }
             case "add_prerequisite" -> {
-                RoadmapAiService.Prerequisite p =
-                        roadmapAi.proposePrerequisite(title, stepText, priorStepsText(roadmap.getId(), step), null);
+                RoadmapAiService.Prerequisite p = roadmapAi.proposePrerequisite(title, stepText,
+                        priorStepsText(roadmap.getId(), step), null);
                 if (p == null) {
                     throw new ConflictException("Nothing obvious is missing first — this may just need doing.");
                 }
@@ -285,8 +328,10 @@ public class ResurfacingService {
     }
 
     /**
-     * Apply an approved restructuring, then treat it as real engagement with the roadmap:
-     * clear the avoidance streak and stamp {@code last_resurfaced_at} so it isn't shown again
+     * Apply an approved restructuring, then treat it as real engagement with the
+     * roadmap:
+     * clear the avoidance streak and stamp {@code last_resurfaced_at} so it isn't
+     * shown again
      * next open. Returns the roadmap with its (now edited) steps.
      */
     @Transactional
@@ -320,7 +365,10 @@ public class ResurfacingService {
         return entry;
     }
 
-    /** The texts of the steps that come before {@code step}, as one block for the prompt. */
+    /**
+     * The texts of the steps that come before {@code step}, as one block for the
+     * prompt.
+     */
     private String priorStepsText(Long roadmapId, Entry step) {
         StringBuilder sb = new StringBuilder();
         for (Entry s : repository.findByParentIdOrderByOrderIndexAsc(roadmapId)) {
@@ -340,8 +388,20 @@ public class ResurfacingService {
         return value instanceof String s ? s : null;
     }
 
-    /** Turn a named next step into its own trackable task, linked to what it came from. */
+    /**
+     * Turn a named next step into its own trackable task, linked to what it came
+     * from.
+     */
     private void createNextStepTask(Entry parent, String text) {
+        String normalized = text.trim().replaceAll("\\s+", " ").toLowerCase(java.util.Locale.ROOT);
+        boolean exists = repository.findByParentIdOrderByOrderIndexAsc(parent.getId()).stream()
+                .filter(e -> e.getType() == EntryType.TASK)
+                .map(e -> stringField(e, "text"))
+                .filter(java.util.Objects::nonNull)
+                .map(s -> s.trim().replaceAll("\\s+", " ").toLowerCase(java.util.Locale.ROOT))
+                .anyMatch(normalized::equals);
+        if (exists)
+            return;
         Entry task = new Entry();
         task.setType(EntryType.TASK);
         task.setStatus(EntryStatus.CAPTURED);
@@ -363,6 +423,9 @@ public class ResurfacingService {
             entry.put("note", note);
         }
         log.add(entry);
+        if (log.size() > MAX_RESURFACE_LOG) {
+            log.subList(0, log.size() - MAX_RESURFACE_LOG).clear();
+        }
         content.put("resurfaceLog", log);
     }
 }

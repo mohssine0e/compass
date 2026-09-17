@@ -6,6 +6,30 @@
   font-weight: var(--weight-medium);
 }
 
+.gen-draft-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--brass);
+  border-radius: 10px;
+  color: var(--brass);
+  background: rgba(207, 157, 91, .08);
+  margin-bottom: 18px;
+}
+
+@media (max-width: 520px) {
+  .gen-draft-banner {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .gen-draft-banner .ui-btn {
+    width: 100%;
+  }
+}
+
 .gen-goal-card {
   display: flex;
   flex-direction: column;

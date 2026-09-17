@@ -49,7 +49,7 @@ export default function ReplanModulesModal({ roadmapId, draft, accept, onClose, 
   }
 
   return (
-    <Modal onClose={onClose} title="Replan remaining modules" size="lg">
+    <Modal onClose={onClose} title="Replan remaining modules" size="xl">
       {modules === null && !error && <p className="deep-faint">Working it out…</p>}
       {error && <p className="roadmap-error">{error}</p>}
       {modules && (

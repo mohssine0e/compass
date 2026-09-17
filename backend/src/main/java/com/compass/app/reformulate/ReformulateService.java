@@ -57,7 +57,7 @@ public class ReformulateService {
   @Transactional(readOnly = true)
   public ReformulateProposal propose(Long stepId, String kind) {
     Entry step = requireStep(stepId);
-    Long roadmapId = step.getParentId();
+    Long roadmapId = rootRoadmapId(step);
     String stepText = stringOf(step, "text");
     String roadmapTitle = roadmapId == null ? null
         : repository.findById(roadmapId).map(r -> stringOf(r, "text") != null
@@ -91,7 +91,7 @@ public class ReformulateService {
         List<GenerateRoadmapResponse.ProposedStep> proposedSteps = GenerateRoadmapResponse.proposal(
                 null, null, smaller, noResources, List.of(), List.of(), null, Map.of())
             .steps();
-        yield ReformulateProposal.breakDown(roadmapId, stepId, stepText, proposedSteps, note);
+        yield ReformulateProposal.breakDown(roadmapId, stepId, stepText, proposedSteps, note, step.getUpdatedAt());
       }
       case "add_prerequisite" -> {
         RoadmapAiService.Prerequisite p =
@@ -99,14 +99,15 @@ public class ReformulateService {
         if (p == null) {
           throw new ConflictException("Nothing obvious to revisit first — this may just need doing.");
         }
-        yield ReformulateProposal.prerequisite(roadmapId, stepId, stepText, p.step(), p.why(), note);
+        yield ReformulateProposal.prerequisite(roadmapId, stepId, stepText, p.step(), p.why(), note,
+            step.getUpdatedAt());
       }
       case "easier_resources" -> {
         List<Map<String, Object>> resources = easierResources(stepText);
         if (resources.isEmpty()) {
           throw new IllegalStateException("Couldn't find gentler resources right now.");
         }
-        yield ReformulateProposal.resources(roadmapId, stepId, stepText, resources, note);
+        yield ReformulateProposal.resources(roadmapId, stepId, stepText, resources, note, step.getUpdatedAt());
       }
       default -> throw new IllegalArgumentException("Unknown reformulation: " + kind);
     };
@@ -116,7 +117,11 @@ public class ReformulateService {
   @Transactional
   public void apply(Long stepId, ApplyReformulateRequest req) {
     Entry step = requireStep(stepId);
-    Long roadmapId = step.getParentId();
+    if (req.sourceUpdatedAt() != null && !req.sourceUpdatedAt().equals(step.getUpdatedAt())) {
+      throw new com.compass.app.config.ConflictException(
+          "This step changed after the proposal was written. Draft it again.");
+    }
+    Long roadmapId = rootRoadmapId(step);
 
     switch (req.kind() == null ? "" : req.kind()) {
       case "break_down" -> roadmapService.splitStep(roadmapId, stepId, req.draftSteps());
@@ -171,6 +176,12 @@ public class ReformulateService {
     step.setContent(content);
     repository.save(step);
     touchParent(step);
+  }
+
+  private Long rootRoadmapId(Entry entry) {
+    List<Entry> ancestors = repository.findAncestors(entry.getId());
+    if (ancestors.isEmpty()) return entry.getParentId();
+    return ancestors.get(ancestors.size() - 1).getId();
   }
 
   private String reformulateNote(Entry step) {

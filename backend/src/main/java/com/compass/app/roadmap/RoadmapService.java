@@ -384,6 +384,11 @@ public class RoadmapService {
         structureService.graduateStep(roadmapId, stepId);
     }
 
+    @Transactional
+    public Entry promoteStepToModule(Long roadmapId, Long stepId) {
+        return structureService.promoteStepToModule(roadmapId, stepId);
+    }
+
     /**
      * Delete a step anywhere in the roadmap's tree and close the order_index gap under its
      * parent (Phase 13). Any substeps under it go too, via the parent FK's ON DELETE CASCADE.

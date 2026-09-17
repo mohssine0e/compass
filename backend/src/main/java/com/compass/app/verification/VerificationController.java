@@ -48,6 +48,6 @@ public class VerificationController {
   /** Answer the check. On pass the step is marked done; otherwise the gap comes back. */
   @PostMapping("/verify")
   public VerifyResult verify(@PathVariable Long stepId, @RequestBody VerifyRequest request) {
-    return service.verify(stepId, request.answer(), request.selectedIndex());
+    return service.verify(stepId, request.answer(), request.selectedIndex(), request.confidence());
   }
 }

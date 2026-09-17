@@ -117,8 +117,6 @@ export function nodeIndexOf(nodes, parentId = null, map = new Map()) {
   return map
 }
 
-// Only real step->step dependencies count for blocking — a step depending on something from a
-// different module is a reminder, never a gate (RB-4.9).
 export function dependencyInfo(node, nodeIndex) {
   if (!node.dependsOn) return null
   const dep = nodeIndex.get(node.dependsOn)

@@ -4,6 +4,7 @@ import com.compass.app.roadmap.dto.CreateRoadmapRequest;
 
 import java.util.List;
 import java.util.Map;
+import java.time.Instant;
 
 /**
  * The approved (possibly edited) reformulation to apply (Phase 8.5). {@code kind} selects which
@@ -15,6 +16,7 @@ public record ApplyReformulateRequest(
         String kind,
         List<CreateRoadmapRequest.DraftStepInput> draftSteps,
         String prerequisite,
-        List<Map<String, Object>> resources
+        List<Map<String, Object>> resources,
+        Instant sourceUpdatedAt
 ) {
 }

@@ -72,4 +72,10 @@ final class GenerationJob {
         this.finishedAt = Instant.now();
         this.status = Status.FAILED;
     }
+
+    void expire() {
+        if (status == Status.PENDING) {
+            fail("Drafting stopped before it finished. Start it again.");
+        }
+    }
 }

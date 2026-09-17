@@ -5,6 +5,7 @@ import com.compass.app.entry.dto.CreateEntryRequest;
 import com.compass.app.entry.dto.EndSessionRequest;
 import com.compass.app.entry.dto.PatchEntryRequest;
 import com.compass.app.events.EventService;
+import com.compass.app.roadmap.RoadmapDependencyService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,14 +21,19 @@ import java.util.NoSuchElementException;
 @Service
 public class EntryService {
 
+    private static final int MAX_SESSION_HISTORY = 200;
+
     private final EntryRepository repository;
     private final ReviewAiService reviewAi;
     private final EventService events;
+    private final RoadmapDependencyService dependencies;
 
-    public EntryService(EntryRepository repository, ReviewAiService reviewAi, EventService events) {
+    public EntryService(EntryRepository repository, ReviewAiService reviewAi, EventService events,
+                        RoadmapDependencyService dependencies) {
         this.repository = repository;
         this.reviewAi = reviewAi;
         this.events = events;
+        this.dependencies = dependencies;
     }
 
     /** All entries, newest first. */
@@ -39,7 +45,7 @@ public class EntryService {
     /** Every completed roadmap step, most recently updated first (RB-5.3). */
     @Transactional(readOnly = true)
     public List<Entry> completedSteps() {
-        return repository.findByTypeAndStatusOrderByUpdatedAtDesc(EntryType.ROADMAP_STEP, EntryStatus.DONE);
+        return repository.findActiveCompletedSteps();
     }
 
     /**
@@ -82,19 +88,24 @@ public class EntryService {
     @Transactional
     public Entry update(Long id, PatchEntryRequest patch) {
         Entry entry = get(id);
+        if (patch.expectedUpdatedAt() != null && !patch.expectedUpdatedAt().equals(entry.getUpdatedAt())) {
+            throw new com.compass.app.config.ConflictException(
+                    "This changed somewhere else. Refresh before saving.");
+        }
 
         if (patch.status() != null) {
+            if (patch.status() == EntryStatus.DONE && entry.getType() == EntryType.ROADMAP_STEP) {
+                dependencies.requireDone(entry);
+            }
             entry.setStatus(patch.status());
         }
         if (patch.significance() != null) {
             entry.setSignificance(patch.significance());
         }
         if (patch.dependsOn() != null) {
-            // Non-positive id is the documented "clear the prerequisite" sentinel, since a
-            // plain null here means "leave unchanged".
             Long prereq = patch.dependsOn() > 0 ? patch.dependsOn() : null;
-            if (prereq != null && prereq.equals(entry.getId())) {
-                throw new IllegalArgumentException("A step can't be its own prerequisite.");
+            if (prereq != null) {
+                dependencies.validate(entry, prereq);
             }
             entry.setDependsOn(prereq);
         }
@@ -106,6 +117,19 @@ public class EntryService {
                     ? new HashMap<>(entry.getContent())
                     : new HashMap<>();
             content.put("text", patch.text().trim());
+            entry.setContent(content);
+        }
+        if (patch.title() != null) {
+            if (entry.getType() != EntryType.ROADMAP) {
+                throw new IllegalArgumentException("Only roadmaps have titles.");
+            }
+            String title = patch.title().trim();
+            if (title.isEmpty()) {
+                throw new IllegalArgumentException("A roadmap needs a title.");
+            }
+            Map<String, Object> content = entry.getContent() != null
+                    ? new HashMap<>(entry.getContent()) : new HashMap<>();
+            content.put("title", title);
             entry.setContent(content);
         }
         if (patch.notes() != null) {
@@ -201,6 +225,7 @@ public class EntryService {
             Map<String, Object> session = new LinkedHashMap<>();
             session.put("startedAt", Instant.now().toString());
             history.add(session);
+            trimOldest(history, MAX_SESSION_HISTORY);
             content.put("sessionHistory", history);
             entry.setContent(content);
             entry = repository.save(entry);
@@ -251,6 +276,12 @@ public class EntryService {
         }
     }
 
+    private static void trimOldest(List<?> list, int max) {
+        if (list.size() > max) {
+            list.subList(0, list.size() - max).clear();
+        }
+    }
+
     /**
      * Create an entry from a capture request. Type defaults to idea; new entries start
      * as CAPTURED. Significance is only applied to ideas (see CLAUDE.md Section 4).
@@ -271,6 +302,17 @@ public class EntryService {
             throw new IllegalArgumentException("An entry needs some text to capture.");
         }
 
+        if (type == EntryType.IDEA) {
+            String normalized = s(text).trim().replaceAll("\\s+", " ").toLowerCase(java.util.Locale.ROOT);
+            boolean duplicate = repository.findAllByOrderByCreatedAtDesc().stream()
+                    .filter(e -> e.getType() == EntryType.IDEA)
+                    .map(e -> e.getContent() == null ? null : e.getContent().get("text"))
+                    .filter(String.class::isInstance)
+                    .map(value -> ((String) value).trim().replaceAll("\\s+", " ").toLowerCase(java.util.Locale.ROOT))
+                    .anyMatch(normalized::equals);
+            if (duplicate) content.put("possibleDuplicate", true);
+        }
+
         Entry entry = new Entry();
         entry.setType(type);
         entry.setStatus(EntryStatus.CAPTURED);
@@ -283,5 +325,9 @@ public class EntryService {
         }
 
         return repository.save(entry);
+    }
+
+    private static String s(Object value) {
+        return value instanceof String text ? text : "";
     }
 }

@@ -202,6 +202,13 @@ public class RoadmapController {
         return RoadmapResponse.of(roadmap, service::stepsOf);
     }
 
+    @PutMapping("/{id}/steps/{stepId}/promote-module")
+    public RoadmapResponse promoteStepToModule(@PathVariable Long id, @PathVariable Long stepId) {
+        service.promoteStepToModule(id, stepId);
+        Entry roadmap = service.getRoadmap(id);
+        return RoadmapResponse.of(roadmap, service::stepsOf);
+    }
+
     /** Archive or unarchive a whole roadmap. Body is {archived}. */
     @PutMapping("/{id}/archive")
     public RoadmapResponse archive(@PathVariable Long id, @RequestBody ArchiveRoadmapRequest request) {

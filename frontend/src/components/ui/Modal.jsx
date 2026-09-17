@@ -17,7 +17,7 @@ import { trapTabKey, useDialogAccessibility } from '../../hooks/useDialogAccessi
  *
  * @param {() => void} onClose
  * @param {string} [title]
- * @param {'md'|'lg'} [size='lg']
+ * @param {'md'|'lg'|'xl'} [size='lg']
  * @example
  *   <Modal onClose={close} title="Your notes">…</Modal>
  */

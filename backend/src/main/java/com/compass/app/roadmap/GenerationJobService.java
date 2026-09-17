@@ -28,6 +28,7 @@ public class GenerationJobService {
     // A finished job is kept a while so a slow poller doesn't miss it, then swept — otherwise a
     // long-running server would slowly accumulate every past job's result forever.
     private static final Duration RETENTION = Duration.ofMinutes(10);
+    private static final Duration MAX_PENDING = Duration.ofMinutes(5);
 
     private final Map<String, GenerationJob> jobs = new ConcurrentHashMap<>();
     private final GenerationWorker worker;
@@ -57,7 +58,13 @@ public class GenerationJobService {
     /** Drop finished jobs old enough that no reasonable poller is still waiting on them. */
     @Scheduled(fixedRate = 60_000)
     void sweep() {
-        Instant cutoff = Instant.now().minus(RETENTION);
+        Instant now = Instant.now();
+        Instant pendingCutoff = now.minus(MAX_PENDING);
+        jobs.values().stream()
+                .filter(j -> j.status() == GenerationJob.Status.PENDING)
+                .filter(j -> j.createdAt().isBefore(pendingCutoff))
+                .forEach(GenerationJob::expire);
+        Instant cutoff = now.minus(RETENTION);
         jobs.values().removeIf(j -> j.finishedAt() != null && j.finishedAt().isBefore(cutoff));
     }
 }

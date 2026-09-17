@@ -51,7 +51,7 @@ public class ResurfacingController {
     /** Answer a spaced recheck of a done step. Returns {passed, gap}; the step stays done. */
     @PostMapping("/{id}/recheck")
     public VerifyResult recheck(@PathVariable Long id, @RequestBody VerifyRequest request) {
-        return service.recheck(id, request.answer());
+        return service.recheck(id, request.answer(), request.confidence());
     }
 
     /** Record how the user answered the honest question (including a skip). */

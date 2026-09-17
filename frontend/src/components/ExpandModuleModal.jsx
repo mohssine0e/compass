@@ -63,7 +63,7 @@ export default function ExpandModuleModal({ roadmapId, module, prefetched, onClo
   }
 
   return (
-    <Modal onClose={onClose} title={module.content?.title} size="lg">
+    <Modal onClose={onClose} title={module.content?.title} size="xl" className="module-review-modal">
       {module.content?.scope && <p className="gen-lead">{module.content.scope}</p>}
       {loading && <p className="deep-faint">Working out the steps for this module…</p>}
       {error && <p className="roadmap-error">{error}</p>}

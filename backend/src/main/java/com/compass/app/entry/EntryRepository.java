@@ -36,6 +36,21 @@ public interface EntryRepository extends JpaRepository<Entry, Long> {
      */
     List<Entry> findByTypeAndStatusOrderByUpdatedAtDesc(EntryType type, EntryStatus status);
 
+    @Query(value = """
+            SELECT e.* FROM entries e
+            WHERE e.type = 'roadmap_step' AND e.status = 'done'
+              AND NOT EXISTS (
+                WITH RECURSIVE ancestors AS (
+                  SELECT p.* FROM entries p WHERE p.id = e.parent_id
+                  UNION ALL
+                  SELECT p.* FROM entries p JOIN ancestors a ON p.id = a.parent_id
+                )
+                SELECT 1 FROM ancestors WHERE status = 'archived'
+              )
+            ORDER BY e.updated_at DESC
+            """, nativeQuery = true)
+    List<Entry> findActiveCompletedSteps();
+
     /**
      * The one entry most worth resurfacing right now, or empty if nothing qualifies.
      *
@@ -127,6 +142,14 @@ public interface EntryRepository extends JpaRepository<Entry, Long> {
               AND e.content->>'nextRecheckAt' IS NOT NULL
               AND (e.content->>'nextRecheckAt')::timestamptz <= :now
               AND (e.last_resurfaced_at IS NULL OR e.last_resurfaced_at < :resurfacedBefore)
+              AND NOT EXISTS (
+                WITH RECURSIVE ancestors AS (
+                  SELECT p.* FROM entries p WHERE p.id = e.parent_id
+                  UNION ALL
+                  SELECT p.* FROM entries p JOIN ancestors a ON p.id = a.parent_id
+                )
+                SELECT 1 FROM ancestors WHERE status = 'archived'
+              )
             ORDER BY (e.content->>'nextRecheckAt')::timestamptz ASC
             LIMIT 1
             """, nativeQuery = true)

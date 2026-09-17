@@ -13,6 +13,7 @@ import {
   getModulePrefetchStatus,
   getRoadmap,
   graduateStep,
+  promoteStepToModule,
   insertRoadmapStep,
   insertModule,
   patchEntry,
@@ -118,6 +119,14 @@ export function panelReducer(panel, action) {
   }
 }
 
+function updateNodeStatus(nodes, targetId, status) {
+  return nodes.map((node) => {
+    if (node.id === targetId) return { ...node, status }
+    if (!node.children?.length) return node
+    return { ...node, children: updateNodeStatus(node.children, targetId, status) }
+  })
+}
+
 export default function RoadmapDetail({ id, onBack, onGone }) {
   const [roadmap, setRoadmap] = useState(null)
   const [error, setError] = useState(null)
@@ -125,6 +134,8 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   const [editingStepId, setEditingStepId] = useState(null)
   const [editText, setEditText] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
   const [insertAtIndex, setInsertAtIndex] = useState(null)
   const [insertText, setInsertText] = useState('')
   const [savingInsert, setSavingInsert] = useState(false)
@@ -192,6 +203,13 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   }, [id])
 
   useEffect(() => {
+    try {
+      const cached = JSON.parse(localStorage.getItem(`compass:module-drafts:${id}`) || '{}')
+      if (Object.keys(cached).length) setPrefetch(cached)
+    } catch { /* ignore malformed browser cache */ }
+  }, [id])
+
+  useEffect(() => {
     load()
   }, [load])
 
@@ -214,6 +232,8 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
       const map = {}
       for (const item of list) map[item.moduleId] = item
       setPrefetch(map)
+      const done = Object.fromEntries(Object.entries(map).filter(([, item]) => item.status === 'DONE'))
+      if (Object.keys(done).length) localStorage.setItem(`compass:module-drafts:${id}`, JSON.stringify(done))
     },
     [roadmap],
   )
@@ -231,6 +251,11 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   async function markDone(stepId) {
     setBusyStepId(stepId)
     setError(null)
+    const previous = roadmap
+    setRoadmap((current) => current && {
+      ...current,
+      children: updateNodeStatus(current.children || [], stepId, 'done'),
+    })
     try {
       await patchEntry(stepId, { status: 'done' })
       // The acknowledgment, if any, arrives moments later as a toast (V3-10) rather than
@@ -247,6 +272,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
           .catch(() => {}) // best-effort — a missed reflection isn't worth surfacing an error for
       }
     } catch (err) {
+      setRoadmap(previous)
       setError(err.message)
     } finally {
       setBusyStepId(null)
@@ -277,10 +303,16 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
   async function undoStep(stepId) {
     setBusyStepId(stepId)
     setError(null)
+    const previous = roadmap
+    setRoadmap((current) => current && {
+      ...current,
+      children: updateNodeStatus(current.children || [], stepId, 'captured'),
+    })
     try {
       await patchEntry(stepId, { status: 'captured' })
       await load()
     } catch (err) {
+      setRoadmap(previous)
       setError(err.message)
     } finally {
       setBusyStepId(null)
@@ -547,6 +579,19 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     }
   }
 
+  async function promoteStepAction(node) {
+    setBusyStepId(node.id)
+    setError(null)
+    try {
+      await promoteStepToModule(roadmap.id, node.id)
+      await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusyStepId(null)
+    }
+  }
+
   // RB-4.8: break down any leaf step, any tier — reuses the same reformulate propose/apply
   // endpoint the resurfacing flow already calls for a stalled step.
   async function startBreakDown(node) {
@@ -554,7 +599,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     setError(null)
     try {
       const proposal = await proposeReformulate(node.id, 'break_down')
-      dispatchPanel({ type: 'breakDown', step: node })
+      dispatchPanel({ type: 'breakDown', step: { ...node, sourceUpdatedAt: proposal.sourceUpdatedAt } })
       setBreakDownSteps(fromProposedSteps(proposal.steps))
     } catch (err) {
       setError(err.message)
@@ -568,7 +613,11 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     setBreakDownBusy(true)
     setError(null)
     try {
-      await applyReformulate(breakDownStep.id, { kind: 'break_down', draftSteps: toDraftSteps(breakDownSteps) })
+      await applyReformulate(breakDownStep.id, {
+        kind: 'break_down',
+        draftSteps: toDraftSteps(breakDownSteps),
+        sourceUpdatedAt: breakDownStep.sourceUpdatedAt,
+      })
       dispatchPanel({ type: 'close' })
       setBreakDownSteps([])
       await load()
@@ -599,6 +648,22 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
       await patchEntry(stepId, { text: trimmed })
       setEditingStepId(null)
       await load()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  async function saveTitle() {
+    const title = titleDraft.trim()
+    if (!title) return
+    setSavingEdit(true)
+    setError(null)
+    try {
+      await patchEntry(roadmap.id, { title, expectedUpdatedAt: roadmap.updatedAt })
+      setRoadmap((current) => ({ ...current, title }))
+      setEditingTitle(false)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -781,6 +846,7 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     startBreakDown,
     startInsert,
     graduateStepAction,
+    promoteStepAction,
     undoStep,
     deleteStep,
     collapsed: visibleCollapsed,
@@ -796,7 +862,35 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
     <div className="roadmap-detail">
       <BackLink onBack={onBack} />
 
-      <h1 className="screen-title">{title}</h1>
+      {editingTitle ? (
+        <div className="roadmap-title-edit">
+          <input
+            className="step-edit-input"
+            value={titleDraft}
+            onChange={(event) => setTitleDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') saveTitle()
+              if (event.key === 'Escape') setEditingTitle(false)
+            }}
+            autoFocus
+          />
+          <Button variant="ghost" onClick={saveTitle} disabled={savingEdit || !titleDraft.trim()}>Save</Button>
+          <Button variant="ghost" onClick={() => setEditingTitle(false)}>Cancel</Button>
+        </div>
+      ) : (
+        <h1 className="screen-title">
+          {title}{' '}
+          <button
+            className="roadmap-title-action"
+            onClick={() => {
+              setTitleDraft(title || '')
+              setEditingTitle(true)
+            }}
+          >
+            Rename
+          </button>
+        </h1>
+      )}
       {notes && <p className="roadmap-detail-notes">{notes}</p>}
 
       <div className="roadmap-detail-progress">
@@ -913,14 +1007,12 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
                 Projects
               </Button>
             )}
-            {view === 'tree' && children.length > 1 && (
-              <Button variant="ghost" onClick={enterReorder}>
-                Reorder
-              </Button>
-            )}
             <Menu
               label="Roadmap actions"
               items={[
+                ...(view === 'tree' && children.length > 1
+                  ? [{ label: 'Reorder tree', onClick: enterReorder }]
+                  : []),
                 ...RE_TIER_OPTIONS.filter((t) => t !== roadmap.tier).map((t) => ({
                   label: `Re-tier to ${t}`,
                   onClick: () => reTier(t),

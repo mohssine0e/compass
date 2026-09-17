@@ -111,6 +111,28 @@
   flex: 1;
 }
 
+.node-group-primary-action {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 7px 12px;
+  white-space: nowrap;
+  font-size: 0.86rem;
+}
+
+.module-review-modal {
+  gap: 20px;
+}
+
+.module-review-modal .roadmap-actions {
+  position: sticky;
+  bottom: -30px;
+  z-index: 2;
+  margin: 8px -36px -30px;
+  padding: 18px 36px;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+}
+
 .roadmap-verify {
   display: inline-flex;
   align-items: center;
@@ -840,4 +862,18 @@
 .retier-group-count {
   color: var(--faint);
   font-size: 0.85rem;
+}
+.roadmap-title-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.roadmap-title-action {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
 }

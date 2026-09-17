@@ -6,7 +6,7 @@ const AUTO_DISMISS_MS = 5000
  * One notification, auto-dismissing after a few seconds or on click. `tone` is 'info' (brass —
  * the default, for anything that finished) or 'danger' (something that failed in the background).
  */
-function Toast({ id, message, tone = 'info', count = 1, onDismiss }) {
+function Toast({ id, message, tone = 'info', count = 1, context, onDismiss, onAction }) {
   useEffect(() => {
     const t = setTimeout(() => onDismiss(id), AUTO_DISMISS_MS)
     return () => clearTimeout(t)
@@ -22,7 +22,7 @@ function Toast({ id, message, tone = 'info', count = 1, onDismiss }) {
       className={`ui-toast ui-toast--${tone}`}
       role="status"
       aria-live="polite"
-      onClick={() => onDismiss(id)}
+      onClick={() => context && onAction ? onAction(context) : onDismiss(id)}
     >
       {/* V4-1: the backend coalesces repeated (message, tone) pairs into one entry with a
           rising count instead of a wall of near-identical toasts — surface that count rather
@@ -37,12 +37,13 @@ function Toast({ id, message, tone = 'info', count = 1, onDismiss }) {
  * acknowledgment, a roadmap finishing generation, a module finishing drafting) surfaces here
  * instead of the screen that started it. Renders nothing when there's nothing queued.
  */
-export default function ToastStack({ toasts, onDismiss }) {
+export default function ToastStack({ toasts, onDismiss, onAction }) {
   if (!toasts.length) return null
   return (
     <div className="ui-toast-stack">
       {toasts.map((t) => (
-        <Toast key={t.id} id={t.id} message={t.message} tone={t.tone} count={t.count} onDismiss={onDismiss} />
+        <Toast key={t.id} id={t.id} message={t.message} tone={t.tone} count={t.count}
+          context={t.context} onDismiss={onDismiss} onAction={onAction} />
       ))}
     </div>
   )

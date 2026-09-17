@@ -81,6 +81,7 @@ export default function ReformulatePanel({ step, atMaxDepth = false, onClose, on
     setBusy(true)
     setError(null)
     const body = { kind: proposal.kind }
+    body.sourceUpdatedAt = proposal.sourceUpdatedAt
     if (proposal.kind === 'break_down') body.draftSteps = toDraftSteps(steps)
     if (proposal.kind === 'add_prerequisite') body.prerequisite = prerequisite.trim()
     if (proposal.kind === 'easier_resources') body.resources = resources

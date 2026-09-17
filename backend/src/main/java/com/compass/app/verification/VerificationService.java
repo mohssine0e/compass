@@ -170,7 +170,7 @@ public class VerificationService {
    * only read for the free-text formats.
    */
   @Transactional
-  public VerifyResult verify(Long stepId, String answer, Integer selectedIndex) {
+  public VerifyResult verify(Long stepId, String answer, Integer selectedIndex, Integer confidence) {
     Entry step = requireStep(stepId);
     Map<String, Object> content = copyContent(step);
     PendingCheck pending = pendingCheckOf(content);
@@ -197,6 +197,7 @@ public class VerificationService {
     if (eval.passed()) {
       content.remove("pendingCheck");
       content.put("verifiedAt", Instant.now().toString());
+      putConfidence(content, confidence, true);
       scheduleRecheck(content, 0); // first spaced recheck after passing
       step.setContent(content);
       step.setStatus(EntryStatus.DONE);
@@ -217,6 +218,10 @@ public class VerificationService {
     step.setContent(content);
     Entry saved = repository.save(step);
     return withSuggestedPrerequisite(saved, eval.gap());
+  }
+
+  public VerifyResult verify(Long stepId, String answer, Integer selectedIndex) {
+    return verify(stepId, answer, selectedIndex, null);
   }
 
   /**
@@ -316,7 +321,7 @@ public class VerificationService {
    * the step stays done — this reinforces, it doesn't punish.
    */
   @Transactional
-  public VerifyResult recheck(Long stepId, String answer) {
+  public VerifyResult recheck(Long stepId, String answer, Integer confidence) {
     if (answer == null || answer.isBlank()) {
       throw new IllegalArgumentException("Write an answer first.");
     }
@@ -338,9 +343,10 @@ public class VerificationService {
       throw new IllegalStateException("Couldn't judge that right now.");
     }
     content.remove("pendingCheck");
+    putConfidence(content, confidence, eval.passed());
     int stage = content.get("recheckStage") instanceof Number n ? n.intValue() : 0;
     // Still solid: widen the spacing. Shaky: bring the next recheck back to the start.
-    scheduleRecheck(content, eval.passed() ? stage + 1 : 0);
+    scheduleRecheck(content, eval.passed() ? stage + 1 : confidence != null && confidence >= 3 ? 0 : 1);
     step.setContent(content);
     Entry saved = repository.save(step);
     touchParent(saved);
@@ -353,8 +359,23 @@ public class VerificationService {
     // Store the clamped stage: the raw one kept incrementing past the end of RECHECK_DAYS, so a
     // long-retained step's recorded stage drifted away from any interval it actually maps to.
     content.put("recheckStage", clamped);
-    content.put("nextRecheckAt",
-        Instant.now().plus(RECHECK_DAYS[clamped], ChronoUnit.DAYS).toString());
+    Instant next = Instant.now().plus(RECHECK_DAYS[clamped], ChronoUnit.DAYS);
+    Object existing = content.get("nextRecheckAt");
+    if (existing instanceof String value) {
+      try {
+        Instant current = Instant.parse(value);
+        if (current.isAfter(Instant.now()) && current.isBefore(next)) next = current;
+      } catch (RuntimeException ignored) {
+      }
+    }
+    content.put("nextRecheckAt", next.toString());
+  }
+
+  private static void putConfidence(Map<String, Object> content, Integer confidence, boolean passed) {
+    if (confidence == null) return;
+    int value = Math.max(1, Math.min(3, confidence));
+    content.put("lastVerificationConfidence", value);
+    content.put("lastVerificationPassed", passed);
   }
 
   /**

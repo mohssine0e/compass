@@ -32,6 +32,7 @@ function ResurfaceView({ prompt, onDone }) {
   const { entry, question, options } = prompt
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
+  const [confidence, setConfidence] = useState(null)
   const [error, setError] = useState(null)
   // null | { kind, loading } | { kind, targetStepId, steps }        (break_down)
   //      | { kind, targetStepId, prerequisite, why }                (add_prerequisite)
@@ -346,7 +347,7 @@ function RecheckView({ prompt, onDone }) {
     setBusy(true)
     setError(null)
     try {
-      setResult(await recheckResurfacing(entry.id, answer.trim()))
+      setResult(await recheckResurfacing(entry.id, answer.trim(), confidence))
     } catch (err) {
       setError(err.message)
     } finally {
@@ -391,6 +392,14 @@ function RecheckView({ prompt, onDone }) {
             rows={3}
             autoFocus
           />
+          <div className="recheck-confidence">
+            <span>How sure were you?</span>
+            {[1, 2, 3].map((value) => (
+              <button key={value} type="button" className={confidence === value ? 'is-selected' : ''} onClick={() => setConfidence(value)}>
+                {value === 1 ? 'Not sure' : value === 2 ? 'Somewhat' : 'Very sure'}
+              </button>
+            ))}
+          </div>
           {error && <p className="resurface-error">{error}</p>}
           <div className="recheck-actions">
             <button className="resurface-skip" disabled={busy} onClick={skip}>

@@ -427,6 +427,10 @@ export function graduateStep(roadmapId, stepId) {
   })
 }
 
+export function promoteStepToModule(roadmapId, stepId) {
+  return request(`/roadmaps/${roadmapId}/steps/${stepId}/promote-module`, { method: 'PUT' })
+}
+
 /** "What this step covers" bullets for the deep view — generated once, then cached (Phase 7.5). */
 export function getStepCovers(stepId) {
   return request(`/roadmaps/steps/${stepId}/covers`, { method: 'POST' })
@@ -515,10 +519,10 @@ export function getStepCheck(stepId, format) {
  * the free-text answer; `selectedIndex` (Phase 26) is the chosen option's index for a
  * multiple_choice check instead — pass whichever the pending check's format calls for.
  */
-export function verifyStep(stepId, answer, selectedIndex) {
+export function verifyStep(stepId, answer, selectedIndex, confidence) {
   return request(`/verification/steps/${stepId}/verify`, {
     method: 'POST',
-    body: JSON.stringify({ answer, selectedIndex }),
+    body: JSON.stringify({ answer, selectedIndex, confidence }),
   })
 }
 
@@ -557,10 +561,10 @@ export function respondResurfacing(id, body) {
 }
 
 /** Answer a spaced recheck of a done step (Phase 8). Returns { passed, gap }. */
-export function recheckResurfacing(id, answer) {
+export function recheckResurfacing(id, answer, confidence) {
   return request(`/resurfacing/${id}/recheck`, {
     method: 'POST',
-    body: JSON.stringify({ answer }),
+    body: JSON.stringify({ answer, confidence }),
   })
 }
 
