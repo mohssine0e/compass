@@ -18,6 +18,10 @@ const MAX_VISIBLE_TOASTS = 10
  */
 export function useNotificationFeed() {
   const [toasts, setToasts] = useState([])
+  // A missed poll is a dropped tick, not a reopened history window: a failed poll must not
+  // move the cursor backward, or every notification already seen is re-delivered as a duplicate
+  // toast next tick ("the same toast appearing twice"). So the cursor below only ever advances
+  // while the poll succeeds — a poll error means next tick resumes from the same `after`, not 0.
   const cursor = useRef(0)
 
   usePolling(

@@ -82,8 +82,39 @@ function sleep(delayMs) {
 // Exported so tests can exercise the timeout/abort contract directly. Most domain functions
 // below don't forward an options object (see V3-5.4) — `classifyIntent` is the one exception
 // (V3-10), since capture needs to enforce its own hard deadline on that specific call.
+//
+// The caller-abort failure contract, pinned by tests in src/__tests__/api.test.js:
+// - a caller abort that interrupts a pre-retry response throws the caller's own AbortError
+//   (never a TimeoutError) — the caller chose to stop, nothing failed;
+// - a caller abort that interrupts the retry *pause* throws the caller's own AbortError too —
+//   the pause must end the moment the caller gives up, and the throw must read as a
+//   cancellation, not a failure;
+// - a caller abort that fires *after* a fulfilled response but before the JSON body parses is
+//   ignored — the data is already here, so the promise resolves with it.
 export async function request(path, options = {}) {
   const { timeoutMs = DEFAULT_TIMEOUT_MS, signal: callerSignal, ...init } = options
+
+  // The sleep between attempts is abort-aware: a caller abort during the retry pause must end
+  // the pause immediately and surface the caller's own AbortError rather than firing the retry
+  // into a request nobody is listening for anymore.
+  const abortableSleep = (delayMs) =>
+    callerSignal
+      ? new Promise((resolve, reject) => {
+          if (callerSignal.aborted) {
+            reject(callerSignal.reason ?? Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }))
+            return
+          }
+          const timer = setTimeout(() => {
+            callerSignal.removeEventListener('abort', onAbort)
+            resolve()
+          }, delayMs)
+          const onAbort = () => {
+            clearTimeout(timer)
+            reject(callerSignal.reason ?? Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }))
+          }
+          callerSignal.addEventListener('abort', onAbort, { once: true })
+        })
+      : sleep(delayMs)
 
   // Dedup is skipped when the caller supplied its own signal — sharing one in-flight request
   // across two callers means one caller's abort would cancel the other's, which is worse than
@@ -97,8 +128,14 @@ export async function request(path, options = {}) {
     try {
       return await fetchOnce(path, timeoutMs, callerSignal, init)
     } catch (err) {
+      // The retry itself must respect a caller abort that fired *during* the response — the
+      // caller is gone, so its own AbortError (not TimeoutError, never a retry) is the answer.
+      // Conversely, a late abort firing after a fulfilled fetch is irrelevant: the flag on the
+      // very fetch that succeeded already read false, and `fetchOnce` only converts to
+      // TimeoutError when its own abort fired — so this branch never sees those.
+      if (callerSignal?.aborted) throw callerSignal.reason ?? err
       if (!isRetryableNetworkError(err)) throw err
-      await sleep(NETWORK_RETRY_DELAY_MS)
+      await abortableSleep(NETWORK_RETRY_DELAY_MS)
       return fetchOnce(path, timeoutMs, callerSignal, init)
     }
   }

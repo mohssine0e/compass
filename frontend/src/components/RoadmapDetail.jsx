@@ -1053,7 +1053,13 @@ export default function RoadmapDetail({ id, onBack, onGone }) {
       {view === 'path' && !reorderMode ? (
         <LearningPathView roadmap={roadmap} onOpenStep={(stepId) => dispatchPanel({ type: 'deepView', stepId })} />
       ) : view === 'projects' && !reorderMode ? (
-        <ProjectsView roadmap={roadmap} onChanged={load} onOpenStep={(stepId) => dispatchPanel({ type: 'deepView', stepId })} />
+        <ProjectsView
+          roadmap={roadmap}
+          onChanged={load}
+          onOpenStep={(stepId) => dispatchPanel({ type: 'deepView', stepId })}
+          onMarkDone={requestMarkDone}
+          onUndoDone={undoStep}
+        />
       ) : reorderMode ? (
         <ol className="step-list is-reordering">
           {draftOrder.map((node, index) => (

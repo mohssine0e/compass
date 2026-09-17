@@ -126,7 +126,9 @@ function StepRow({ node, depth, parentType, ctx }) {
 // A container node — a module (child roadmap) or a step with substeps. Collapsible, with its own
 // rolled-up progress. A step-turned-container (from a break-down) gets a "Flatten" action to
 // promote back up (Phase 20) — modules use a different mechanism (expand), not this.
-function GroupNode({ node, depth, parentType, ctx }) {
+// (`parentType` is accepted for signature parity with StepNode/NodeRenderer's shared call site
+// but unused here — container styling keys off the node's own type, not its parent's.)
+function GroupNode({ node, depth, ctx }) {
   const open = !ctx.collapsed.has(node.id)
   const p = node.progress || { done: 0, total: 0 }
   const isStepContainer = node.type === 'roadmap_step'

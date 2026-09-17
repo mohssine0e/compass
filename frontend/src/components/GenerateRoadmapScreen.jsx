@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createRoadmap, generateRoadmap, insertModule, proposeSubtopicModule, suggestResources } from '../api'
 import { Button, Card, ExternalLink } from './ui'
 import StepProposalEditor, { attachIssueCids, fromProposedSteps, sourceHost, toDraftSteps } from './StepProposalEditor'
@@ -97,8 +97,14 @@ export default function GenerateRoadmapScreen({ initialGoal, initialResult, onCr
   // this key remains stable while the user types or changes the goal.
   const draftKey = 'compass:roadmap-draft:active'
 
+  // Restore-on-mount and live-phase snapshot are two separate effects, not one with a branch:
+  // the restore needs `fetchResourcesFor` for a mid-draft flat proposal (see below), and
+  // folding that into the snapshot effect's body would re-run the restore's refetch on every
+  // keystroke (every `flatSteps` change) — restoring is mount-only, snapshotting is ongoing.
   useEffect(() => {
     if (initialResult || restoredDraft) return
+    let cancelled = false
+    let refetchRound = null
     try {
       const saved = JSON.parse(localStorage.getItem(draftKey) || 'null')
       if (!saved) return
@@ -115,19 +121,51 @@ export default function GenerateRoadmapScreen({ initialGoal, initialResult, onCr
       if (saved.sources) setSources(saved.sources)
       if (saved.assessment) setAssessment(saved.assessment)
       if (saved.tier) setTier(saved.tier)
+      // A restored flat draft must not be re-tagged by a leftover resources call, and must not
+      // silently swallow the resources fetch it still needs: adopt the saved round so anything
+      // older is stale, then start this draft's own fetch fresh.
+      if (typeof saved.flatRound === 'number') {
+        flatRoundRef.current = saved.flatRound
+        setFlatRound(saved.flatRound)
+      }
+      // Restoring the steps ("Finding resources…") must come with the resources fetch that
+      // fills them: without this, a reloaded flat draft keeps steps that never gain resources
+      // and no call is running to fetch them. Only refetch when some step is still empty (the
+      // common case after a reload mid-draft); a fully-filled draft needs no new call. Bumps the
+      // round first so any leftover pre-reload fetch that somehow resolves late is stale.
+      if (saved.phase === 'flat' && Array.isArray(saved.flatSteps)) {
+        const needsResources = saved.flatSteps.some((s) => !(s.resources && s.resources.length))
+        if (needsResources) {
+          flatRoundRef.current += 1
+          setFlatRound(flatRoundRef.current)
+          refetchRound = flatRoundRef.current
+        }
+      }
       setRestoredDraft(true)
+      // The scope comes from the *saved* goal, not `goal` state: setGoal above hasn't flushed
+      // yet on this same mount, so reading `goal` here would send an empty scope for restored
+      // drafts and mistarget the whole resources call.
+      if (refetchRound != null && !cancelled) fetchResourcesFor(saved.flatSteps, refetchRound, saved.goal || '')
     } catch {
       localStorage.removeItem(draftKey)
     }
+    return () => {
+      cancelled = true
+    }
+    // Mount-only by design: it reads a saved draft once, then stands down (`restoredDraft`).
+    // `fetchResourcesFor` is defined in the component body — including that fresh-every-render
+    // identity in the deps would re-run the restore on every keystroke (every `flatSteps`
+    // change), which is exactly the re-refetch loop the split above exists to avoid.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftKey, initialResult, restoredDraft])
 
   useEffect(() => {
     if (phase === 'goal' || busy || initialResult) return
     const snapshot = { goal, phase, title, questions, answers, priorClarifications, modules, flatSteps,
-      interpretation, skipped, sources, assessment, tier, savedAt: Date.now() }
+      interpretation, skipped, sources, assessment, tier, flatRound, savedAt: Date.now() }
     localStorage.setItem(draftKey, JSON.stringify(snapshot))
   }, [draftKey, phase, goal, title, questions, answers, priorClarifications, modules, flatSteps,
-    interpretation, skipped, sources, assessment, tier, busy, initialResult])
+    interpretation, skipped, sources, assessment, tier, flatRound, busy, initialResult])
 
   function regenerateDraft() {
     localStorage.removeItem(draftKey)
@@ -324,7 +362,10 @@ export default function GenerateRoadmapScreen({ initialGoal, initialResult, onCr
       setFlatSteps(editorSteps)
       setIssues(attachIssueCids(editorSteps, res.issues))
       setPhase('flat')
-      fetchResourcesFor(editorSteps)
+      // Bump the round token BEFORE the in-flight fetch reads it, so any earlier fetch is stale.
+      flatRoundRef.current += 1
+      setFlatRound(flatRoundRef.current)
+      fetchResourcesFor(editorSteps, flatRoundRef.current, goal)
     } else {
       const raw = res.modules && res.modules.length ? res.modules : [{ title: '', scope: '' }]
       setModules(raw.map((m) => ({ cid: nextCid(), title: m.title || '', scope: m.scope || '' })))
@@ -337,12 +378,25 @@ export default function GenerateRoadmapScreen({ initialGoal, initialResult, onCr
   // (POST /resources/suggest) rather than making the founder wait for both before seeing the
   // plan at all. Matches by cid, not array position, so it's still correct even if the founder
   // edits/removes a step while resources are still being found.
-  async function fetchResourcesFor(stepsSnapshot) {
+  //
+  // Stale-proposal guard (the ref + `round` token): asking a second question round starts a
+  // new draft while the first one's resources call may still be in flight — without the guard,
+  // a slow first call lands on the *second* draft's steps, stapling the wrong resources onto
+  // steps that merely re-use the same cid range. The ref bumps on every showResult/proposal,
+  // and only the round that started the fetch may apply its result (state mirrors it for the
+  // snapshot/restore path below, which needs it serializable).
+  const [flatRound, setFlatRound] = useState(0)
+  const flatRoundRef = useRef(0)
+  // `scope` is a parameter, not the `goal` state: the restore-on-mount path below refetches
+  // before setGoal(saved.goal) has flushed, so reading `goal` here would send an empty scope for
+  // restored drafts. Every live call passes the current `goal` (see showResult).
+  async function fetchResourcesFor(stepsSnapshot, round, scope) {
     const cids = stepsSnapshot.map((s) => s.cid)
     const stepTexts = stepsSnapshot.map((s) => s.text)
     setResourcesPending(true)
     try {
-      const resourceLists = await suggestResources({ scope: goal, stepTexts, roadmapId: null })
+      const resourceLists = await suggestResources({ scope, stepTexts, roadmapId: null })
+      if (round !== flatRoundRef.current) return // a newer draft superseded this one
       setFlatSteps((prev) =>
         prev.map((s) => {
           const idx = cids.indexOf(s.cid)
@@ -356,7 +410,7 @@ export default function GenerateRoadmapScreen({ initialGoal, initialResult, onCr
       // Best-effort — a failed resources fetch just leaves steps without suggestions; the
       // founder can always add their own via StepProposalEditor.
     } finally {
-      setResourcesPending(false)
+      if (round === flatRoundRef.current) setResourcesPending(false)
     }
   }
 

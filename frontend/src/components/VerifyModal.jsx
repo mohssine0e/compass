@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { applyReformulate, getStepCheck, verifyStep } from '../api'
 import { Button, Chip, Modal, TextArea } from './ui'
 import './VerifyModal.css'
@@ -35,7 +35,7 @@ export default function VerifyModal({ step, onClose, onPassed, onOverride, onCha
   const [confidence, setConfidence] = useState(null)
   const [error, setError] = useState(null)
 
-  function fetchCheck(requestedFormat) {
+  const fetchCheck = useCallback((requestedFormat) => {
     let alive = true
     setLoading(true)
     setQuestion(null)
@@ -56,9 +56,9 @@ export default function VerifyModal({ step, onClose, onPassed, onOverride, onCha
     return () => {
       alive = false
     }
-  }
+  }, [step.id])
 
-  useEffect(() => fetchCheck(), [step.id])
+  useEffect(() => fetchCheck(), [fetchCheck])
 
   function changeFormat(next) {
     if (next === format || busy) return

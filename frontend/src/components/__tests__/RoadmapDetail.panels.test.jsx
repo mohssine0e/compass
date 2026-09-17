@@ -237,7 +237,10 @@ describe('RoadmapDetail panel/modal mutual exclusivity', () => {
     await user.click(screen.getByText('close-module-proposal'))
     expect(openDialogTestIds()).toEqual([])
 
-    await user.click(screen.getByText('Regenerate scope'))
+    // "Regenerate scope" lives behind Module B's own ⋯ menu (only unexpanded modules offer it —
+    // Module A here already has steps), so open that menu before choosing the action.
+    await user.click(screen.getByLabelText('Actions for Module B'))
+    await user.click(screen.getByRole('menuitem', { name: 'Regenerate scope' }))
     expect(openDialogTestIds()).toEqual(['modal-module-proposal'])
     expect(screen.getByTestId('modal-module-proposal')).toHaveTextContent('Regenerate this module')
   })
@@ -412,15 +415,24 @@ describe('RoadmapDetail non-panel state', () => {
     api.reorderRoadmapSteps.mockResolvedValue({})
     await renderWith(flatRoadmap())
 
-    await user.click(screen.getByText('Reorder'))
+    // "Reorder tree" lives behind the Roadmap actions ⋯ menu (moved there when the toolbar was
+    // decluttered) — open the menu, then choose it.
+    await user.click(screen.getByLabelText('Roadmap actions'))
+    await user.click(screen.getByRole('menuitem', { name: 'Reorder tree' }))
     expect(screen.getByText('Save order')).toBeInTheDocument()
 
     // Verify-mode selector is hidden while reordering (mutually exclusive toolbar state).
     expect(screen.queryByText('Check before done')).not.toBeInTheDocument()
 
+    // Drag the first row onto the second: the draft order flips locally, and only "Save order"
+    // persists it — the API call carries the dragged order, not the original one.
+    const rows = screen.getAllByRole('listitem')
+    fireEvent.dragStart(rows[0])
+    fireEvent.dragEnter(rows[1])
+
     await user.click(screen.getByText('Save order'))
 
-    await waitFor(() => expect(api.reorderRoadmapSteps).toHaveBeenCalledWith(1, [21, 22]))
+    await waitFor(() => expect(api.reorderRoadmapSteps).toHaveBeenCalledWith(1, [22, 21]))
     expect(screen.queryByText('Save order')).not.toBeInTheDocument()
   })
 
@@ -428,7 +440,8 @@ describe('RoadmapDetail non-panel state', () => {
     const user = userEvent.setup()
     await renderWith(flatRoadmap())
 
-    await user.click(screen.getByText('Reorder'))
+    await user.click(screen.getByLabelText('Roadmap actions'))
+    await user.click(screen.getByRole('menuitem', { name: 'Reorder tree' }))
     await user.click(screen.getByText('Cancel'))
 
     expect(api.reorderRoadmapSteps).not.toHaveBeenCalled()

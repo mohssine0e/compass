@@ -98,6 +98,47 @@ describe('request()', () => {
   })
 
   it("the caller's own abort (e.g. component unmount) is NOT reported as a TimeoutError", async () => {
+    vi.useFakeTimers()
+    fetch.mockImplementationOnce(abortableFetch())
+
+    const caller = new AbortController()
+    const pending = request('/entries', { timeoutMs: 5_000, signal: caller.signal })
+    const assertion = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    caller.abort()
+    await assertion
+
+    // And it never counted as a connection failure either — aborted means \"don't retry\".
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it("a caller abort during the retry pause ends the pause and throws the caller's AbortError", async () => {
+    vi.useFakeTimers()
+    fetch.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    fetch.mockResolvedValueOnce(jsonResponse([{ id: 2 }]))
+
+    const caller = new AbortController()
+    const pending = request('/entries', { signal: caller.signal })
+    const assertion = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    // The 400ms pause is the only timer in flight; aborting mid-pause must reject now, long
+    // before the timer would have fired and issued the second request.
+    caller.abort()
+    await assertion
+
+    expect(fetch).toHaveBeenCalledTimes(1) // the original attempt only — no retry fired
+  })
+
+  it('a caller abort after the response is ignored — fulfilled data still resolves', async () => {
+    const caller = new AbortController()
+    fetch.mockImplementationOnce(async () => {
+      caller.abort() // too late: the fetch this signal guards already fulfilled
+      return jsonResponse([{ id: 7 }])
+    })
+
+    await expect(request('/entries', { signal: caller.signal })).resolves.toEqual([{ id: 7 }])
+  })
+
+  it("the caller's own abort on a status poll is not a TimeoutError and is never retried", async () => {
+    vi.useFakeTimers()
     fetch.mockImplementationOnce(abortableFetch())
     const callerController = new AbortController()
 
@@ -107,6 +148,7 @@ describe('request()', () => {
 
     await assertion
     await expect(pending).rejects.not.toBeInstanceOf(TimeoutError)
+    expect(fetch).toHaveBeenCalledTimes(1)
   })
 
   it('a genuine network failure is retried once, transparently, and succeeds if the retry does', async () => {

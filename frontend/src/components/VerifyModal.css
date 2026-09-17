@@ -122,12 +122,27 @@
   font-size: 0.85rem;
 }
 
+/* The verify bottom row (VerifyModal.jsx): the escape hatch sits left, the real check right —
+   on a narrow phone both must stack instead of squeezing side by side, or the "Check my
+   answer" call to action compresses unreadably next to "Mark done anyway".
+*/
 .verify-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-top: 4px;
+}
+
+@media (max-width: 520px) {
+  .verify-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .verify-actions .ui-btn {
+    width: 100%;
+  }
 }
 
 .verify-override {

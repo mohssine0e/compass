@@ -124,7 +124,10 @@ export default function StepDeepView({
     }
   }
 
-  // Fetch "what this covers" once when opened, if not already cached on the step.
+  // Fetch "what this covers" once when opened, if not already cached on the step. (The
+  // `covers` read in the guard below keeps the effect idempotent when `step.id` is stable but
+  // the `step` object is refreshed by onChanged callbacks; it intentionally does NOT re-run the
+  // fetch — the covers never change without the step changing.)
   useEffect(() => {
     if (covers) return
     let alive = true
@@ -136,7 +139,8 @@ export default function StepDeepView({
     return () => {
       alive = false
     }
-  }, [step.id, covers])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step.id])
 
   // Debounced notes autosave.
   function onNotesChange(value) {

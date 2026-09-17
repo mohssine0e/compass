@@ -8,6 +8,11 @@ import './Roadmap.css'
 // to fill in once built, and the same completion checkbox the tree already uses (status, not a
 // separate flag). A project step is still just a roadmap_step; this is a filtered view, not a
 // new entity.
+//
+// Completion goes through the SAME handlers the tree row uses (`onMarkDone` → the verify gate
+// when the roadmap has "check before done" on, `onUndoDone` for reopening) — a project checked
+// off here must never silently self-report past a verification mode the founder turned on
+// elsewhere. URL saving reports its own failure instead of dying as an unhandled rejection.
 function collectProjects(nodes, moduleTitle = null, out = []) {
   for (const n of nodes) {
     if (n.children && n.children.length > 0) {
@@ -19,7 +24,7 @@ function collectProjects(nodes, moduleTitle = null, out = []) {
   return out
 }
 
-export default function ProjectsView({ roadmap, onChanged, onOpenStep }) {
+export default function ProjectsView({ roadmap, onChanged, onOpenStep, onMarkDone, onUndoDone }) {
   const projects = collectProjects(roadmap.children || [])
 
   if (projects.length === 0) {
@@ -29,28 +34,39 @@ export default function ProjectsView({ roadmap, onChanged, onOpenStep }) {
   return (
     <ul className="projects-list">
       {projects.map((p) => (
-        <ProjectRow key={p.id} project={p} onChanged={onChanged} onOpenStep={onOpenStep} />
+        <ProjectRow
+          key={p.id}
+          project={p}
+          onChanged={onChanged}
+          onOpenStep={onOpenStep}
+          onMarkDone={onMarkDone}
+          onUndoDone={onUndoDone}
+        />
       ))}
     </ul>
   )
 }
 
-function ProjectRow({ project, onChanged, onOpenStep }) {
+function ProjectRow({ project, onChanged, onOpenStep, onMarkDone, onUndoDone }) {
   const [url, setUrl] = useState(project.content?.projectUrl || '')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
   const done = project.status === 'done'
 
-  async function toggleDone() {
-    await patchEntry(project.id, { status: done ? 'captured' : 'done' })
-    onChanged?.()
+  function toggleDone() {
+    if (done) onUndoDone?.(project.id)
+    else onMarkDone?.(project)
   }
 
   async function saveUrl() {
-    if ((project.content?.projectUrl || '') === url.trim()) return
+    if (saving || (project.content?.projectUrl || '') === url.trim()) return
     setSaving(true)
+    setError(null)
     try {
       await patchEntry(project.id, { projectUrl: url.trim() })
       onChanged?.()
+    } catch (err) {
+      setError(err.message)
     } finally {
       setSaving(false)
     }
@@ -87,6 +103,7 @@ function ProjectRow({ project, onChanged, onOpenStep }) {
             </ExternalLink>
           )}
         </div>
+        {error && <p className="roadmap-error">{error}</p>}
       </div>
     </li>
   )

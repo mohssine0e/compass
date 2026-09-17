@@ -32,7 +32,6 @@ function ResurfaceView({ prompt, onDone }) {
   const { entry, question, options } = prompt
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
-  const [confidence, setConfidence] = useState(null)
   const [error, setError] = useState(null)
   // null | { kind, loading } | { kind, targetStepId, steps }        (break_down)
   //      | { kind, targetStepId, prerequisite, why }                (add_prerequisite)
@@ -170,6 +169,7 @@ function ResurfaceView({ prompt, onDone }) {
           setRestructure(null)
           setError(null)
         }}
+        resourcesPending={resourcesPending}
       />
     )
   }
@@ -269,6 +269,7 @@ function RestructureReview({
   error,
   onApply,
   onCancel,
+  resourcesPending,
 }) {
   if (restructure.loading) {
     return (
@@ -340,6 +341,9 @@ function RecheckView({ prompt, onDone }) {
   const [answer, setAnswer] = useState('')
   const [result, setResult] = useState(null)
   const [busy, setBusy] = useState(false)
+  // The founder's own before-the-check confidence (1–3) — feeds the backend's scheduling, not
+  // the verdict. Lives here, not in ResurfaceView: this is the only view that collects it.
+  const [confidence, setConfidence] = useState(null)
   const [error, setError] = useState(null)
 
   async function submit() {

@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useId, useRef } from 'react'
 import { trapTabKey, useDialogAccessibility } from '../../hooks/useDialogAccessibility'
 
 /**
@@ -23,7 +23,11 @@ import { trapTabKey, useDialogAccessibility } from '../../hooks/useDialogAccessi
  */
 export default function Modal({ onClose, title, size = 'lg', className = '', children }) {
   const panelRef = useRef(null)
-  const titleId = title ? `modal-title-${Math.random().toString(36).slice(2, 9)}` : undefined
+  // Stable for the modal's lifetime (React 19 useId) — lets screen readers name the dialog via
+  // aria-labelledby. Must stay unconditional (and must not be random per render): an id that
+  // changes every render breaks the reference the moment anything inside re-renders.
+  const uid = useId().replace(/:/g, '')
+  const titleId = title ? `modal-title-${uid}` : undefined
 
   useDialogAccessibility(panelRef, onClose)
 

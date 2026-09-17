@@ -122,4 +122,28 @@ describe('Modal accessibility', () => {
     await user.click(container.querySelector('.ui-overlay'))
     expect(onClose).toHaveBeenCalledTimes(1)
   })
+
+  it('gives the dialog a stable accessible name via its title', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(
+      <Modal onClose={() => {}} title="Delete this step?">
+        <button>Confirm</button>
+      </Modal>,
+    )
+
+    const firstId = screen.getByRole('dialog').getAttribute('aria-labelledby')
+    expect(screen.getByRole('dialog', { name: 'Delete this step?' })).toBeInTheDocument()
+
+    // A re-render (any state change inside) must not change the title id — a random-per-render
+    // id breaks the aria-labelledby reference the moment the dialog updates.
+    await user.click(screen.getByText('Confirm'))
+    rerender(
+      <Modal onClose={() => {}} title="Delete this step?">
+        <button>Confirmed</button>
+      </Modal>,
+    )
+
+    expect(screen.getByRole('dialog').getAttribute('aria-labelledby')).toBe(firstId)
+    expect(screen.getByRole('dialog', { name: 'Delete this step?' })).toBeInTheDocument()
+  })
 })
